@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>排班工具</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <section class="ops-card">
+      <div class="ops-title-row">
+        <h2>核心功能</h2>
+        <p id="dbHint" class="db-hint"></p>
+      </div>
+      <div class="ops-grid basic-ops-grid">
+        <button class="ghost-btn ops-btn" id="memberSettingsButton" type="button">人員設定</button>
+        <button class="ghost-btn ops-btn" id="exportButton" type="button">匯出班表</button>
+        <button class="primary-btn ops-btn" id="exportSapButton" type="button">匯出休例假</button>
+        <button class="primary-btn ops-btn" id="exportLeaveButton" type="button">匯出請假</button>
+        <button class="primary-btn ops-btn" id="exportOvertimeButton" type="button">匯出加班</button>
+      </div>
+    </section>
+
+    <section class="toolbar-card">
+      <div class="toolbar-grid">
+        <div class="toolbar-section">
+          <div class="toolbar-title-row">
+            <span class="toolbar-title">單位</span>
+            <button class="text-btn" id="deptSettingsButton" type="button">設定</button>
+          </div>
+          <div class="dept-filter-row">
+            <label for="deptFilter">顯示範圍</label>
+            <select id="deptFilter"></select>
+          </div>
+        </div>
+
+        <div class="toolbar-section">
+          <div class="toolbar-title-row">
+            <span class="toolbar-title">班別</span>
+            <button class="text-btn" id="shiftSettingsButton" type="button">設定</button>
+          </div>
+          <div id="shiftChips" class="chips"></div>
+        </div>
+
+        <div class="toolbar-section">
+          <div class="toolbar-title-row">
+            <span class="toolbar-title">假別</span>
+            <button class="text-btn" id="leaveSettingsButton" type="button">設定</button>
+          </div>
+          <div id="leaveChips" class="chips"></div>
+        </div>
+
+        <div class="toolbar-section">
+          <div class="toolbar-title-row">
+            <span class="toolbar-title">加班</span>
+            <button class="text-btn" id="overtimeSettingsButton" type="button">設定</button>
+          </div>
+          <div id="overtimeChips" class="chips"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="calendar-card">
+      <div class="calendar-nav">
+        <button class="nav-btn" id="prevMonthButton" type="button">上一月</button>
+        <div class="month-title-wrap">
+          <h2 id="monthTitle"></h2>
+        </div>
+        <div class="nav-actions">
+          <button class="nav-btn" id="nextMonthButton" type="button">下一月</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="mainTable"></table>
+      </div>
+    </section>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>
