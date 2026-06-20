@@ -176,6 +176,12 @@ const DEFAULT_STATE = {
 
 const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
 const MONTH_LABELS = ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"];
+const REQUEST_STATUS_LABELS = {
+  pending: "待審核",
+  approved: "已核准",
+  rejected: "已退回",
+  cancelled: "已取消"
+};
 
 let state = createDefaultState();
 let modalColor = COLORS[0].hex;
@@ -187,6 +193,13 @@ let appInfo = null;
 let dragMemberId = "";
 let leaveTooltipTimer = null;
 let coreActionsOpen = false;
+let currentSession = null;
+let currentProfile = null;
+let currentMember = null;
+let leaveRequestRecords = [];
+let overtimeRequestRecords = [];
+let authErrorMessage = "";
+let eventsBound = false;
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -223,6 +236,29 @@ function weekdayOf(day) {
 
 function toDateString(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function toDateObject(dateString) {
+  const [year, month, day] = String(dateString || "").split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+}
+
+function enumerateDateRange(startDate, endDate) {
+  const start = toDateObject(startDate);
+  const end = toDateObject(endDate);
+  if (!start || !end || start > end) {
+    return [];
+  }
+  const dates = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(toDateString(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
 }
 
 function normalizeTimeText(value) {
@@ -499,6 +535,8 @@ function cleanupScheduleEntries(schedule, merged) {
       shift: validShiftIds.has(slot?.shift) ? slot.shift : null,
       leave: validLeaveIds.has(slot?.leave) ? slot.leave : null,
       overtime: validOvertimeIds.has(slot?.overtime) ? slot.overtime : null,
+      leaveRequestId: validLeaveIds.has(slot?.leave) ? slot?.leaveRequestId || null : null,
+      overtimeRequestId: validOvertimeIds.has(slot?.overtime) ? slot?.overtimeRequestId || null : null,
       leaveMeta: validLeaveIds.has(slot?.leave) && slot?.leaveMeta && typeof slot.leaveMeta === "object"
         ? {
           allDay: slot.leaveMeta.allDay !== false,
@@ -620,6 +658,167 @@ function getLeaveLabel(leave) {
   return leave.code ? `${leave.code} ${leave.name}` : leave.name;
 }
 
+function isLoggedIn() {
+  return Boolean(currentSession?.user);
+}
+
+function isManager() {
+  return currentProfile?.role === "manager";
+}
+
+function canEditSchedule() {
+  return isManager();
+}
+
+function getCurrentProfileName() {
+  return currentProfile?.full_name || currentSession?.user?.email || "";
+}
+
+function getCurrentRoleLabel() {
+  return isManager() ? "主管" : "員工";
+}
+
+function resolveCurrentMember() {
+  if (!currentProfile?.employee_code) {
+    return null;
+  }
+  return state.members.find((member) => member.code === currentProfile.employee_code) || null;
+}
+
+function getRequestStatusLabel(status) {
+  return REQUEST_STATUS_LABELS[status] || status;
+}
+
+function formatRequestDateText(startDate, endDate) {
+  if (!startDate) {
+    return "";
+  }
+  return startDate === endDate || !endDate ? startDate : `${startDate} ~ ${endDate}`;
+}
+
+function formatRequestTimeText(record) {
+  if (record.isAllDay !== false) {
+    return "整天";
+  }
+  return `${record.startTime || "--:--"} - ${record.endTime || "--:--"}`;
+}
+
+function getAllowedLeaveRequestItems() {
+  return state.leaves.filter((item) => !["0036", "0047"].includes(item.code));
+}
+
+function getRequestStatusOptions(selectedValue) {
+  return ["pending", "approved", "rejected", "cancelled"].map((status) => (
+    `<option value="${status}" ${status === selectedValue ? "selected" : ""}>${escapeHtml(getRequestStatusLabel(status))}</option>`
+  )).join("");
+}
+
+function syncRoleUi() {
+  const managerOnlyIds = [
+    "memberSettingsButton",
+    "deptSettingsButton",
+    "shiftSettingsButton",
+    "leaveSettingsButton",
+    "overtimeSettingsButton",
+    "leaveApprovalButton",
+    "overtimeApprovalButton"
+  ];
+  managerOnlyIds.forEach((id) => {
+    const element = document.getElementById(id);
+    if (!element) {
+      return;
+    }
+    element.style.display = isManager() ? "" : "none";
+    element.disabled = !isManager();
+  });
+
+  ["shiftChips", "leaveChips", "overtimeChips"].forEach((id) => {
+    const element = document.getElementById(id);
+    if (!element) {
+      return;
+    }
+    element.classList.toggle("chips-readonly", !canEditSchedule());
+  });
+
+  const leaveRequestButton = document.getElementById("leaveRequestButton");
+  const overtimeRequestButton = document.getElementById("overtimeRequestButton");
+  if (leaveRequestButton) {
+    leaveRequestButton.style.display = isLoggedIn() && currentMember ? "" : "none";
+  }
+  if (overtimeRequestButton) {
+    overtimeRequestButton.style.display = isLoggedIn() && currentMember ? "" : "none";
+  }
+}
+
+function renderAuthBar() {
+  const container = document.getElementById("authBar");
+  if (!container) {
+    return;
+  }
+  if (!isLoggedIn()) {
+    container.innerHTML = "";
+    return;
+  }
+  if (!currentProfile) {
+    container.innerHTML = `
+      <div class="session-pill">已登入，但尚未建立身份資料</div>
+      <button class="ghost-btn compact-btn" id="signOutButton" type="button">登出</button>
+    `;
+    return;
+  }
+  const memberText = currentProfile.employee_code ? `${escapeHtml(currentProfile.employee_code)} · ` : "";
+  container.innerHTML = `
+    <div class="session-pill">${escapeHtml(getCurrentRoleLabel())} · ${memberText}${escapeHtml(getCurrentProfileName())}</div>
+    <button class="ghost-btn compact-btn" id="signOutButton" type="button">登出</button>
+  `;
+}
+
+function renderAuthGate() {
+  const root = document.getElementById("authRoot");
+  if (!root) {
+    return;
+  }
+  if (!isLoggedIn()) {
+    root.innerHTML = `
+      <div class="auth-overlay">
+        <div class="auth-card">
+          <h3>登入</h3>
+          <div class="form-row">
+            <label for="loginEmail">Email</label>
+            <input id="loginEmail" type="text" autocomplete="username" placeholder="請輸入 Email">
+          </div>
+          <div class="form-row">
+            <label for="loginPassword">密碼</label>
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="請輸入密碼">
+          </div>
+          ${authErrorMessage ? `<div class="auth-error">${escapeHtml(authErrorMessage)}</div>` : ""}
+          <div class="modal-footer auth-footer">
+            <button class="btn-primary" type="button" data-auth-sign-in="true">登入</button>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  if (!currentProfile) {
+    root.innerHTML = `
+      <div class="auth-overlay">
+        <div class="auth-card">
+          <h3>帳號尚未綁定身份</h3>
+          <p class="modal-description">請先在 Supabase 的 <code>profiles</code> 建立與 Auth 使用者相同 id 的資料列，並填好 employee_code、full_name、role。</p>
+          <div class="readonly-pill">${escapeHtml(currentSession?.user?.email || "")}</div>
+          ${authErrorMessage ? `<div class="auth-error">${escapeHtml(authErrorMessage)}</div>` : ""}
+          <div class="modal-footer auth-footer">
+            <button class="btn-cancel" type="button" id="authGateSignOutButton">登出</button>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  root.innerHTML = "";
+}
+
 function hasSapLeaveRows() {
   const sapLeaveCodes = new Set(["0036", "0047"]);
   return state.members.some((member) => {
@@ -736,7 +935,7 @@ function showLeaveTooltip(memberId, day, anchorRect) {
   root.innerHTML = `
     <div class="leave-tooltip-head">
       <div class="leave-tooltip-title">${escapeHtml(getLeaveLabel(leave))}</div>
-      <button class="ghost-btn compact-btn leave-tooltip-btn" type="button" data-edit-leave-assignment="${memberId}:${day}">修改</button>
+      ${isManager() ? `<button class="ghost-btn compact-btn leave-tooltip-btn" type="button" data-edit-leave-assignment="${memberId}:${day}">修改</button>` : ""}
     </div>
     ${lines.map((line) => `<div class="leave-tooltip-line">${escapeHtml(line)}</div>`).join("")}
   `;
@@ -793,6 +992,7 @@ function renderToolbar() {
   renderChips("shiftChips", "shift", visibleShifts);
   renderChips("leaveChips", "leave", state.leaves);
   renderChips("overtimeChips", "overtime", state.overtime);
+  syncRoleUi();
 }
 
 function memberLabel(member) {
@@ -881,13 +1081,15 @@ function renderTable() {
 
 function renderHeader() {
   document.getElementById("monthTitle").textContent = `${state.year} 年 ${MONTH_LABELS[state.month]}`;
-  document.getElementById("dbHint").textContent = appInfo ? `資料庫位置：${appInfo.databasePath}` : "";
+  document.getElementById("dbHint").textContent = appInfo ? `資料來源：${appInfo.databasePath}` : "";
+  renderAuthBar();
 }
 
 function renderAll() {
   renderHeader();
   renderToolbar();
   renderTable();
+  renderAuthGate();
 }
 
 function ensureScheduleSlot(memberId, day) {
@@ -908,6 +1110,9 @@ function pruneEmptySchedule() {
 }
 
 function queueSave() {
+  if (!canEditSchedule()) {
+    return;
+  }
   if (saveTimer) {
     clearTimeout(saveTimer);
   }
@@ -921,6 +1126,9 @@ function queueSave() {
 }
 
 function applySelectionToCell(memberId, day) {
+  if (!canEditSchedule()) {
+    return;
+  }
   const member = state.members.find((item) => item.id === memberId);
   if (!member || !isMemberActiveOnDate(member, state.year, state.month, day)) {
     return;
@@ -963,6 +1171,9 @@ function applySelectionToCell(memberId, day) {
 }
 
 function selectChip(type, id) {
+  if (!canEditSchedule()) {
+    return;
+  }
   if (state.selected.type === type && state.selected.id === id) {
     state.selected = { type: null, id: null };
   } else {
@@ -1492,6 +1703,9 @@ function saveNamedColorItem(category, mode) {
   closeModal();
   renderAll();
   queueSave();
+  if (category === "leave" || category === "overtime") {
+    syncRequestCatalogs().catch((error) => setSaveStatus(`同步設定失敗：${error.message}`));
+  }
 }
 
 async function deleteListItem(category, id) {
@@ -1760,6 +1974,400 @@ async function deleteMember(memberId) {
   queueSave();
 }
 
+async function refreshRequestData() {
+  if (!isLoggedIn() || !currentProfile) {
+    leaveRequestRecords = [];
+    overtimeRequestRecords = [];
+    return;
+  }
+  leaveRequestRecords = await window.schedulerApi.listLeaveRequests({ manager: isManager() });
+  overtimeRequestRecords = await window.schedulerApi.listOvertimeRequests({ manager: isManager() });
+}
+
+async function syncRequestCatalogs() {
+  if (!isManager()) {
+    return;
+  }
+  await window.schedulerApi.syncCatalogs(state);
+}
+
+function renderRequestSummaryLines(record, kind) {
+  const lines = [];
+  if (record.memberName || record.memberCode) {
+    lines.push(`${record.memberCode || "-"} · ${record.memberName || "-"}`);
+  }
+  if (kind === "leave") {
+    lines.push(`${record.leaveCode || ""} ${record.leaveName || ""}`.trim());
+    lines.push(`日期：${formatRequestDateText(record.startDate, record.endDate)}`);
+    lines.push(`時間：${formatRequestTimeText(record)}`);
+  } else {
+    lines.push(record.overtimeName || "");
+    lines.push(`日期：${record.workDate || ""}`);
+  }
+  lines.push(`狀態：${getRequestStatusLabel(record.status)}`);
+  if (record.reason) {
+    lines.push(`原因：${record.reason}`);
+  }
+  if (record.managerNote) {
+    lines.push(`主管備註：${record.managerNote}`);
+  }
+  return lines.filter(Boolean);
+}
+
+function renderEmployeeRequestList(kind, records) {
+  if (!records.length) {
+    return '<div class="empty-state">目前還沒有申請資料</div>';
+  }
+  return records.map((record) => `
+    <div class="request-item">
+      <div class="request-head">
+        <div class="request-title">${escapeHtml(kind === "leave" ? `${record.leaveCode} ${record.leaveName}`.trim() : record.overtimeName || "加班申請")}</div>
+        <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
+      </div>
+      ${renderRequestSummaryLines(record, kind).slice(1).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
+    </div>
+  `).join("");
+}
+
+function renderManagerRequestList(kind, records) {
+  if (!records.length) {
+    return '<div class="empty-state">目前沒有可審核資料</div>';
+  }
+  return records.map((record) => `
+    <div class="request-item">
+      <div class="request-head">
+        <div class="request-title">${escapeHtml(record.memberCode || "-")} · ${escapeHtml(record.memberName || "-")}</div>
+        <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
+      </div>
+      ${renderRequestSummaryLines(record, kind).slice(1).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
+      <div class="request-review-grid">
+        <div class="form-row">
+          <label for="${kind}ReviewStatus_${record.id}">審核結果</label>
+          <select id="${kind}ReviewStatus_${record.id}">${getRequestStatusOptions(record.status)}</select>
+        </div>
+        <div class="form-row">
+          <label for="${kind}ReviewNote_${record.id}">主管備註</label>
+          <input id="${kind}ReviewNote_${record.id}" type="text" maxlength="120" value="${escapeHtml(record.managerNote || "")}" placeholder="可選填">
+        </div>
+      </div>
+      <div class="request-actions">
+        <button class="btn-primary" type="button" data-save-request-review="${kind}:${record.id}">儲存審核</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function syncLeaveRequestFormUi() {
+  const allDay = document.getElementById("leaveRequestAllDay")?.checked !== false;
+  const timeSection = document.getElementById("leaveRequestTimeSection");
+  if (timeSection) {
+    timeSection.style.display = allDay ? "none" : "";
+  }
+  setTimeInputDisabled("leaveRequestStartTime", allDay);
+  setTimeInputDisabled("leaveRequestEndTime", allDay);
+}
+
+async function openLeaveRequestModal() {
+  if (!currentMember) {
+    showInfoMessage("目前帳號尚未對應到排班人員代碼，無法送出請假申請");
+    return;
+  }
+  await refreshRequestData();
+  const leaveItems = getAllowedLeaveRequestItems();
+  const defaultLeave = leaveItems[0];
+  openEntityListModal({
+    title: "請假申請",
+    modalClass: "modal modal-wide",
+    body: `
+      <div class="form-grid">
+        <div class="form-row">
+          <label>申請人</label>
+          <div class="readonly-pill">${escapeHtml(currentMember.code)} · ${escapeHtml(currentMember.name)}</div>
+        </div>
+        <div class="form-row">
+          <label for="leaveRequestType">假別</label>
+          <select id="leaveRequestType">${leaveItems.map((item) => `<option value="${item.id}">${escapeHtml(getLeaveLabel(item))}</option>`).join("")}</select>
+        </div>
+        <div class="form-row">
+          <label for="leaveRequestStartDate">開始日期</label>
+          <input id="leaveRequestStartDate" type="date" value="${toDateString(state.year, state.month, 1)}">
+        </div>
+        <div class="form-row">
+          <label for="leaveRequestEndDate">結束日期</label>
+          <input id="leaveRequestEndDate" type="date" value="${toDateString(state.year, state.month, 1)}">
+        </div>
+      </div>
+      <div class="form-row checkbox-row checkbox-row-left">
+        <label>
+          <input id="leaveRequestAllDay" type="checkbox" ${defaultLeave?.defaultAllDay !== false ? "checked" : ""}>
+          整天
+        </label>
+      </div>
+      <div class="form-grid" id="leaveRequestTimeSection" style="${defaultLeave?.defaultAllDay !== false ? "display:none;" : ""}">
+        <div class="form-row">
+          <label for="leaveRequestStartTime">開始時間</label>
+          ${timeInputMarkup("leaveRequestStartTime", "")}
+        </div>
+        <div class="form-row">
+          <label for="leaveRequestEndTime">結束時間</label>
+          ${timeInputMarkup("leaveRequestEndTime", "")}
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="leaveRequestReason">原因</label>
+        <input id="leaveRequestReason" type="text" maxlength="120" placeholder="請輸入原因">
+      </div>
+      <div class="request-section">
+        <div class="section-title">我的請假申請</div>
+        ${renderEmployeeRequestList("leave", leaveRequestRecords)}
+      </div>
+    `,
+    footerButtons: '<button class="btn-primary" type="button" data-save-leave-request="true">送出申請</button>'
+  });
+  syncLeaveRequestFormUi();
+}
+
+async function saveLeaveRequestFromModal() {
+  const leaveId = document.getElementById("leaveRequestType")?.value || "";
+  const leave = getItem("leave", leaveId);
+  const startDate = document.getElementById("leaveRequestStartDate")?.value || "";
+  const endDate = document.getElementById("leaveRequestEndDate")?.value || "";
+  const isAllDay = document.getElementById("leaveRequestAllDay")?.checked !== false;
+  const startTime = readTimeInputValue("leaveRequestStartTime");
+  const endTime = readTimeInputValue("leaveRequestEndTime");
+  if (!leave || !startDate || !endDate || !isValidDateRange(startDate, endDate) && startDate !== endDate) {
+    reportValidationError("請確認請假日期");
+    return;
+  }
+  if (!isAllDay && !isValidTimeRange(startTime, endTime)) {
+    reportValidationError("開始時間必須早於結束時間");
+    return;
+  }
+  await window.schedulerApi.createLeaveRequest({
+    leaveCode: leave.code,
+    startDate,
+    endDate,
+    isAllDay,
+    startTime,
+    endTime,
+    reason: document.getElementById("leaveRequestReason")?.value.trim() || ""
+  });
+  showInfoMessage("請假申請已送出");
+  await openLeaveRequestModal();
+}
+
+async function openOvertimeRequestModal() {
+  if (!currentMember) {
+    showInfoMessage("目前帳號尚未對應到排班人員代碼，無法送出加班申請");
+    return;
+  }
+  await refreshRequestData();
+  openEntityListModal({
+    title: "加班申請",
+    modalClass: "modal modal-wide",
+    body: `
+      <div class="form-grid">
+        <div class="form-row">
+          <label>申請人</label>
+          <div class="readonly-pill">${escapeHtml(currentMember.code)} · ${escapeHtml(currentMember.name)}</div>
+        </div>
+        <div class="form-row">
+          <label for="overtimeRequestType">加班別</label>
+          <select id="overtimeRequestType">${state.overtime.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("")}</select>
+        </div>
+        <div class="form-row">
+          <label for="overtimeRequestDate">加班日期</label>
+          <input id="overtimeRequestDate" type="date" value="${toDateString(state.year, state.month, 1)}">
+        </div>
+      </div>
+      <div class="form-row">
+        <label for="overtimeRequestReason">原因</label>
+        <input id="overtimeRequestReason" type="text" maxlength="120" placeholder="請輸入原因">
+      </div>
+      <div class="request-section">
+        <div class="section-title">我的加班申請</div>
+        ${renderEmployeeRequestList("overtime", overtimeRequestRecords)}
+      </div>
+    `,
+    footerButtons: '<button class="btn-primary" type="button" data-save-overtime-request="true">送出申請</button>'
+  });
+}
+
+async function saveOvertimeRequestFromModal() {
+  const overtimeId = document.getElementById("overtimeRequestType")?.value || "";
+  const overtime = getItem("overtime", overtimeId);
+  const workDate = document.getElementById("overtimeRequestDate")?.value || "";
+  if (!overtime || !workDate) {
+    reportValidationError("請確認加班別與日期");
+    return;
+  }
+  await window.schedulerApi.createOvertimeRequest({
+    overtimeName: overtime.name,
+    workDate,
+    reason: document.getElementById("overtimeRequestReason")?.value.trim() || ""
+  });
+  showInfoMessage("加班申請已送出");
+  await openOvertimeRequestModal();
+}
+
+async function openLeaveApprovalModal() {
+  if (!isManager()) {
+    showInfoMessage("此功能限主管使用");
+    return;
+  }
+  await refreshRequestData();
+  openEntityListModal({
+    title: "請假審核",
+    modalClass: "modal modal-wide",
+    body: renderManagerRequestList("leave", leaveRequestRecords)
+  });
+}
+
+async function openOvertimeApprovalModal() {
+  if (!isManager()) {
+    showInfoMessage("此功能限主管使用");
+    return;
+  }
+  await refreshRequestData();
+  openEntityListModal({
+    title: "加班審核",
+    modalClass: "modal modal-wide",
+    body: renderManagerRequestList("overtime", overtimeRequestRecords)
+  });
+}
+
+function clearScheduleLeaveByRequestId(requestId) {
+  Object.values(state.schedule).forEach((slot) => {
+    if (slot?.leaveRequestId === requestId) {
+      slot.leave = null;
+      slot.leaveMeta = null;
+      slot.leaveRequestId = null;
+    }
+  });
+}
+
+function clearScheduleOvertimeByRequestId(requestId) {
+  Object.values(state.schedule).forEach((slot) => {
+    if (slot?.overtimeRequestId === requestId) {
+      slot.overtime = null;
+      slot.overtimeRequestId = null;
+    }
+  });
+}
+
+function applyApprovedLeaveRequestToSchedule(record) {
+  clearScheduleLeaveByRequestId(record.id);
+  if (record.status !== "approved") {
+    pruneEmptySchedule();
+    return;
+  }
+  const member = state.members.find((item) => item.code === record.memberCode);
+  const leave = state.leaves.find((item) => item.code === record.leaveCode);
+  if (!member || !leave) {
+    return;
+  }
+  enumerateDateRange(record.startDate, record.endDate).forEach((dateString) => {
+    const [year, month, day] = dateString.split("-").map(Number);
+    const slotKey = scheduleKey(member.id, year, month - 1, day);
+    const slot = state.schedule[slotKey] || { shift: null, leave: null, overtime: null };
+    slot.shift = null;
+    slot.leave = leave.id;
+    slot.leaveMeta = {
+      allDay: record.isAllDay !== false,
+      startTime: record.isAllDay !== false ? "" : record.startTime || "",
+      endTime: record.isAllDay !== false ? "" : record.endTime || "",
+      reasonEnabled: Boolean(record.reason),
+      reason: record.reason || ""
+    };
+    slot.leaveRequestId = record.id;
+    state.schedule[slotKey] = slot;
+  });
+  pruneEmptySchedule();
+}
+
+function applyApprovedOvertimeRequestToSchedule(record) {
+  clearScheduleOvertimeByRequestId(record.id);
+  if (record.status !== "approved") {
+    pruneEmptySchedule();
+    return;
+  }
+  const member = state.members.find((item) => item.code === record.memberCode);
+  const overtime = state.overtime.find((item) => item.name === record.overtimeName);
+  if (!member || !overtime || !record.workDate) {
+    return;
+  }
+  const [year, month, day] = record.workDate.split("-").map(Number);
+  const slotKey = scheduleKey(member.id, year, month - 1, day);
+  const slot = state.schedule[slotKey] || { shift: null, leave: null, overtime: null };
+  slot.overtime = overtime.id;
+  slot.overtimeRequestId = record.id;
+  state.schedule[slotKey] = slot;
+  pruneEmptySchedule();
+}
+
+async function saveRequestReview(kind, requestId) {
+  if (!isManager()) {
+    showInfoMessage("此功能限主管使用");
+    return;
+  }
+  const status = document.getElementById(`${kind}ReviewStatus_${requestId}`)?.value || "pending";
+  const managerNote = document.getElementById(`${kind}ReviewNote_${requestId}`)?.value.trim() || "";
+  if (kind === "leave") {
+    await window.schedulerApi.updateLeaveRequest({ id: requestId, status, managerNote });
+  } else {
+    await window.schedulerApi.updateOvertimeRequest({ id: requestId, status, managerNote });
+  }
+  await refreshRequestData();
+  const nextRecord = (kind === "leave" ? leaveRequestRecords : overtimeRequestRecords).find((item) => item.id === requestId);
+  if (nextRecord) {
+    if (kind === "leave") {
+      applyApprovedLeaveRequestToSchedule(nextRecord);
+    } else {
+      applyApprovedOvertimeRequestToSchedule(nextRecord);
+    }
+    await forceSave();
+  }
+  renderAll();
+  if (kind === "leave") {
+    await openLeaveApprovalModal();
+  } else {
+    await openOvertimeApprovalModal();
+  }
+}
+
+async function handleSignIn() {
+  const email = document.getElementById("loginEmail")?.value.trim() || "";
+  const password = document.getElementById("loginPassword")?.value || "";
+  if (!email || !password) {
+    authErrorMessage = "請輸入 Email 與密碼";
+    renderAuthGate();
+    return;
+  }
+  try {
+    authErrorMessage = "";
+    await window.schedulerApi.signIn(email, password);
+    await loadApp();
+  } catch (error) {
+    authErrorMessage = error.message || "登入失敗";
+    renderAuthGate();
+  }
+}
+
+async function handleSignOut() {
+  await window.schedulerApi.signOut();
+  authErrorMessage = "";
+  currentSession = null;
+  currentProfile = null;
+  currentMember = null;
+  leaveRequestRecords = [];
+  overtimeRequestRecords = [];
+  appInfo = null;
+  state = createDefaultState();
+  closeModal();
+  closeCoreActionsMenu();
+  renderAll();
+}
+
 function changeMonth(delta) {
   state.month += delta;
   if (state.month > 11) {
@@ -1849,6 +2457,9 @@ async function exportLeave() {
 }
 
 async function forceSave() {
+  if (!canEditSchedule()) {
+    return;
+  }
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
@@ -1861,6 +2472,10 @@ async function forceSave() {
 }
 
 function bindEvents() {
+  if (eventsBound) {
+    return;
+  }
+  eventsBound = true;
   document.getElementById("coreActionsToggle").addEventListener("click", (event) => {
     event.stopPropagation();
     toggleCoreActionsMenu();
@@ -1891,6 +2506,22 @@ function bindEvents() {
     closeCoreActionsMenu();
     openMemberSettings();
   });
+  document.getElementById("leaveRequestButton").addEventListener("click", async () => {
+    closeCoreActionsMenu();
+    await openLeaveRequestModal();
+  });
+  document.getElementById("overtimeRequestButton").addEventListener("click", async () => {
+    closeCoreActionsMenu();
+    await openOvertimeRequestModal();
+  });
+  document.getElementById("leaveApprovalButton").addEventListener("click", async () => {
+    closeCoreActionsMenu();
+    await openLeaveApprovalModal();
+  });
+  document.getElementById("overtimeApprovalButton").addEventListener("click", async () => {
+    closeCoreActionsMenu();
+    await openOvertimeApprovalModal();
+  });
 
   document.getElementById("deptFilter").addEventListener("change", (event) => {
     state.deptFilter = event.target.value;
@@ -1902,6 +2533,14 @@ function bindEvents() {
   document.body.addEventListener("click", async (event) => {
     const target = event.target.closest("button, td");
     if (!target) {
+      return;
+    }
+    if (target.dataset.authSignIn) {
+      await handleSignIn();
+      return;
+    }
+    if (target.id === "signOutButton" || target.id === "authGateSignOutButton") {
+      await handleSignOut();
       return;
     }
     if (target.id === "coreActionsToggle") {
@@ -1918,6 +2557,26 @@ function bindEvents() {
         applySelectionToCell(target.dataset.memberId, Number(target.dataset.day));
         return;
       }
+    const managerOnlyAction = Boolean(
+      target.dataset.deleteCategory ||
+      target.dataset.editLeaveAssignment ||
+      target.dataset.openAdd ||
+      target.dataset.editItem ||
+      target.dataset.saveShift ||
+      target.dataset.saveNamedItem ||
+      target.dataset.openAddDepartment ||
+      target.dataset.editDepartment ||
+      target.dataset.saveDepartment ||
+      target.dataset.deleteDepartment ||
+      target.dataset.openAddMember ||
+      target.dataset.editMember ||
+      target.dataset.saveMember ||
+      target.dataset.deleteMember
+    );
+    if (managerOnlyAction && !isManager()) {
+      showInfoMessage("此功能限主管使用");
+      return;
+    }
     if (target.dataset.chipType !== undefined) {
       selectChip(target.dataset.chipType, target.dataset.chipId || null);
       return;
@@ -1957,6 +2616,19 @@ function bindEvents() {
       saveNamedColorItem(category, mode);
     }
     if (target.dataset.saveLeaveAssignment) saveLeaveAssignmentFromModal();
+    if (target.dataset.saveLeaveRequest) {
+      await saveLeaveRequestFromModal();
+      return;
+    }
+    if (target.dataset.saveOvertimeRequest) {
+      await saveOvertimeRequestFromModal();
+      return;
+    }
+    if (target.dataset.saveRequestReview) {
+      const [kind, requestId] = target.dataset.saveRequestReview.split(":");
+      await saveRequestReview(kind, requestId);
+      return;
+    }
 
     if (target.dataset.openAddDepartment) openDepartmentForm("add");
     if (target.dataset.editDepartment) openDepartmentForm("edit", target.dataset.editDepartment);
@@ -1996,6 +2668,10 @@ function bindEvents() {
     };
     if (target.id === "leaveAssignmentAllDay" || target.id === "leaveAssignmentReasonEnabled") {
       syncLeaveAssignmentModalUi();
+      return;
+    }
+    if (target.id === "leaveRequestAllDay") {
+      syncLeaveRequestFormUi();
       return;
     }
     if (target.id === "overtimeUseRest1" || target.id === "overtimeUseRest2") {
@@ -2091,13 +2767,34 @@ function bindEvents() {
 
 async function loadApp() {
   bindEvents();
+  authErrorMessage = "";
+  currentSession = null;
+  currentProfile = null;
+  currentMember = null;
+  leaveRequestRecords = [];
+  overtimeRequestRecords = [];
+  appInfo = null;
   try {
+    const authContext = await window.schedulerApi.initializeAuth();
+    currentSession = authContext.session;
+    currentProfile = authContext.profile;
+    renderAll();
+    if (!isLoggedIn() || !currentProfile) {
+      return;
+    }
+
     appInfo = await window.schedulerApi.getAppInfo();
     const payload = await window.schedulerApi.loadState();
     state = normalizeState(payload);
+    currentMember = resolveCurrentMember();
+    await syncRequestCatalogs();
+    await refreshRequestData();
   } catch (error) {
     setSaveStatus(`載入失敗：${error.message}`);
-    state = createDefaultState();
+    authErrorMessage = error.message || "載入失敗";
+    if (!isLoggedIn()) {
+      state = createDefaultState();
+    }
   }
   renderAll();
   syncCoreActionsMenu();

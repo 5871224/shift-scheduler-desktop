@@ -17,7 +17,7 @@ async function main() {
   }
 
   const response = await fetch(
-    `${String(config.supabaseUrl).replace(/\/+$/, "")}/rest/v1/schedule_documents?id=eq.${encodeURIComponent(config.documentId || "default")}&select=id`,
+    `${String(config.supabaseUrl).replace(/\/+$/, "")}/auth/v1/settings`,
     {
       headers: {
         apikey: config.supabaseAnonKey,
@@ -30,7 +30,7 @@ async function main() {
     throw new Error(await response.text() || `HTTP ${response.status}`);
   }
 
-  console.log("public supabase check ok");
+  console.log("supabase auth config ok");
 }
 
 main().catch((error) => {
