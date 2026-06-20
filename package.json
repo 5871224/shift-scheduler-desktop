@@ -7,6 +7,9 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "web": "node src/web-server.js",
+    "web:check": "node scripts/check-public-supabase.js",
+    "web:publish": "node scripts/publish-static-web.js",
     "pack": "electron-builder --dir",
     "dist": "node scripts/build-portable.js"
   },

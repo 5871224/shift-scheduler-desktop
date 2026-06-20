@@ -1,29 +1,100 @@
-# 排班工具桌面版
+# 排班工具
 
-這個資料夾現在已經整理成 Electron 專案，可做成免安裝 Windows 版。
+目前這個專案有 2 種使用方式：
 
-## 本機開發
+- Electron 桌面版
+- 純前端 Web 版
+
+## 純前端 Web 版
+
+這一版不需要 Node.js 後端。
+
+資料：
+- 直接由瀏覽器連 Supabase
+
+匯出：
+- 直接在瀏覽器產生並下載 Excel / CSV
+
+部署：
+- 可放一般靜態空間
+- 可放 GitHub Pages
+- 可放 Cloudflare Pages / Netlify
+
+### Supabase 先做的事
+
+請在 Supabase SQL Editor 依序執行：
+
+```text
+supabase/003_schedule_documents.sql
+supabase/004_schedule_documents_anon.sql
+```
+
+`004_schedule_documents_anon.sql` 是讓前端用 `anon key` 直接讀寫 `schedule_documents`。
+
+### 本機預覽
+
+```powershell
+npm install
+npm run web
+```
+
+開啟：
+
+```text
+http://127.0.0.1:3010
+```
+
+### 檢查前端能不能直接連 Supabase
+
+```powershell
+npm run web:check
+```
+
+看到：
+
+```text
+public supabase check ok
+```
+
+就代表前端已能直接存取 Supabase。
+
+### 產生發佈版
+
+```powershell
+npm run web:publish
+```
+
+會產生 [docs](C:/Users/indar/Desktop/排班/docs)。
+
+### GitHub Pages
+
+把 [docs](C:/Users/indar/Desktop/排班/docs) 當成發佈資料夾即可。
+
+- 若用 GitHub Pages，可設定 `main branch /docs`
+- [docs/.nojekyll](C:/Users/indar/Desktop/排班/docs/.nojekyll) 已自動建立
+
+### FTP 上傳
+
+把 [docs](C:/Users/indar/Desktop/排班/docs) 裡面的檔案全部上傳到網站根目錄即可：
+
+- `index.html`
+- `styles.css`
+- `renderer.js`
+- `web-api.js`
+- `browser-exporter.js`
+- `app-config.js`
+
+## Electron 桌面版
 
 ```powershell
 npm install
 npm start
 ```
 
-## 打包
+## 打包桌面版
 
 ```powershell
 npm run dist
 ```
 
-打包完成後會在 `release/` 看到：
-
-- `排班工具-1.0.0-portable.exe`
-- `排班工具-1.0.0.zip`
-
-## 技術選型
-
-- 畫面：`HTML / CSS / JS`
-- 外殼：`Electron`
-- 資料庫：`SQLite`，檔名為 `shift-scheduler.db`，直接放在 `exe` 同資料夾
-- 匯出：`ExcelJS`
-- 發給別人：把 `release/` 內產物直接提供即可
+輸出會在 `release/`。
