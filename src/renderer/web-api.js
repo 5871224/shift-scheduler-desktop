@@ -632,14 +632,6 @@
     });
     return { ok: true };
   }
-
-  async function exportExcel(payload) {
-    const blob = await exporter.workbookToBlob(await exporter.createScheduleWorkbook(payload));
-    const fileName = makeFileName("排班班表", payload, "xlsx");
-    downloadBlob(blob, fileName);
-    return { canceled: false, filePath: fileName };
-  }
-
   async function exportSapCsv(payload) {
     const blob = new Blob(
       [exporter.buildSapLeaveCsvContent(payload)],
@@ -697,7 +689,6 @@
     listOvertimeRequests,
     updateLeaveRequest,
     updateOvertimeRequest,
-    exportExcel,
     exportSapCsv,
     exportOvertime,
     exportLeave,

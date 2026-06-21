@@ -2545,21 +2545,6 @@ function changeMonth(delta) {
 
 
 
-async function exportExcel() {
-  try {
-    const result = await window.schedulerApi.exportExcel({
-      state,
-      year: state.year,
-      month: state.month
-    });
-    if (result.canceled) {
-      return;
-    }
-  } catch (error) {
-    setSaveStatus(`匯出失敗：${error.message}`);
-  }
-}
-
 async function exportSapCsv() {
   if (!hasSapLeaveRows()) {
     showInfoMessage("目前沒有可匯出的休例假資料");
@@ -2650,10 +2635,6 @@ function bindEvents() {
   });
   bindClick("prevMonthButton", () => changeMonth(-1));
   bindClick("nextMonthButton", () => changeMonth(1));
-  bindClick("exportButton", () => {
-    closeCoreActionsMenu();
-    exportExcel();
-  });
   bindClick("exportSapButton", () => {
     closeCoreActionsMenu();
     exportSapCsv();

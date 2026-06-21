@@ -1,7 +1,7 @@
 const path = require("path");
 const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { SchedulerDatabase } = require("./services/db");
-const { exportScheduleWorkbook, exportSapLeaveCsv, exportOvertimeWorkbook, exportLeaveWorkbook } = require("./services/exporter");
+const { exportSapLeaveCsv, exportOvertimeWorkbook, exportLeaveWorkbook } = require("./services/exporter");
 
 let mainWindow;
 let database;
@@ -32,26 +32,10 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 }
 
-async function exportExcel(payload) {
-  const defaultFileName = `排班表_${payload.year}_${String(payload.month + 1).padStart(2, "0")}.xlsx`;
-  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: "匯出排班表",
-    defaultPath: path.join(app.getPath("documents"), defaultFileName),
-    filters: [{ name: "Excel", extensions: ["xlsx"] }]
-  });
-
-  if (canceled || !filePath) {
-    return { canceled: true };
-  }
-
-  await exportScheduleWorkbook(payload, filePath);
-  return { canceled: false, filePath };
-}
-
 async function exportSapCsv(payload) {
   const defaultFileName = `sap休例假_${payload.year}_${String(payload.month + 1).padStart(2, "0")}.csv`;
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: "匯出 SAP休例假",
+    title: "匯出 SAP 休例假",
     defaultPath: path.join(app.getPath("documents"), defaultFileName),
     filters: [{ name: "CSV", extensions: ["csv"] }]
   });
@@ -106,7 +90,6 @@ app.whenReady().then(() => {
     database.saveState(state);
     return { ok: true, savedAt: new Date().toISOString() };
   });
-  ipcMain.handle("export:excel", (_event, payload) => exportExcel(payload));
   ipcMain.handle("export:sap-csv", (_event, payload) => exportSapCsv(payload));
   ipcMain.handle("export:overtime", (_event, payload) => exportOvertime(payload));
   ipcMain.handle("export:leave", (_event, payload) => exportLeave(payload));
