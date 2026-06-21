@@ -385,6 +385,29 @@
     }
   }
 
+  async function syncMemberProfile(member, previousEmployeeCode = "") {
+    ensureManager();
+    const employeeCode = String(member?.code || "").trim();
+    const sourceEmployeeCode = String(previousEmployeeCode || employeeCode).trim();
+    if (!employeeCode || !sourceEmployeeCode) {
+      return { ok: false, updated: false };
+    }
+    await restUpdate("profiles", {
+      employee_code: `eq.${sourceEmployeeCode}`
+    }, {
+      employee_code: employeeCode,
+      full_name: member?.name || "",
+      role: member?.role === "manager" ? "manager" : "employee",
+      hire_date: member?.hireDate || null,
+      leave_date: member?.leaveDate || null,
+      pay_by_day: Boolean(member?.payByDay)
+    }, {
+      auth: true,
+      prefer: "return=minimal"
+    });
+    return { ok: true, updated: true };
+  }
+
   async function getLeaveTypeByCode(code) {
     const rows = await restSelect("leave_types", {
       select: "id,code,name",
@@ -633,6 +656,7 @@
     loadState,
     saveState,
     syncCatalogs,
+    syncMemberProfile,
     createLeaveRequest,
     createOvertimeRequest,
     listLeaveRequests,

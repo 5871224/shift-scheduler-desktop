@@ -93,11 +93,11 @@ const DEFAULT_STATE = {
     { id: "p2", code: "STF", name: "員工" }
   ],
   members: [
-    { id: "m1", code: "A001", name: "王小美", deptId: "d1", positionId: "p1", proxyMemberId: "m2", hireDate: "2025-01-01", leaveDate: "", payByDay: false },
-    { id: "m2", code: "A002", name: "林佳怡", deptId: "d1", positionId: "p2", proxyMemberId: "m1", hireDate: "2025-01-01", leaveDate: "", payByDay: false },
-    { id: "m3", code: "A003", name: "陳建宏", deptId: "d1", positionId: "p2", proxyMemberId: "", hireDate: "2025-01-01", leaveDate: "", payByDay: false },
-    { id: "m4", code: "B001", name: "吳佩珊", deptId: "d2", positionId: "p1", proxyMemberId: "m5", hireDate: "2025-01-01", leaveDate: "", payByDay: false },
-    { id: "m5", code: "B002", name: "張志豪", deptId: "d2", positionId: "p2", proxyMemberId: "m4", hireDate: "2025-01-01", leaveDate: "", payByDay: false }
+    { id: "m1", code: "A001", name: "王小美", deptId: "d1", positionId: "p1", proxyMemberId: "m2", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "manager" },
+    { id: "m2", code: "A002", name: "林佳怡", deptId: "d1", positionId: "p2", proxyMemberId: "m1", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "employee" },
+    { id: "m3", code: "A003", name: "陳建宏", deptId: "d1", positionId: "p2", proxyMemberId: "", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "employee" },
+    { id: "m4", code: "B001", name: "吳佩珊", deptId: "d2", positionId: "p1", proxyMemberId: "m5", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "manager" },
+    { id: "m5", code: "B002", name: "張志豪", deptId: "d2", positionId: "p2", proxyMemberId: "m4", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "employee" }
   ],
   shifts: [
       {
@@ -443,7 +443,8 @@ function sanitizeMember(member, fallbackIndex, merged) {
     proxyMemberId: member?.proxyMemberId || "",
     hireDate: member?.hireDate || "",
     leaveDate: member?.leaveDate || "",
-    payByDay: Boolean(member?.payByDay)
+    payByDay: Boolean(member?.payByDay),
+    role: member?.role === "manager" ? "manager" : "employee"
   };
 }
 
@@ -676,6 +677,22 @@ function getCurrentProfileName() {
   return currentProfile?.full_name || currentSession?.user?.email || "";
 }
 
+function getRequestActor() {
+  if (currentMember) {
+    return {
+      code: currentMember.code || currentProfile?.employee_code || "",
+      name: currentMember.name || getCurrentProfileName()
+    };
+  }
+  if (currentProfile) {
+    return {
+      code: currentProfile.employee_code || "",
+      name: currentProfile.full_name || getCurrentProfileName()
+    };
+  }
+  return null;
+}
+
 function getCurrentRoleLabel() {
   return isManager() ? "主管" : "員工";
 }
@@ -776,14 +793,6 @@ function syncRoleUi() {
     element.classList.toggle("chips-readonly", !canEditSchedule());
   });
 
-  const leaveRequestButton = document.getElementById("leaveRequestButton");
-  const overtimeRequestButton = document.getElementById("overtimeRequestButton");
-  if (leaveRequestButton) {
-    leaveRequestButton.style.display = isLoggedIn() && currentMember ? "" : "none";
-  }
-  if (overtimeRequestButton) {
-    overtimeRequestButton.style.display = isLoggedIn() && currentMember ? "" : "none";
-  }
 }
 
 function renderAuthBar() {
@@ -805,7 +814,7 @@ function renderAuthBar() {
     return;
   }
   const memberText = currentProfile.employee_code ? `${escapeHtml(currentProfile.employee_code)} · ` : "";
-  const requestButtons = currentMember ? `
+  const requestButtons = currentProfile ? `
     <button class="ghost-btn compact-btn" type="button" data-open-leave-request="true">請假申請</button>
     <button class="ghost-btn compact-btn" type="button" data-open-overtime-request="true">加班申請</button>
   ` : "";
@@ -1114,7 +1123,7 @@ function renderTable() {
 
 function renderHeader() {
   document.getElementById("monthTitle").textContent = `${state.year} 年 ${MONTH_LABELS[state.month]}`;
-  document.getElementById("dbHint").textContent = appInfo ? `資料來源：${appInfo.databasePath}` : "";
+  document.getElementById("dbHint").textContent = "";
   renderAuthBar();
 }
 
@@ -1890,7 +1899,7 @@ function openMemberSettings() {
           <div class="settings-text-row">
             <span class="list-item-title">${escapeHtml(member.code)} · ${escapeHtml(member.name)}</span>
             <span class="list-item-subtitle">${escapeHtml(getDepartmentName(member.deptId))}</span>
-            <span class="list-item-subtitle">到職 ${escapeHtml(member.hireDate || "-")} · 離職 ${escapeHtml(member.leaveDate || "-")}${member.payByDay ? " · 按日計薪" : ""}</span>
+            <span class="list-item-subtitle">${member.role === "manager" ? "主管" : "員工"} · 到職 ${escapeHtml(member.hireDate || "-")} · 離職 ${escapeHtml(member.leaveDate || "-")}${member.payByDay ? " · 按日計薪" : ""}</span>
           </div>
         </div>
         <div class="list-item-actions">
@@ -1919,7 +1928,8 @@ function openMemberForm(mode, memberId = "") {
       proxyMemberId: "",
       hireDate: "",
       leaveDate: "",
-      payByDay: false
+      payByDay: false,
+      role: "employee"
     };
   if (!member) {
     return;
@@ -1942,6 +1952,13 @@ function openMemberForm(mode, memberId = "") {
           <label for="memberDept">所屬單位</label>
           <select id="memberDept">${buildSelectOptions(state.departments, "id", (item) => item.name, member.deptId)}</select>
         </div>
+        <div class="form-row">
+          <label for="memberRole">權限</label>
+          <select id="memberRole">
+            <option value="employee" ${member.role === "manager" ? "" : "selected"}>員工</option>
+            <option value="manager" ${member.role === "manager" ? "selected" : ""}>主管</option>
+          </select>
+        </div>
         <div class="form-row checkbox-row checkbox-row-left">
           <label class="member-toggle-label">
             <input id="memberPayByDay" type="checkbox" ${member.payByDay ? "checked" : ""}>
@@ -1962,13 +1979,16 @@ function openMemberForm(mode, memberId = "") {
   });
 }
 
-function saveMember(mode) {
+async function saveMember(mode) {
   const hireDate = document.getElementById("memberHireDate")?.value || "";
   const leaveDate = document.getElementById("memberLeaveDate")?.value || "";
   if (hireDate && leaveDate && !isValidDateRange(hireDate, leaveDate)) {
     reportValidationError("到職日必須早於離職日");
     return;
   }
+  const previousMember = mode === "edit"
+    ? state.members.find((member) => member.id === modalContext.targetId) || null
+    : null;
   const payload = {
     id: mode === "edit" ? modalContext.targetId : uid("m"),
     code: document.getElementById("memberCode")?.value.trim(),
@@ -1978,7 +1998,8 @@ function saveMember(mode) {
     proxyMemberId: "",
     hireDate,
     leaveDate,
-    payByDay: Boolean(document.getElementById("memberPayByDay")?.checked)
+    payByDay: Boolean(document.getElementById("memberPayByDay")?.checked),
+    role: document.getElementById("memberRole")?.value === "manager" ? "manager" : "employee"
   };
   if (!payload.code || !payload.name || !payload.deptId) {
     return;
@@ -1988,8 +2009,22 @@ function saveMember(mode) {
   } else {
     state.members.push(payload);
   }
+  if (currentProfile && currentProfile.employee_code === (previousMember?.code || payload.code)) {
+    currentProfile = {
+      ...currentProfile,
+      employee_code: payload.code,
+      full_name: payload.name,
+      role: payload.role
+    };
+  }
+  currentMember = resolveCurrentMember();
   closeModal();
   renderAll();
+  try {
+    await window.schedulerApi.syncMemberProfile(payload, previousMember?.code || "");
+  } catch (error) {
+    setSaveStatus(`同步人員權限失敗：${error.message}`);
+  }
   queueSave();
 }
 
@@ -2107,8 +2142,9 @@ async function openLeaveRequestModal() {
     openSignInDialog("送出請假申請前請先登入");
     return;
   }
-  if (!currentMember) {
-    showInfoMessage("目前帳號尚未對應到排班人員代碼，無法送出請假申請");
+  const actor = getRequestActor();
+  if (!actor) {
+    showInfoMessage("目前帳號尚未建立身份資料，無法送出請假申請");
     return;
   }
   await refreshRequestData();
@@ -2121,7 +2157,7 @@ async function openLeaveRequestModal() {
       <div class="form-grid">
         <div class="form-row">
           <label>申請人</label>
-          <div class="readonly-pill">${escapeHtml(currentMember.code)} · ${escapeHtml(currentMember.name)}</div>
+          <div class="readonly-pill">${escapeHtml(actor.code)} · ${escapeHtml(actor.name)}</div>
         </div>
         <div class="form-row">
           <label for="leaveRequestType">假別</label>
@@ -2200,8 +2236,9 @@ async function openOvertimeRequestModal() {
     openSignInDialog("送出加班申請前請先登入");
     return;
   }
-  if (!currentMember) {
-    showInfoMessage("目前帳號尚未對應到排班人員代碼，無法送出加班申請");
+  const actor = getRequestActor();
+  if (!actor) {
+    showInfoMessage("目前帳號尚未建立身份資料，無法送出加班申請");
     return;
   }
   await refreshRequestData();
@@ -2212,7 +2249,7 @@ async function openOvertimeRequestModal() {
       <div class="form-grid">
         <div class="form-row">
           <label>申請人</label>
-          <div class="readonly-pill">${escapeHtml(currentMember.code)} · ${escapeHtml(currentMember.name)}</div>
+          <div class="readonly-pill">${escapeHtml(actor.code)} · ${escapeHtml(actor.name)}</div>
         </div>
         <div class="form-row">
           <label for="overtimeRequestType">加班別</label>
