@@ -5,22 +5,14 @@
 
   const config = window.SCHEDULER_CONFIG || {};
   const exporter = window.schedulerBrowserExporter;
-  const supabaseFactory = window.supabase;
   const baseUrl = String(config.supabaseUrl || "").replace(/\/+$/, "");
   const anonKey = String(config.supabaseAnonKey || "");
   const documentId = String(config.documentId || "default");
+  const sessionStorageKey = `scheduler.supabase.session.${baseUrl}`;
 
-  if (!baseUrl || !anonKey || !exporter || !supabaseFactory?.createClient) {
-    throw new Error("缺少前端設定、匯出模組或 Supabase SDK");
+  if (!baseUrl || !anonKey || !exporter) {
+    throw new Error("缺少 Supabase 設定");
   }
-
-  const supabaseClient = supabaseFactory.createClient(baseUrl, anonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true
-    }
-  });
 
   let currentSession = null;
   let currentProfile = null;
@@ -40,6 +32,157 @@
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 
+  function normalizeSession(payload) {
+    if (!payload?.access_token || !payload?.user) {
+      return null;
+    }
+    return {
+      access_token: payload.access_token,
+      refresh_token: payload.refresh_token || "",
+      token_type: payload.token_type || "bearer",
+      expires_in: Number(payload.expires_in || 0),
+      expires_at: Number(payload.expires_at || 0),
+      user: payload.user
+    };
+  }
+
+  function readStoredSession() {
+    try {
+      return normalizeSession(JSON.parse(localStorage.getItem(sessionStorageKey) || "null"));
+    } catch {
+      return null;
+    }
+  }
+
+  function persistSession(session) {
+    currentSession = normalizeSession(session);
+    if (currentSession) {
+      localStorage.setItem(sessionStorageKey, JSON.stringify(currentSession));
+    } else {
+      localStorage.removeItem(sessionStorageKey);
+    }
+  }
+
+  function clearSession() {
+    currentSession = null;
+    currentProfile = null;
+    localStorage.removeItem(sessionStorageKey);
+  }
+
+  function buildHeaders(options = {}) {
+    const { auth = false, contentType = true, extra = {} } = options;
+    const token = auth && currentSession?.access_token ? currentSession.access_token : anonKey;
+    const headers = {
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+      ...extra
+    };
+    if (contentType) {
+      headers["Content-Type"] = "application/json";
+    }
+    return headers;
+  }
+
+  async function readError(response) {
+    const text = await response.text();
+    if (!text) {
+      return `HTTP ${response.status}`;
+    }
+    try {
+      const parsed = JSON.parse(text);
+      return parsed.message || parsed.error_description || parsed.error || text;
+    } catch {
+      return text;
+    }
+  }
+
+  async function requestJson(pathname, options = {}) {
+    const response = await fetch(`${baseUrl}${pathname}`, {
+      ...options,
+      headers: buildHeaders({
+        auth: options.auth,
+        contentType: options.contentType !== false,
+        extra: options.headers || {}
+      })
+    });
+    if (!response.ok) {
+      throw new Error(await readError(response));
+    }
+    if (response.status === 204) {
+      return null;
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  }
+
+  function buildQuery(params = {}) {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        search.set(key, String(value));
+      }
+    });
+    const query = search.toString();
+    return query ? `?${query}` : "";
+  }
+
+  function quoteFilterValue(value) {
+    return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+  }
+
+  function buildInFilter(values) {
+    return `in.(${values.map((value) => quoteFilterValue(value)).join(",")})`;
+  }
+
+  async function restSelect(table, options = {}) {
+    const { select = "*", filters = {}, order = "", limit = "", auth = false } = options;
+    return requestJson(
+      `/rest/v1/${table}${buildQuery({
+        select,
+        order,
+        limit,
+        ...filters
+      })}`,
+      {
+        method: "GET",
+        auth,
+        headers: {
+          Accept: "application/json"
+        }
+      }
+    );
+  }
+
+  async function restInsert(table, rows, options = {}) {
+    const { auth = false, onConflict = "", prefer = "return=representation" } = options;
+    return requestJson(
+      `/rest/v1/${table}${buildQuery(onConflict ? { on_conflict: onConflict } : {})}`,
+      {
+        method: "POST",
+        auth,
+        headers: {
+          Prefer: prefer
+        },
+        body: JSON.stringify(rows)
+      }
+    );
+  }
+
+  async function restUpdate(table, filters, payload, options = {}) {
+    const { auth = false, prefer = "return=representation" } = options;
+    return requestJson(
+      `/rest/v1/${table}${buildQuery(filters)}`,
+      {
+        method: "PATCH",
+        auth,
+        headers: {
+          Prefer: prefer
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+  }
+
   function ensureSignedIn() {
     if (!currentSession?.user) {
       throw new Error("請先登入");
@@ -49,26 +192,51 @@
   function ensureManager() {
     ensureSignedIn();
     if (currentProfile?.role !== "manager") {
-      throw new Error("此功能限主管使用");
+      throw new Error("此功能需要主管權限");
     }
+  }
+
+  async function refreshSessionIfNeeded() {
+    if (!currentSession?.refresh_token) {
+      return currentSession;
+    }
+    if (currentSession.expires_at && Date.now() < (currentSession.expires_at - 60) * 1000) {
+      return currentSession;
+    }
+    const payload = await requestJson("/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      body: JSON.stringify({
+        refresh_token: currentSession.refresh_token
+      })
+    });
+    persistSession(payload);
+    return currentSession;
   }
 
   async function fetchProfile(userId) {
-    const { data, error } = await supabaseClient
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-    return data || null;
+    const rows = await restSelect("profiles", {
+      select: "*",
+      filters: {
+        id: `eq.${userId}`
+      },
+      auth: true
+    });
+    return rows?.[0] || null;
   }
 
-  async function refreshAuthContext(sessionOverride) {
-    currentSession = sessionOverride ?? (await supabaseClient.auth.getSession()).data.session ?? null;
-    currentProfile = currentSession?.user ? await fetchProfile(currentSession.user.id) : null;
+  async function refreshAuthContext() {
+    currentProfile = null;
+    if (!currentSession?.user) {
+      return {
+        session: null,
+        profile: null
+      };
+    }
+    await refreshSessionIfNeeded();
+    currentProfile = await fetchProfile(currentSession.user.id);
+    if (!currentProfile) {
+      throw new Error("帳號尚未綁定身份");
+    }
     return {
       session: currentSession,
       profile: currentProfile
@@ -76,53 +244,92 @@
   }
 
   async function initializeAuth() {
-    return refreshAuthContext();
+    persistSession(readStoredSession());
+    if (!currentSession?.user) {
+      return { session: null, profile: null };
+    }
+    try {
+      return await refreshAuthContext();
+    } catch {
+      clearSession();
+      return { session: null, profile: null };
+    }
   }
 
-  async function signIn(email, password) {
-    const { error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password
+  async function getLoginEmailByEmployeeCode(employeeCode) {
+    const email = await requestJson("/rest/v1/rpc/login_email_by_employee_code", {
+      method: "POST",
+      body: JSON.stringify({
+        p_employee_code: String(employeeCode || "").trim()
+      })
     });
-    if (error) {
+    return typeof email === "string" ? email.trim() : "";
+  }
+
+  async function signIn(loginAccount, password) {
+    const employeeCode = String(loginAccount || "").trim();
+    const email = await getLoginEmailByEmployeeCode(employeeCode);
+    if (!email) {
+      throw new Error("找不到這個工號，或尚未設定登入帳號");
+    }
+    const payload = await requestJson("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        password
+      })
+    });
+    persistSession(payload);
+    try {
+      return await refreshAuthContext();
+    } catch (error) {
+      clearSession();
       throw error;
     }
-    return refreshAuthContext();
   }
 
   async function signOut() {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) {
-      throw error;
+    if (currentSession?.access_token) {
+      try {
+        await requestJson("/auth/v1/logout", {
+          method: "POST",
+          auth: true,
+          contentType: false
+        });
+      } catch {
+        // ponytail: logout失敗時仍直接清本機session，避免使用者卡住；若要更嚴謹可再補重試。
+      }
     }
-    currentSession = null;
-    currentProfile = null;
+    clearSession();
     return { session: null, profile: null };
   }
 
   async function loadState() {
-    ensureSignedIn();
-    const { data, error } = await supabaseClient
-      .from("schedule_documents")
-      .select("payload")
-      .eq("id", documentId)
-      .maybeSingle();
-
-    if (error) {
+    try {
+      const rows = await restSelect("schedule_documents", {
+        select: "payload",
+        filters: {
+          id: `eq.${documentId}`
+        },
+        auth: Boolean(currentSession?.access_token)
+      });
+      return rows?.[0]?.payload || null;
+    } catch (error) {
+      if (!currentSession?.access_token && /permission denied|42501|401|403/i.test(error.message || "")) {
+        // ponytail: 未開放匿名讀取時，先讓頁面用預設資料進得去；要顯示正式班表可執行 anon select SQL。
+        return null;
+      }
       throw error;
     }
-    return data?.payload || null;
   }
 
   async function saveState(state) {
     ensureManager();
-    const { error } = await supabaseClient
-      .from("schedule_documents")
-      .upsert([{ id: documentId, payload: state }], { onConflict: "id" });
-
-    if (error) {
-      throw error;
-    }
+    await restInsert("schedule_documents", [{ id: documentId, payload: state }], {
+      auth: true,
+      onConflict: "id",
+      prefer: "resolution=merge-duplicates,return=minimal"
+    });
     return { ok: true, savedAt: new Date().toISOString() };
   }
 
@@ -136,21 +343,20 @@
       requires_time: item.defaultAllDay === false,
       requires_reason: Boolean(item.requireReason)
     }));
-    const { error: leaveError } = await supabaseClient
-      .from("leave_types")
-      .upsert(leaveRows, { onConflict: "code" });
-    if (leaveError) {
-      throw leaveError;
+    if (leaveRows.length) {
+      await restInsert("leave_types", leaveRows, {
+        auth: true,
+        onConflict: "code",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
     }
 
-    const { data: existingOvertime, error: overtimeReadError } = await supabaseClient
-      .from("overtime_types")
-      .select("id,name");
-    if (overtimeReadError) {
-      throw overtimeReadError;
-    }
-
+    const existingOvertime = await restSelect("overtime_types", {
+      select: "id,name",
+      auth: true
+    });
     const overtimeMap = new Map((existingOvertime || []).map((item) => [item.name, item]));
+
     for (const item of state.overtime || []) {
       const payload = {
         name: item.name,
@@ -165,109 +371,143 @@
         rest_2_end_time: item.useRest2 ? item.rest2EndTime || null : null
       };
       const existing = overtimeMap.get(item.name);
-      const query = existing
-        ? supabaseClient.from("overtime_types").update(payload).eq("id", existing.id)
-        : supabaseClient.from("overtime_types").insert(payload);
-      const { error } = await query;
-      if (error) {
-        throw error;
+      if (existing?.id) {
+        await restUpdate("overtime_types", { id: `eq.${existing.id}` }, payload, {
+          auth: true,
+          prefer: "return=minimal"
+        });
+      } else {
+        await restInsert("overtime_types", [payload], {
+          auth: true,
+          prefer: "return=minimal"
+        });
       }
     }
   }
 
   async function getLeaveTypeByCode(code) {
-    const { data, error } = await supabaseClient
-      .from("leave_types")
-      .select("id,code,name")
-      .eq("code", code)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
+    const rows = await restSelect("leave_types", {
+      select: "id,code,name",
+      filters: {
+        code: `eq.${code}`
+      },
+      auth: true
+    });
+    if (!rows?.length) {
+      throw new Error("找不到對應的假別，請先同步假別設定");
     }
-    if (!data) {
-      throw new Error("找不到對應的假別資料，請先請主管同步假別設定");
-    }
-    return data;
+    return rows[0];
   }
 
   async function getOvertimeTypeByName(name) {
-    const { data, error } = await supabaseClient
-      .from("overtime_types")
-      .select("id,name")
-      .eq("name", name)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
+    const rows = await restSelect("overtime_types", {
+      select: "id,name",
+      filters: {
+        name: `eq.${name}`
+      },
+      auth: true
+    });
+    if (!rows?.length) {
+      throw new Error("找不到對應的加班別，請先同步加班設定");
     }
-    if (!data) {
-      throw new Error("找不到對應的加班資料，請先請主管同步加班設定");
-    }
-    return data;
+    return rows[0];
   }
 
   async function createLeaveRequest(payload) {
     ensureSignedIn();
     const leaveType = await getLeaveTypeByCode(payload.leaveCode);
-    const { error } = await supabaseClient
-      .from("leave_requests")
-      .insert({
-        member_id: currentSession.user.id,
-        leave_type_id: leaveType.id,
-        start_date: payload.startDate,
-        end_date: payload.endDate,
-        is_all_day: payload.isAllDay,
-        start_time: payload.isAllDay ? null : payload.startTime,
-        end_time: payload.isAllDay ? null : payload.endTime,
-        reason: payload.reason || ""
-      });
-
-    if (error) {
-      throw error;
-    }
+    await restInsert("leave_requests", [{
+      member_id: currentSession.user.id,
+      leave_type_id: leaveType.id,
+      start_date: payload.startDate,
+      end_date: payload.endDate,
+      is_all_day: payload.isAllDay,
+      start_time: payload.isAllDay ? null : payload.startTime,
+      end_time: payload.isAllDay ? null : payload.endTime,
+      reason: payload.reason || ""
+    }], {
+      auth: true,
+      prefer: "return=minimal"
+    });
     return { ok: true };
   }
 
   async function createOvertimeRequest(payload) {
     ensureSignedIn();
     const overtimeType = await getOvertimeTypeByName(payload.overtimeName);
-    const { error } = await supabaseClient
-      .from("overtime_requests")
-      .insert({
-        member_id: currentSession.user.id,
-        overtime_type_id: overtimeType.id,
-        work_date: payload.workDate,
-        reason: payload.reason || ""
-      });
-
-    if (error) {
-      throw error;
-    }
+    await restInsert("overtime_requests", [{
+      member_id: currentSession.user.id,
+      overtime_type_id: overtimeType.id,
+      work_date: payload.workDate,
+      reason: payload.reason || ""
+    }], {
+      auth: true,
+      prefer: "return=minimal"
+    });
     return { ok: true };
+  }
+
+  async function fetchProfilesByIds(ids) {
+    if (!ids.length) {
+      return new Map();
+    }
+    const rows = await restSelect("profiles", {
+      select: "id,employee_code,full_name,role",
+      filters: {
+        id: buildInFilter(ids)
+      },
+      auth: true
+    });
+    return new Map((rows || []).map((item) => [item.id, item]));
+  }
+
+  async function fetchLeaveTypesByIds(ids) {
+    if (!ids.length) {
+      return new Map();
+    }
+    const rows = await restSelect("leave_types", {
+      select: "id,code,name",
+      filters: {
+        id: buildInFilter(ids)
+      },
+      auth: true
+    });
+    return new Map((rows || []).map((item) => [item.id, item]));
+  }
+
+  async function fetchOvertimeTypesByIds(ids) {
+    if (!ids.length) {
+      return new Map();
+    }
+    const rows = await restSelect("overtime_types", {
+      select: "id,name",
+      filters: {
+        id: buildInFilter(ids)
+      },
+      auth: true
+    });
+    return new Map((rows || []).map((item) => [item.id, item]));
   }
 
   async function listLeaveRequests(options = {}) {
     ensureSignedIn();
-    let query = supabaseClient
-      .from("leave_requests")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const filters = {};
     if (!options.manager) {
-      query = query.eq("member_id", currentSession.user.id);
+      filters.member_id = `eq.${currentSession.user.id}`;
     }
-    const { data, error } = await query;
-    if (error) {
-      throw error;
-    }
+    const rows = await restSelect("leave_requests", {
+      select: "*",
+      filters,
+      order: "created_at.desc",
+      auth: true
+    });
 
-    const rows = data || [];
-    const memberIds = [...new Set(rows.map((item) => item.member_id).filter(Boolean))];
-    const leaveTypeIds = [...new Set(rows.map((item) => item.leave_type_id).filter(Boolean))];
+    const memberIds = [...new Set((rows || []).map((item) => item.member_id).filter(Boolean))];
+    const leaveTypeIds = [...new Set((rows || []).map((item) => item.leave_type_id).filter(Boolean))];
     const profileMap = await fetchProfilesByIds(memberIds);
     const leaveTypeMap = await fetchLeaveTypesByIds(leaveTypeIds);
 
-    return rows.map((item) => ({
+    return (rows || []).map((item) => ({
       id: item.id,
       memberId: item.member_id,
       memberCode: profileMap.get(item.member_id)?.employee_code || "",
@@ -289,25 +529,23 @@
 
   async function listOvertimeRequests(options = {}) {
     ensureSignedIn();
-    let query = supabaseClient
-      .from("overtime_requests")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const filters = {};
     if (!options.manager) {
-      query = query.eq("member_id", currentSession.user.id);
+      filters.member_id = `eq.${currentSession.user.id}`;
     }
-    const { data, error } = await query;
-    if (error) {
-      throw error;
-    }
+    const rows = await restSelect("overtime_requests", {
+      select: "*",
+      filters,
+      order: "created_at.desc",
+      auth: true
+    });
 
-    const rows = data || [];
-    const memberIds = [...new Set(rows.map((item) => item.member_id).filter(Boolean))];
-    const overtimeTypeIds = [...new Set(rows.map((item) => item.overtime_type_id).filter(Boolean))];
+    const memberIds = [...new Set((rows || []).map((item) => item.member_id).filter(Boolean))];
+    const overtimeTypeIds = [...new Set((rows || []).map((item) => item.overtime_type_id).filter(Boolean))];
     const profileMap = await fetchProfilesByIds(memberIds);
     const overtimeTypeMap = await fetchOvertimeTypesByIds(overtimeTypeIds);
 
-    return rows.map((item) => ({
+    return (rows || []).map((item) => ({
       id: item.id,
       memberId: item.member_id,
       memberCode: profileMap.get(item.member_id)?.employee_code || "",
@@ -325,88 +563,40 @@
   async function updateLeaveRequest(payload) {
     ensureManager();
     const nextStatus = payload.status;
-    const updatePayload = {
+    await restUpdate("leave_requests", {
+      id: `eq.${payload.id}`
+    }, {
       status: nextStatus,
       manager_note: payload.managerNote || "",
       approved_by: nextStatus === "pending" ? null : currentSession.user.id,
       approved_at: nextStatus === "pending" ? null : new Date().toISOString()
-    };
-    const { error } = await supabaseClient
-      .from("leave_requests")
-      .update(updatePayload)
-      .eq("id", payload.id);
-
-    if (error) {
-      throw error;
-    }
+    }, {
+      auth: true,
+      prefer: "return=minimal"
+    });
     return { ok: true };
   }
 
   async function updateOvertimeRequest(payload) {
     ensureManager();
     const nextStatus = payload.status;
-    const updatePayload = {
+    await restUpdate("overtime_requests", {
+      id: `eq.${payload.id}`
+    }, {
       status: nextStatus,
       manager_note: payload.managerNote || "",
       approved_by: nextStatus === "pending" ? null : currentSession.user.id,
       approved_at: nextStatus === "pending" ? null : new Date().toISOString()
-    };
-    const { error } = await supabaseClient
-      .from("overtime_requests")
-      .update(updatePayload)
-      .eq("id", payload.id);
-
-    if (error) {
-      throw error;
-    }
+    }, {
+      auth: true,
+      prefer: "return=minimal"
+    });
     return { ok: true };
-  }
-
-  async function fetchProfilesByIds(ids) {
-    if (!ids.length) {
-      return new Map();
-    }
-    const { data, error } = await supabaseClient
-      .from("profiles")
-      .select("id,employee_code,full_name,role")
-      .in("id", ids);
-    if (error) {
-      throw error;
-    }
-    return new Map((data || []).map((item) => [item.id, item]));
-  }
-
-  async function fetchLeaveTypesByIds(ids) {
-    if (!ids.length) {
-      return new Map();
-    }
-    const { data, error } = await supabaseClient
-      .from("leave_types")
-      .select("id,code,name")
-      .in("id", ids);
-    if (error) {
-      throw error;
-    }
-    return new Map((data || []).map((item) => [item.id, item]));
-  }
-
-  async function fetchOvertimeTypesByIds(ids) {
-    if (!ids.length) {
-      return new Map();
-    }
-    const { data, error } = await supabaseClient
-      .from("overtime_types")
-      .select("id,name")
-      .in("id", ids);
-    if (error) {
-      throw error;
-    }
-    return new Map((data || []).map((item) => [item.id, item]));
   }
 
   async function exportExcel(payload) {
     const blob = await exporter.workbookToBlob(await exporter.createScheduleWorkbook(payload));
-    const fileName = makeFileName("排班表", payload, "xlsx");
+    const fileName = makeFileName("排班班表", payload, "xlsx");
     downloadBlob(blob, fileName);
     return { canceled: false, filePath: fileName };
   }
@@ -455,7 +645,7 @@
     exportLeave,
     getAppInfo: async () => ({
       databasePath: `Supabase / schedule_documents / ${documentId}`,
-      backend: "supabase-auth",
+      backend: "supabase-static",
       updatedAt: null
     }),
     showMessage: async (_title, message) => {

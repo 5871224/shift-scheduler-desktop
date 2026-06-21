@@ -199,6 +199,8 @@ let currentMember = null;
 let leaveRequestRecords = [];
 let overtimeRequestRecords = [];
 let authErrorMessage = "";
+let authPromptMessage = "";
+let authModalOpen = false;
 let eventsBound = false;
 
 function deepClone(value) {
@@ -713,7 +715,37 @@ function getRequestStatusOptions(selectedValue) {
   )).join("");
 }
 
+function openSignInDialog(message = "") {
+  authPromptMessage = message;
+  authErrorMessage = "";
+  authModalOpen = true;
+  renderAuthGate();
+}
+
+function closeSignInDialog() {
+  authPromptMessage = "";
+  authErrorMessage = "";
+  authModalOpen = false;
+  renderAuthGate();
+}
+
+function promptManagerAccess(message) {
+  if (!isLoggedIn()) {
+    openSignInDialog(message || "此功能需先登入主管帳號");
+    return false;
+  }
+  if (!isManager()) {
+    showInfoMessage("此功能限主管使用");
+    return false;
+  }
+  return true;
+}
+
 function syncRoleUi() {
+  const coreActionsShell = document.getElementById("coreActionsShell");
+  if (coreActionsShell) {
+    coreActionsShell.style.display = isManager() ? "" : "none";
+  }
   const managerOnlyIds = [
     "memberSettingsButton",
     "deptSettingsButton",
@@ -756,7 +788,9 @@ function renderAuthBar() {
     return;
   }
   if (!isLoggedIn()) {
-    container.innerHTML = "";
+    container.innerHTML = `
+      <button class="ghost-btn compact-btn" type="button" data-open-sign-in="true">登入</button>
+    `;
     return;
   }
   if (!currentProfile) {
@@ -767,8 +801,13 @@ function renderAuthBar() {
     return;
   }
   const memberText = currentProfile.employee_code ? `${escapeHtml(currentProfile.employee_code)} · ` : "";
+  const requestButtons = currentMember ? `
+    <button class="ghost-btn compact-btn" type="button" data-open-leave-request="true">請假申請</button>
+    <button class="ghost-btn compact-btn" type="button" data-open-overtime-request="true">加班申請</button>
+  ` : "";
   container.innerHTML = `
     <div class="session-pill">${escapeHtml(getCurrentRoleLabel())} · ${memberText}${escapeHtml(getCurrentProfileName())}</div>
+    ${requestButtons}
     <button class="ghost-btn compact-btn" id="signOutButton" type="button">登出</button>
   `;
 }
@@ -778,14 +817,19 @@ function renderAuthGate() {
   if (!root) {
     return;
   }
+  if (!authModalOpen) {
+    root.innerHTML = "";
+    return;
+  }
   if (!isLoggedIn()) {
     root.innerHTML = `
       <div class="auth-overlay">
         <div class="auth-card">
           <h3>登入</h3>
+          ${authPromptMessage ? `<p class="modal-description">${escapeHtml(authPromptMessage)}</p>` : ""}
           <div class="form-row">
-            <label for="loginEmail">Email</label>
-            <input id="loginEmail" type="text" autocomplete="username" placeholder="請輸入 Email">
+            <label for="loginAccount">工號</label>
+            <input id="loginAccount" type="text" autocomplete="username" placeholder="請輸入工號">
           </div>
           <div class="form-row">
             <label for="loginPassword">密碼</label>
@@ -793,23 +837,8 @@ function renderAuthGate() {
           </div>
           ${authErrorMessage ? `<div class="auth-error">${escapeHtml(authErrorMessage)}</div>` : ""}
           <div class="modal-footer auth-footer">
+            <button class="btn-cancel" type="button" data-close-auth-gate="true">取消</button>
             <button class="btn-primary" type="button" data-auth-sign-in="true">登入</button>
-          </div>
-        </div>
-      </div>
-    `;
-    return;
-  }
-  if (!currentProfile) {
-    root.innerHTML = `
-      <div class="auth-overlay">
-        <div class="auth-card">
-          <h3>帳號尚未綁定身份</h3>
-          <p class="modal-description">請先在 Supabase 的 <code>profiles</code> 建立與 Auth 使用者相同 id 的資料列，並填好 employee_code、full_name、role。</p>
-          <div class="readonly-pill">${escapeHtml(currentSession?.user?.email || "")}</div>
-          ${authErrorMessage ? `<div class="auth-error">${escapeHtml(authErrorMessage)}</div>` : ""}
-          <div class="modal-footer auth-footer">
-            <button class="btn-cancel" type="button" id="authGateSignOutButton">登出</button>
           </div>
         </div>
       </div>
@@ -1127,6 +1156,7 @@ function queueSave() {
 
 function applySelectionToCell(memberId, day) {
   if (!canEditSchedule()) {
+    promptManagerAccess("修改班表需先登入主管帳號");
     return;
   }
   const member = state.members.find((item) => item.id === memberId);
@@ -1172,6 +1202,7 @@ function applySelectionToCell(memberId, day) {
 
 function selectChip(type, id) {
   if (!canEditSchedule()) {
+    promptManagerAccess("修改班表需先登入主管帳號");
     return;
   }
   if (state.selected.type === type && state.selected.id === id) {
@@ -2068,6 +2099,10 @@ function syncLeaveRequestFormUi() {
 }
 
 async function openLeaveRequestModal() {
+  if (!isLoggedIn()) {
+    openSignInDialog("送出請假申請前請先登入");
+    return;
+  }
   if (!currentMember) {
     showInfoMessage("目前帳號尚未對應到排班人員代碼，無法送出請假申請");
     return;
@@ -2157,6 +2192,10 @@ async function saveLeaveRequestFromModal() {
 }
 
 async function openOvertimeRequestModal() {
+  if (!isLoggedIn()) {
+    openSignInDialog("送出加班申請前請先登入");
+    return;
+  }
   if (!currentMember) {
     showInfoMessage("目前帳號尚未對應到排班人員代碼，無法送出加班申請");
     return;
@@ -2211,8 +2250,7 @@ async function saveOvertimeRequestFromModal() {
 }
 
 async function openLeaveApprovalModal() {
-  if (!isManager()) {
-    showInfoMessage("此功能限主管使用");
+  if (!promptManagerAccess("審核請假前請先登入主管帳號")) {
     return;
   }
   await refreshRequestData();
@@ -2224,8 +2262,7 @@ async function openLeaveApprovalModal() {
 }
 
 async function openOvertimeApprovalModal() {
-  if (!isManager()) {
-    showInfoMessage("此功能限主管使用");
+  if (!promptManagerAccess("審核加班前請先登入主管帳號")) {
     return;
   }
   await refreshRequestData();
@@ -2306,8 +2343,7 @@ function applyApprovedOvertimeRequestToSchedule(record) {
 }
 
 async function saveRequestReview(kind, requestId) {
-  if (!isManager()) {
-    showInfoMessage("此功能限主管使用");
+  if (!promptManagerAccess("審核申請前請先登入主管帳號")) {
     return;
   }
   const status = document.getElementById(`${kind}ReviewStatus_${requestId}`)?.value || "pending";
@@ -2336,16 +2372,17 @@ async function saveRequestReview(kind, requestId) {
 }
 
 async function handleSignIn() {
-  const email = document.getElementById("loginEmail")?.value.trim() || "";
+  const loginAccount = document.getElementById("loginAccount")?.value.trim() || "";
   const password = document.getElementById("loginPassword")?.value || "";
-  if (!email || !password) {
-    authErrorMessage = "請輸入 Email 與密碼";
+  if (!loginAccount || !password) {
+    authErrorMessage = "請輸入工號與密碼";
     renderAuthGate();
     return;
   }
   try {
     authErrorMessage = "";
-    await window.schedulerApi.signIn(email, password);
+    await window.schedulerApi.signIn(loginAccount, password);
+    closeSignInDialog();
     await loadApp();
   } catch (error) {
     authErrorMessage = error.message || "登入失敗";
@@ -2356,16 +2393,17 @@ async function handleSignIn() {
 async function handleSignOut() {
   await window.schedulerApi.signOut();
   authErrorMessage = "";
+  authPromptMessage = "";
+  authModalOpen = false;
   currentSession = null;
   currentProfile = null;
   currentMember = null;
   leaveRequestRecords = [];
   overtimeRequestRecords = [];
   appInfo = null;
-  state = createDefaultState();
   closeModal();
   closeCoreActionsMenu();
-  renderAll();
+  await loadApp();
 }
 
 function changeMonth(delta) {
@@ -2476,63 +2514,73 @@ function bindEvents() {
     return;
   }
   eventsBound = true;
-  document.getElementById("coreActionsToggle").addEventListener("click", (event) => {
+  const bindClick = (id, handler) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.addEventListener("click", handler);
+    }
+  };
+
+  bindClick("coreActionsToggle", (event) => {
     event.stopPropagation();
     toggleCoreActionsMenu();
   });
-  document.getElementById("prevMonthButton").addEventListener("click", () => changeMonth(-1));
-  document.getElementById("nextMonthButton").addEventListener("click", () => changeMonth(1));
-  document.getElementById("exportButton").addEventListener("click", () => {
+  bindClick("prevMonthButton", () => changeMonth(-1));
+  bindClick("nextMonthButton", () => changeMonth(1));
+  bindClick("exportButton", () => {
     closeCoreActionsMenu();
     exportExcel();
   });
-  document.getElementById("exportSapButton").addEventListener("click", () => {
+  bindClick("exportSapButton", () => {
     closeCoreActionsMenu();
     exportSapCsv();
   });
-  document.getElementById("exportOvertimeButton").addEventListener("click", () => {
+  bindClick("exportOvertimeButton", () => {
     closeCoreActionsMenu();
     exportOvertime();
   });
-  document.getElementById("exportLeaveButton").addEventListener("click", () => {
+  bindClick("exportLeaveButton", () => {
     closeCoreActionsMenu();
     exportLeave();
   });
-  document.getElementById("deptSettingsButton").addEventListener("click", openDepartmentSettings);
-  document.getElementById("shiftSettingsButton").addEventListener("click", () => openListSettings("shift"));
-  document.getElementById("leaveSettingsButton").addEventListener("click", () => openListSettings("leave"));
-  document.getElementById("overtimeSettingsButton").addEventListener("click", () => openListSettings("overtime"));
-  document.getElementById("memberSettingsButton").addEventListener("click", () => {
+  bindClick("deptSettingsButton", openDepartmentSettings);
+  bindClick("shiftSettingsButton", () => openListSettings("shift"));
+  bindClick("leaveSettingsButton", () => openListSettings("leave"));
+  bindClick("overtimeSettingsButton", () => openListSettings("overtime"));
+  bindClick("memberSettingsButton", () => {
     closeCoreActionsMenu();
     openMemberSettings();
   });
-  document.getElementById("leaveRequestButton").addEventListener("click", async () => {
-    closeCoreActionsMenu();
-    await openLeaveRequestModal();
-  });
-  document.getElementById("overtimeRequestButton").addEventListener("click", async () => {
-    closeCoreActionsMenu();
-    await openOvertimeRequestModal();
-  });
-  document.getElementById("leaveApprovalButton").addEventListener("click", async () => {
+  bindClick("leaveApprovalButton", async () => {
     closeCoreActionsMenu();
     await openLeaveApprovalModal();
   });
-  document.getElementById("overtimeApprovalButton").addEventListener("click", async () => {
+  bindClick("overtimeApprovalButton", async () => {
     closeCoreActionsMenu();
     await openOvertimeApprovalModal();
   });
 
-  document.getElementById("deptFilter").addEventListener("change", (event) => {
-    state.deptFilter = event.target.value;
-    renderToolbar();
-    renderTable();
-    queueSave();
-  });
+  const deptFilter = document.getElementById("deptFilter");
+  if (deptFilter) {
+    deptFilter.addEventListener("change", (event) => {
+      state.deptFilter = event.target.value;
+      renderToolbar();
+      renderTable();
+      queueSave();
+    });
+  }
 
   document.body.addEventListener("click", async (event) => {
     const target = event.target.closest("button, td");
     if (!target) {
+      return;
+    }
+    if (target.dataset.openSignIn) {
+      openSignInDialog();
+      return;
+    }
+    if (target.dataset.closeAuthGate) {
+      closeSignInDialog();
       return;
     }
     if (target.dataset.authSignIn) {
@@ -2550,13 +2598,13 @@ function bindEvents() {
       closeModal();
       return;
     }
-      if (target.classList.contains("cell")) {
-        if (target.classList.contains("inactive-cell")) {
-          return;
-        }
-        applySelectionToCell(target.dataset.memberId, Number(target.dataset.day));
+    if (target.classList.contains("cell")) {
+      if (target.classList.contains("inactive-cell")) {
         return;
       }
+      applySelectionToCell(target.dataset.memberId, Number(target.dataset.day));
+      return;
+    }
     const managerOnlyAction = Boolean(
       target.dataset.deleteCategory ||
       target.dataset.editLeaveAssignment ||
@@ -2574,7 +2622,15 @@ function bindEvents() {
       target.dataset.deleteMember
     );
     if (managerOnlyAction && !isManager()) {
-      showInfoMessage("此功能限主管使用");
+      promptManagerAccess("此功能需先登入主管帳號");
+      return;
+    }
+    if (target.dataset.openLeaveRequest) {
+      await openLeaveRequestModal();
+      return;
+    }
+    if (target.dataset.openOvertimeRequest) {
+      await openOvertimeRequestModal();
       return;
     }
     if (target.dataset.chipType !== undefined) {
@@ -2768,33 +2824,28 @@ function bindEvents() {
 async function loadApp() {
   bindEvents();
   authErrorMessage = "";
-  currentSession = null;
-  currentProfile = null;
-  currentMember = null;
-  leaveRequestRecords = [];
-  overtimeRequestRecords = [];
-  appInfo = null;
   try {
     const authContext = await window.schedulerApi.initializeAuth();
     currentSession = authContext.session;
     currentProfile = authContext.profile;
-    renderAll();
-    if (!isLoggedIn() || !currentProfile) {
-      return;
-    }
-
     appInfo = await window.schedulerApi.getAppInfo();
     const payload = await window.schedulerApi.loadState();
     state = normalizeState(payload);
     currentMember = resolveCurrentMember();
-    await syncRequestCatalogs();
+    if (isManager()) {
+      await syncRequestCatalogs();
+    }
     await refreshRequestData();
   } catch (error) {
     setSaveStatus(`載入失敗：${error.message}`);
     authErrorMessage = error.message || "載入失敗";
-    if (!isLoggedIn()) {
-      state = createDefaultState();
-    }
+    state = createDefaultState();
+    currentSession = null;
+    currentProfile = null;
+    currentMember = null;
+    leaveRequestRecords = [];
+    overtimeRequestRecords = [];
+    appInfo = null;
   }
   renderAll();
   syncCoreActionsMenu();

@@ -10,14 +10,12 @@
   <div class="app-shell">
     <section class="toolbar-card">
       <div class="toolbar-top-row">
-        <h2 class="toolbar-main-title">核心功能</h2>
+        <h2 class="toolbar-main-title">排班工具</h2>
         <div id="authBar" class="auth-bar"></div>
         <p id="dbHint" class="db-hint"></p>
-        <div class="core-actions-shell">
-          <button class="ghost-btn core-actions-toggle" id="coreActionsToggle" type="button">功能選單</button>
+        <div class="core-actions-shell" id="coreActionsShell">
+          <button class="ghost-btn core-actions-toggle" id="coreActionsToggle" type="button">核心功能</button>
           <div class="core-actions-menu" id="coreActionsMenu" aria-hidden="true">
-            <button class="ghost-btn ops-btn" id="leaveRequestButton" type="button">請假申請</button>
-            <button class="ghost-btn ops-btn" id="overtimeRequestButton" type="button">加班申請</button>
             <button class="ghost-btn ops-btn" id="leaveApprovalButton" type="button">請假審核</button>
             <button class="ghost-btn ops-btn" id="overtimeApprovalButton" type="button">加班審核</button>
             <button class="ghost-btn ops-btn" id="memberSettingsButton" type="button">人員設定</button>
@@ -87,7 +85,6 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./app-config.js"></script>
   <script src="./browser-exporter.js"></script>
   <script src="./web-api.js"></script>
