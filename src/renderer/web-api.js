@@ -32,6 +32,22 @@
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 
+  function pickFile(accept) {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = accept;
+      input.style.display = "none";
+      document.body.appendChild(input);
+      input.addEventListener("change", () => {
+        const file = input.files?.[0] || null;
+        input.remove();
+        resolve(file);
+      }, { once: true });
+      input.click();
+    });
+  }
+
   function normalizeSession(payload) {
     if (!payload?.access_token || !payload?.user) {
       return null;
@@ -648,6 +664,24 @@
     return { canceled: false, filePath: fileName };
   }
 
+  async function exportMembers(payload) {
+    const blob = await exporter.workbookToBlob(await exporter.createMemberWorkbook(payload));
+    const fileName = "人員資料.xlsx";
+    downloadBlob(blob, fileName);
+    return { canceled: false, filePath: fileName };
+  }
+
+  async function importMembers() {
+    const file = await pickFile(".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (!file) {
+      return { canceled: true, rows: [] };
+    }
+    return {
+      canceled: false,
+      rows: await exporter.parseMemberWorkbook(await file.arrayBuffer())
+    };
+  }
+
   window.schedulerApi = {
     initializeAuth,
     getAuthContext: () => ({ session: currentSession, profile: currentProfile }),
@@ -667,6 +701,8 @@
     exportSapCsv,
     exportOvertime,
     exportLeave,
+    exportMembers,
+    importMembers,
     getAppInfo: async () => ({
       databasePath: `Supabase / schedule_documents / ${documentId}`,
       backend: "supabase-static",

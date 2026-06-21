@@ -629,6 +629,10 @@ function getPositionName(positionId) {
   return state.positions.find((position) => position.id === positionId)?.name || "未指定職位";
 }
 
+function getSalaryTypeLabel(member) {
+  return member?.payByDay ? "按日計薪" : "月薪";
+}
+
 function getDepartmentSummary(deptIds) {
   if (!Array.isArray(deptIds) || !deptIds.length) {
     return "全部單位";
@@ -1899,7 +1903,7 @@ function openMemberSettings() {
           <div class="settings-text-row">
             <span class="list-item-title">${escapeHtml(member.code)} · ${escapeHtml(member.name)}</span>
             <span class="list-item-subtitle">${escapeHtml(getDepartmentName(member.deptId))}</span>
-            <span class="list-item-subtitle">${member.role === "manager" ? "主管" : "員工"} · 到職 ${escapeHtml(member.hireDate || "-")} · 離職 ${escapeHtml(member.leaveDate || "-")}${member.payByDay ? " · 按日計薪" : ""}</span>
+            <span class="list-item-subtitle">${member.role === "manager" ? "主管" : "員工"} · 到職 ${escapeHtml(member.hireDate || "-")} · 離職 ${escapeHtml(member.leaveDate || "-")} · ${getSalaryTypeLabel(member)}</span>
           </div>
         </div>
         <div class="list-item-actions">
@@ -1912,7 +1916,11 @@ function openMemberSettings() {
   openEntityListModal({
     title: "人員設定",
     body,
-    footerButtons: `<button class="btn-primary" type="button" data-open-add-member="true">新增人員</button>`
+    footerButtons: `
+      <button class="ghost-btn" type="button" data-export-members="true">匯出人員資料</button>
+      <button class="ghost-btn" type="button" data-import-members="true">匯入人員資料</button>
+      <button class="btn-primary" type="button" data-open-add-member="true">新增人員</button>
+    `
   });
 }
 
@@ -1959,12 +1967,6 @@ function openMemberForm(mode, memberId = "") {
             <option value="manager" ${member.role === "manager" ? "selected" : ""}>主管</option>
           </select>
         </div>
-        <div class="form-row checkbox-row checkbox-row-left">
-          <label class="member-toggle-label">
-            <input id="memberPayByDay" type="checkbox" ${member.payByDay ? "checked" : ""}>
-            按日計薪
-          </label>
-        </div>
         <div class="form-row">
           <label for="memberHireDate">到職日</label>
           <input id="memberHireDate" type="date" value="${escapeHtml(member.hireDate)}">
@@ -1972,6 +1974,13 @@ function openMemberForm(mode, memberId = "") {
         <div class="form-row">
           <label for="memberLeaveDate">離職日</label>
           <input id="memberLeaveDate" type="date" value="${escapeHtml(member.leaveDate)}">
+        </div>
+        <div class="form-row form-row-wide">
+          <label for="memberSalaryType">薪資方式</label>
+          <select id="memberSalaryType">
+            <option value="monthly" ${member.payByDay ? "" : "selected"}>月薪</option>
+            <option value="daily" ${member.payByDay ? "selected" : ""}>按日計薪</option>
+          </select>
         </div>
       </div>
     `,
@@ -1998,7 +2007,7 @@ async function saveMember(mode) {
     proxyMemberId: "",
     hireDate,
     leaveDate,
-    payByDay: Boolean(document.getElementById("memberPayByDay")?.checked),
+    payByDay: document.getElementById("memberSalaryType")?.value === "daily",
     role: document.getElementById("memberRole")?.value === "manager" ? "manager" : "employee"
   };
   if (!payload.code || !payload.name || !payload.deptId) {
@@ -2026,6 +2035,79 @@ async function saveMember(mode) {
     setSaveStatus(`同步人員權限失敗：${error.message}`);
   }
   queueSave();
+}
+
+async function exportMembersFromSettings() {
+  try {
+    await window.schedulerApi.exportMembers({
+      state,
+      year: state.year,
+      month: state.month
+    });
+  } catch (error) {
+    setSaveStatus(`匯出失敗：${error.message}`);
+  }
+}
+
+async function importMembersFromSettings() {
+  try {
+    const result = await window.schedulerApi.importMembers();
+    if (result.canceled) {
+      return;
+    }
+    const departmentMap = new Map(state.departments.map((department) => [department.name.trim(), department.id]));
+    let imported = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const row of result.rows || []) {
+      const code = String(row.code || "").trim();
+      const name = String(row.name || "").trim();
+      const departmentName = String(row.departmentName || "").trim();
+      const deptId = departmentMap.get(departmentName);
+      if (!code || !name || !deptId) {
+        skipped += 1;
+        continue;
+      }
+      if (row.hireDate && row.leaveDate && !isValidDateRange(row.hireDate, row.leaveDate)) {
+        skipped += 1;
+        continue;
+      }
+      const existing = state.members.find((member) => member.code === code) || null;
+      const payload = {
+        id: existing?.id || uid("m"),
+        code,
+        name,
+        deptId,
+        positionId: existing?.positionId || "",
+        proxyMemberId: existing?.proxyMemberId || "",
+        hireDate: row.hireDate || "",
+        leaveDate: row.leaveDate || "",
+        payByDay: Boolean(row.payByDay),
+        role: row.role === "manager" ? "manager" : "employee"
+      };
+      if (existing) {
+        state.members = state.members.map((member) => member.id === existing.id ? payload : member);
+        updated += 1;
+      } else {
+        state.members.push(payload);
+        imported += 1;
+      }
+      try {
+        await window.schedulerApi.syncMemberProfile(payload, existing?.code || "");
+      } catch {
+        // ponytail: 匯入主流程先完成，後端身份同步失敗只略過；若日後要追蹤失敗名單可再補報表。
+      }
+    }
+
+    currentMember = resolveCurrentMember();
+    renderAll();
+    openMemberSettings();
+    queueSave();
+    showInfoMessage(`匯入完成：新增 ${imported} 筆，更新 ${updated} 筆，略過 ${skipped} 筆`);
+  } catch (error) {
+    setSaveStatus(`匯入失敗：${error.message}`);
+  }
 }
 
 async function deleteMember(memberId) {
@@ -2658,6 +2740,8 @@ function bindEvents() {
       target.dataset.saveDepartment ||
       target.dataset.deleteDepartment ||
       target.dataset.openAddMember ||
+      target.dataset.exportMembers ||
+      target.dataset.importMembers ||
       target.dataset.editMember ||
       target.dataset.saveMember ||
       target.dataset.deleteMember
@@ -2736,8 +2820,19 @@ function bindEvents() {
     }
 
     if (target.dataset.openAddMember) openMemberForm("add");
+    if (target.dataset.exportMembers) {
+      await exportMembersFromSettings();
+      return;
+    }
+    if (target.dataset.importMembers) {
+      await importMembersFromSettings();
+      return;
+    }
     if (target.dataset.editMember) openMemberForm("edit", target.dataset.editMember);
-    if (target.dataset.saveMember) saveMember(target.dataset.saveMember);
+    if (target.dataset.saveMember) {
+      await saveMember(target.dataset.saveMember);
+      return;
+    }
     if (target.dataset.deleteMember) {
       await deleteMember(target.dataset.deleteMember);
     }

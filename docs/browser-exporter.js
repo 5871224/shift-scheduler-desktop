@@ -27,6 +27,46 @@
     return `FF${String(hex || "#FFFFFF").replace("#", "").toUpperCase()}`;
   }
 
+  function formatDisplayDate(value) {
+    if (!value) {
+      return "";
+    }
+    const text = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      return text.replaceAll("-", "/");
+    }
+    return text;
+  }
+
+  function normalizeImportedDate(value) {
+    if (!value) {
+      return "";
+    }
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return formatIsoDate(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      // ponytail: Excel serial date先用1899基準直接換，已足夠支援目前匯入格式；若未來遇到1904系統再補分支。
+      const utc = new Date(Math.round((value - 25569) * 86400 * 1000));
+      if (!Number.isNaN(utc.getTime())) {
+        return formatIsoDate(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+      }
+    }
+    const text = String(value).trim();
+    if (!text || text === "年/月/日") {
+      return "";
+    }
+    const match = text.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (!match) {
+      return "";
+    }
+    return `${match[1]}-${String(Number(match[2])).padStart(2, "0")}-${String(Number(match[3])).padStart(2, "0")}`;
+  }
+
+  function getCellDisplayValue(cell) {
+    return String(cell?.text ?? cell?.value ?? "").trim();
+  }
+
   function isMemberActiveOnDate(member, year, month, day) {
     const date = formatIsoDate(year, month, day);
     if (member.hireDate && date < member.hireDate) {
@@ -346,6 +386,76 @@
     return workbook;
   }
 
+  async function createMemberWorkbook(payload) {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("人員資料");
+    const headers = ["代碼", "姓名", "所屬單位", "權限", "到職日", "離職日", "薪資方式"];
+
+    sheet.addRow(headers);
+    (payload.state?.members || []).forEach((member) => {
+      const department = (payload.state?.departments || []).find((item) => item.id === member.deptId);
+      sheet.addRow([
+        member.code || "",
+        member.name || "",
+        department?.name || "",
+        member.role === "manager" ? "主管" : "員工",
+        formatDisplayDate(member.hireDate || ""),
+        formatDisplayDate(member.leaveDate || ""),
+        member.payByDay ? "按日計薪" : "月薪"
+      ]);
+    });
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
+    sheet.columns = [
+      { width: 14 },
+      { width: 14 },
+      { width: 16 },
+      { width: 12 },
+      { width: 14 },
+      { width: 14 },
+      { width: 14 }
+    ];
+    applySheetBorder(sheet);
+    return workbook;
+  }
+
+  async function parseMemberWorkbook(arrayBuffer) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) {
+      return [];
+    }
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        return;
+      }
+      const code = getCellDisplayValue(row.getCell(1));
+      const name = getCellDisplayValue(row.getCell(2));
+      const departmentName = getCellDisplayValue(row.getCell(3));
+      const roleText = getCellDisplayValue(row.getCell(4));
+      const hireDate = normalizeImportedDate(row.getCell(5).value);
+      const leaveDate = normalizeImportedDate(row.getCell(6).value);
+      const salaryType = getCellDisplayValue(row.getCell(7));
+      if (![code, name, departmentName, roleText, hireDate, leaveDate, salaryType].some(Boolean)) {
+        return;
+      }
+      rows.push({
+        code,
+        name,
+        departmentName,
+        role: roleText === "主管" ? "manager" : "employee",
+        hireDate,
+        leaveDate,
+        payByDay: salaryType === "按日計薪"
+      });
+    });
+    return rows;
+  }
+
   async function workbookToBlob(workbook) {
     const buffer = await workbook.xlsx.writeBuffer();
     return new Blob(
@@ -370,6 +480,9 @@
     if (!csv.includes("REST") || !csv.includes("OFF")) {
       throw new Error("browser exporter self-check failed");
     }
+    if (normalizeImportedDate("2025/01/02") !== "2025-01-02") {
+      throw new Error("browser exporter date self-check failed");
+    }
   }
 
   runSelfCheck();
@@ -379,6 +492,8 @@
     createScheduleWorkbook,
     createOvertimeWorkbook,
     createLeaveWorkbook,
+    createMemberWorkbook,
+    parseMemberWorkbook,
     workbookToBlob
   };
 })();
