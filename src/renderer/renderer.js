@@ -742,6 +742,10 @@ function promptManagerAccess(message) {
 }
 
 function syncRoleUi() {
+  const toolbarGrid = document.getElementById("toolbarGrid");
+  if (toolbarGrid) {
+    toolbarGrid.style.display = isManager() ? "grid" : "none";
+  }
   const coreActionsShell = document.getElementById("coreActionsShell");
   if (coreActionsShell) {
     coreActionsShell.style.display = isManager() ? "" : "none";
