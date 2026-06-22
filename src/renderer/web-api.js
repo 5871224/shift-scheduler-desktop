@@ -87,12 +87,13 @@
 
   function buildHeaders(options = {}) {
     const { auth = false, contentType = true, extra = {} } = options;
-    const token = auth && currentSession?.access_token ? currentSession.access_token : anonKey;
     const headers = {
       apikey: anonKey,
-      Authorization: `Bearer ${token}`,
       ...extra
     };
+    if (auth && currentSession?.access_token) {
+      headers.Authorization = `Bearer ${currentSession.access_token}`;
+    }
     if (contentType) {
       headers["Content-Type"] = "application/json";
     }

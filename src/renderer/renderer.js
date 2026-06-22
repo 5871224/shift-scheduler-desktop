@@ -1221,7 +1221,6 @@ function queueSave() {
 
 function applySelectionToCell(memberId, day) {
   if (!canEditSchedule()) {
-    promptManagerAccess("修改班表需先登入主管帳號");
     return;
   }
   const member = state.members.find((item) => item.id === memberId);
