@@ -1130,12 +1130,12 @@ thead th.today,
 .dept-block {
   border: 1px solid var(--line);
   border-radius: 18px;
-  padding: 12px;
+  padding: 8px 10px;
   background: #fff;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 12px;
+  gap: 8px;
 }
 
 .dept-header {
@@ -1148,20 +1148,20 @@ thead th.today,
 .dept-heading {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   white-space: nowrap;
 }
 
 .dept-name {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .dept-count {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1172,7 +1172,7 @@ thead th.today,
 .member-inline-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   align-items: flex-start;
 }
@@ -1180,6 +1180,9 @@ thead th.today,
 .draggable-member {
   cursor: grab;
   user-select: none;
+  min-height: 34px;
+  padding: 6px 10px;
+  gap: 6px;
 }
 
 .draggable-member:active {
@@ -1189,7 +1192,7 @@ thead th.today,
 .dept-empty-pill {
   color: var(--muted);
   font-size: 12px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px dashed var(--line);
   border-radius: 999px;
   background: #fff;
@@ -1319,8 +1322,8 @@ thead th.today,
 }
 
 .settings-icon-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: #fff;
@@ -1337,8 +1340,8 @@ thead th.today,
 }
 
 .settings-icon-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   stroke: currentColor;
   stroke-width: 1.8;
   fill: none;
@@ -1536,8 +1539,19 @@ thead th.today,
     font-size: 12px;
   }
 
+  .dept-name {
+    font-size: 17px;
+  }
+
+  .dept-count,
+  .member-item span {
+    font-size: 12px;
+  }
+
   .dept-block {
     grid-template-columns: 1fr;
+    padding: 8px;
+    gap: 8px;
   }
 
   .member-inline-list {
