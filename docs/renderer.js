@@ -1177,7 +1177,7 @@ function renderCellInner(key, memberId = "", day = 0) {
     return '<div class="cell-inner"></div>';
   }
   return `<div class="cell-inner">${segments.map((segment) => (
-    `<div class="seg ${segment.status === "pending" ? "seg-pending" : ""}" style="background:${segment.color};color:${textColor(segment.color)}" ${
+    `<div class="seg ${segment.status === "pending" ? "seg-pending" : ""}" style="background-color:${segment.color};color:${textColor(segment.color)}" ${
       segment.category === "leave" && shouldPromptLeaveDetail(segment, cellState.leaveMeta)
         ? `data-hover-leave-detail="${memberId}:${day}"`
         : ""
