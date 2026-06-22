@@ -632,6 +632,20 @@
     });
     return { ok: true };
   }
+
+  async function updateOvertimeRequestType(payload) {
+    ensureManager();
+    const overtimeType = await getOvertimeTypeByName(payload.overtimeName);
+    await restUpdate("overtime_requests", {
+      id: `eq.${payload.id}`
+    }, {
+      overtime_type_id: overtimeType.id
+    }, {
+      auth: true,
+      prefer: "return=minimal"
+    });
+    return { ok: true };
+  }
   async function exportSapCsv(payload) {
     const blob = new Blob(
       [exporter.buildSapLeaveCsvContent(payload)],
@@ -689,6 +703,7 @@
     listOvertimeRequests,
     updateLeaveRequest,
     updateOvertimeRequest,
+    updateOvertimeRequestType,
     exportSapCsv,
     exportOvertime,
     exportLeave,

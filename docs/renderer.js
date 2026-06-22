@@ -776,7 +776,6 @@ function syncRoleUi() {
     "deptSettingsButton",
     "shiftSettingsButton",
     "leaveSettingsButton",
-    "overtimeSettingsButton",
     "leaveApprovalButton",
     "overtimeApprovalButton"
   ];
@@ -789,7 +788,7 @@ function syncRoleUi() {
     element.disabled = !isManager();
   });
 
-  ["shiftChips", "leaveChips", "overtimeChips"].forEach((id) => {
+  ["shiftChips", "leaveChips"].forEach((id) => {
     const element = document.getElementById(id);
     if (!element) {
       return;
@@ -1031,13 +1030,15 @@ function renderChips(containerId, category, items) {
 }
 
 function renderToolbar() {
+  if (state.selected.type === "overtime" || state.selected.type === "cancel-overtime") {
+    state.selected = { type: null, id: null };
+  }
   renderDeptFilter();
   const visibleShifts = state.deptFilter === "all"
     ? state.shifts
     : state.shifts.filter((shift) => shiftAllowsDepartment(shift, state.deptFilter));
   renderChips("shiftChips", "shift", visibleShifts);
   renderChips("leaveChips", "leave", state.leaves);
-  renderChips("overtimeChips", "overtime", state.overtime);
   syncRoleUi();
 }
 
@@ -1185,6 +1186,11 @@ function applySelectionToCell(memberId, day) {
   }
   const slot = ensureScheduleSlot(memberId, day);
   const { type, id } = state.selected;
+  if (type === "overtime" || type === "cancel-overtime") {
+    state.selected = { type: null, id: null };
+    renderToolbar();
+    return;
+  }
   if (type === "leave") {
     const leave = getItem("leave", id);
     if (!leave) {
@@ -1403,6 +1409,60 @@ function saveLeaveAssignmentFromModal() {
     reasonEnabled,
     reason: reasonEnabled ? (document.getElementById("leaveAssignmentReason")?.value.trim() || "") : ""
   };
+  closeModal();
+  renderTable();
+  queueSave();
+}
+
+function openOvertimeAssignmentModal(memberId, day) {
+  const member = state.members.find((item) => item.id === memberId);
+  const slot = getSlot(memberId, day);
+  if (!member || !slot?.overtime || !state.overtime.length) {
+    return;
+  }
+  modalContext = {
+    category: "overtime-assignment",
+    memberId,
+    day,
+    requestId: slot.overtimeRequestId || ""
+  };
+  openEntityListModal({
+    title: "修改加班",
+    modalClass: "modal modal-form-compact",
+    body: `
+      <div class="form-row">
+        <label>人員</label>
+        <div class="readonly-pill">${escapeHtml(member.name)} · ${day} 日</div>
+      </div>
+      <div class="form-row">
+        <label for="scheduleOvertimeType">加班別</label>
+        <select id="scheduleOvertimeType">${buildSelectOptions(state.overtime, "id", (item) => item.name, slot.overtime)}</select>
+      </div>
+    `,
+    footerButtons: '<button class="btn-primary" type="button" data-save-overtime-assignment="true">儲存</button>'
+  });
+}
+
+async function saveOvertimeAssignmentFromModal() {
+  const { memberId, day, requestId } = modalContext;
+  const overtimeId = document.getElementById("scheduleOvertimeType")?.value || "";
+  const overtime = getItem("overtime", overtimeId);
+  if (!memberId || !day || !overtime) {
+    reportValidationError("請確認加班別");
+    return;
+  }
+  const slot = ensureScheduleSlot(memberId, Number(day));
+  slot.overtime = overtime.id;
+  if (requestId) {
+    // ponytail: 先只同步核準加班的班別，之後若要連日期或理由一起編修，再擴成完整申請編輯流程。
+    await window.schedulerApi.updateOvertimeRequestType({
+      id: requestId,
+      overtimeName: overtime.name
+    });
+    overtimeRequestRecords = overtimeRequestRecords.map((record) => (
+      record.id === requestId ? { ...record, overtimeName: overtime.name } : record
+    ));
+  }
   closeModal();
   renderTable();
   queueSave();
@@ -2136,6 +2196,25 @@ async function refreshRequestData() {
   overtimeRequestRecords = await window.schedulerApi.listOvertimeRequests({ manager: isManager() });
 }
 
+function syncApprovedRequestsToSchedule() {
+  if (!isManager()) {
+    return;
+  }
+  leaveRequestRecords.forEach((record) => {
+    applyApprovedLeaveRequestToSchedule(record);
+  });
+  Object.keys(state.schedule).forEach((key) => {
+    if (state.schedule[key]?.overtime) {
+      state.schedule[key].overtime = null;
+      state.schedule[key].overtimeRequestId = null;
+    }
+  });
+  overtimeRequestRecords.forEach((record) => {
+    applyApprovedOvertimeRequestToSchedule(record);
+  });
+  pruneEmptySchedule();
+}
+
 async function syncRequestCatalogs() {
   if (!isManager()) {
     return;
@@ -2477,6 +2556,7 @@ async function saveRequestReview(kind, requestId) {
     await window.schedulerApi.updateOvertimeRequest({ id: requestId, status, managerNote });
   }
   await refreshRequestData();
+  syncApprovedRequestsToSchedule();
   const nextRecord = (kind === "leave" ? leaveRequestRecords : overtimeRequestRecords).find((item) => item.id === requestId);
   if (nextRecord) {
     if (kind === "leave") {
@@ -2650,7 +2730,6 @@ function bindEvents() {
   bindClick("deptSettingsButton", openDepartmentSettings);
   bindClick("shiftSettingsButton", () => openListSettings("shift"));
   bindClick("leaveSettingsButton", () => openListSettings("leave"));
-  bindClick("overtimeSettingsButton", () => openListSettings("overtime"));
   bindClick("memberSettingsButton", () => {
     closeCoreActionsMenu();
     openMemberSettings();
@@ -2702,11 +2781,21 @@ function bindEvents() {
       closeModal();
       return;
     }
-    if (target.classList.contains("cell")) {
-      if (target.classList.contains("inactive-cell")) {
+    const cellTarget = target instanceof Element ? target.closest(".cell") : null;
+    if (cellTarget instanceof HTMLElement) {
+      if (cellTarget.classList.contains("inactive-cell")) {
         return;
       }
-      applySelectionToCell(target.dataset.memberId, Number(target.dataset.day));
+      const memberId = cellTarget.dataset.memberId;
+      const day = Number(cellTarget.dataset.day);
+      if (!state.selected.type) {
+        const slot = getSlot(memberId, day);
+        if (canEditSchedule() && slot?.overtime) {
+          openOvertimeAssignmentModal(memberId, day);
+          return;
+        }
+      }
+      applySelectionToCell(memberId, day);
       return;
     }
     const managerOnlyAction = Boolean(
@@ -2716,6 +2805,7 @@ function bindEvents() {
       target.dataset.editItem ||
       target.dataset.saveShift ||
       target.dataset.saveNamedItem ||
+      target.dataset.saveOvertimeAssignment ||
       target.dataset.openAddDepartment ||
       target.dataset.editDepartment ||
       target.dataset.saveDepartment ||
@@ -2778,6 +2868,10 @@ function bindEvents() {
       saveNamedColorItem(category, mode);
     }
     if (target.dataset.saveLeaveAssignment) saveLeaveAssignmentFromModal();
+    if (target.dataset.saveOvertimeAssignment) {
+      await saveOvertimeAssignmentFromModal();
+      return;
+    }
     if (target.dataset.saveLeaveRequest) {
       await saveLeaveRequestFromModal();
       return;
@@ -2953,6 +3047,7 @@ async function loadApp() {
       await syncRequestCatalogs();
     }
     await refreshRequestData();
+    syncApprovedRequestsToSchedule();
   } catch (error) {
     setSaveStatus(`載入失敗：${error.message}`);
     authErrorMessage = error.message || "載入失敗";
