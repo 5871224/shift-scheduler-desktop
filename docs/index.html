@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>排班工具</title>
-  <link rel="stylesheet" href="./styles.css?v=20260622i">
+  <link rel="stylesheet" href="./styles.css?v=20260622j">
 </head>
 <body>
   <div class="app-shell">
@@ -63,7 +63,17 @@
         </div>
       </div>
 
-      <div class="table-wrap">
+      <div class="table-sticky-header" id="tableStickyHeader" aria-hidden="true">
+        <div class="table-sticky-header-left">
+          <div class="table-sticky-cell table-sticky-cell-dept">單位</div>
+          <div class="table-sticky-cell table-sticky-cell-person">人員</div>
+        </div>
+        <div class="table-sticky-header-scroll">
+          <div class="table-sticky-header-days" id="tableStickyHeaderDays"></div>
+        </div>
+      </div>
+
+      <div class="table-wrap" id="tableWrap">
         <table id="mainTable"></table>
       </div>
     </section>
@@ -73,9 +83,9 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260622i"></script>
-  <script src="./browser-exporter.js?v=20260622i"></script>
-  <script src="./web-api.js?v=20260622i"></script>
-  <script src="./renderer.js?v=20260622i"></script>
+  <script src="./app-config.js?v=20260622j"></script>
+  <script src="./browser-exporter.js?v=20260622j"></script>
+  <script src="./web-api.js?v=20260622j"></script>
+  <script src="./renderer.js?v=20260622j"></script>
 </body>
 </html>

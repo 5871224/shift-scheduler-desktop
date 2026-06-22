@@ -192,6 +192,39 @@ let eventsBound = false;
 let dragSortItemId = "";
 let dragSortCategory = "";
 
+function renderStickyTableHeader(days) {
+  const container = document.getElementById("tableStickyHeaderDays");
+  const stickyHeader = document.getElementById("tableStickyHeader");
+  if (!container || !stickyHeader) {
+    return;
+  }
+  const today = new Date();
+  const isToday = (day) => (
+    today.getFullYear() === state.year &&
+    today.getMonth() === state.month &&
+    today.getDate() === day
+  );
+  const cells = [];
+  for (let day = 1; day <= days; day += 1) {
+    const weekday = weekdayOf(day);
+    const cls = weekday === 0 ? "sun" : weekday === 6 ? "sat" : "";
+    cells.push(
+      `<div class="table-sticky-cell table-sticky-cell-day ${cls} ${isToday(day) ? "today" : ""}">${day}<span>${WEEKDAY_LABELS[weekday]}</span></div>`
+    );
+  }
+  container.innerHTML = cells.join("");
+  syncStickyHeaderScroll();
+}
+
+function syncStickyHeaderScroll() {
+  const tableWrap = document.getElementById("tableWrap");
+  const container = document.getElementById("tableStickyHeaderDays");
+  if (!tableWrap || !container) {
+    return;
+  }
+  container.style.transform = `translateX(${-tableWrap.scrollLeft}px)`;
+}
+
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -1173,6 +1206,7 @@ function renderTable() {
 
   html += "</tbody>";
   table.innerHTML = html;
+  renderStickyTableHeader(days);
 }
 
 function renderHeader() {
@@ -3090,6 +3124,12 @@ function bindEvents() {
     closeCoreActionsMenu();
     await openOvertimeApprovalModal();
   });
+
+  const tableWrap = document.getElementById("tableWrap");
+  if (tableWrap) {
+    tableWrap.addEventListener("scroll", syncStickyHeaderScroll, { passive: true });
+  }
+  window.addEventListener("resize", syncStickyHeaderScroll);
 
   const deptFilter = document.getElementById("deptFilter");
   if (deptFilter) {

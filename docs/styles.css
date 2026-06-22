@@ -51,7 +51,7 @@ button {
   flex-direction: column;
   min-height: 100vh;
   padding: 20px;
-  padding-bottom: 250px;
+  padding-bottom: 380px;
   gap: 16px;
 }
 
@@ -380,11 +380,92 @@ button {
   gap: 8px;
 }
 
+.table-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 24;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  background: #fbf8f1;
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(72, 52, 31, 0.08);
+}
+
+.table-sticky-header-left {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.table-sticky-header-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.table-sticky-header-days {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--day-col-width);
+  will-change: transform;
+}
+
+.table-sticky-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 6px 2px;
+  border-right: 1px solid #ebe3d8;
+  box-shadow: inset 0 -1px 0 #ebe3d8;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.table-sticky-cell-dept {
+  width: var(--dept-col-width);
+  min-width: var(--dept-col-width);
+}
+
+.table-sticky-cell-person {
+  width: var(--person-col-width);
+  min-width: var(--person-col-width);
+}
+
+.table-sticky-cell-day {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.table-sticky-cell-day.sun {
+  color: #c93f3f;
+}
+
+.table-sticky-cell-day.sat {
+  color: #205aa8;
+}
+
+.table-sticky-cell-day.today,
+.table-sticky-cell-dept.today,
+.table-sticky-cell-person.today {
+  background: var(--today);
+}
+
+.table-sticky-cell-day span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
 .table-wrap {
   overflow-x: auto;
   overflow-y: visible;
-  border-radius: 18px;
+  border-radius: 0 0 18px 18px;
   border: 1px solid var(--line);
+  border-top: none;
   background: #fff;
 }
 
@@ -400,12 +481,12 @@ td {
   border-bottom: 1px solid #ebe3d8;
 }
 
+thead {
+  visibility: hidden;
+}
+
 thead th {
-  position: sticky;
-  top: 0;
-  z-index: 8;
   background: #fbf8f1;
-  box-shadow: inset 0 -1px 0 #ebe3d8;
   font-size: 11px;
   font-weight: 700;
   padding: 6px 2px;
@@ -1150,7 +1231,7 @@ thead th.today,
 
 @media (max-width: 960px) {
   .app-shell {
-    padding-bottom: 320px;
+    padding-bottom: 460px;
   }
 
   .toolbar-floating-card {
@@ -1168,5 +1249,9 @@ thead th.today,
     margin-left: 0;
     text-align: left;
     width: 100%;
+  }
+
+  .table-sticky-header {
+    top: 8px;
   }
 }
