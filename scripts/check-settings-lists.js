@@ -21,6 +21,7 @@ assert(!renderer.includes(">刪除</button>"), "delete actions should no longer 
 assert(renderer.includes('data-sort-category="department"'), "department settings should support drag sorting");
 assert(renderer.includes('data-drop-member="${member.id}"'), "department settings should support dropping onto members for reordering");
 assert(renderer.includes('<span>${escapeHtml(member.name)}</span>'), "department settings should show member names without employee codes");
+assert(renderer.includes('showInfoMessage("這個單位還有人員，請先將人員移轉到其他單位後再刪除。");'), "department deletion should be blocked while members remain");
 assert(renderer.includes('if (category === "shift") {\n    state.shifts = currentList;'), "shift reorder should persist to state.shifts");
 assert(renderer.includes('if (category === "leave") {\n    state.leaves = currentList;'), "leave reorder should persist to state.leaves");
 assert(renderer.includes('if (category === "department") {\n    state.departments = currentList;'), "department reorder should persist to state.departments");

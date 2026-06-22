@@ -2170,13 +2170,16 @@ function removeScheduleByMember(memberId) {
 }
 
 async function deleteDepartment(departmentId) {
-  const confirmed = await confirmAction("確定要刪除這個單位嗎？單位下的人員也會一起刪除。");
+  const memberIds = state.members.filter((member) => member.deptId === departmentId).map((member) => member.id);
+  if (memberIds.length) {
+    showInfoMessage("這個單位還有人員，請先將人員移轉到其他單位後再刪除。");
+    return;
+  }
+  const confirmed = await confirmAction("確定要刪除這個單位嗎？");
   if (!confirmed) {
     return;
   }
-  const memberIds = state.members.filter((member) => member.deptId === departmentId).map((member) => member.id);
   state.departments = state.departments.filter((department) => department.id !== departmentId);
-  state.members = state.members.filter((member) => member.deptId !== departmentId);
   memberIds.forEach(removeScheduleByMember);
   if (state.deptFilter === departmentId) {
     state.deptFilter = "all";
