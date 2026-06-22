@@ -1675,28 +1675,43 @@ function openListSettings(category) {
         <div class="settings-table-wrap">
           <div class="settings-table">
             <div class="settings-table-row settings-table-head settings-table-row-${category}">
-              <div>排序</div>
               <div>顏色</div>
               <div>${category === "shift" ? "班別" : "假別"}</div>
-              <div>${category === "shift" ? "適用單位" : "規則"}</div>
+              <div>${category === "shift" ? "適用單位" : "需填時間"}</div>
               ${category === "shift" ? "<div>時段</div>" : ""}
+              ${category === "leave" ? "<div>需填原因</div>" : ""}
               <div class="settings-table-actions-head">操作</div>
             </div>
             ${list.map((item) => `
               <div class="settings-table-row settings-table-row-${category} sortable-settings-item" draggable="true" data-sort-category="${category}" data-sort-item="${item.id}">
-                <div class="settings-table-sort">拖曳</div>
                 <div class="settings-table-color"><div class="dot" style="background:${item.color}"></div></div>
                 <div class="settings-table-name">${escapeHtml(category === "leave" ? getLeaveLabel(item) : item.name)}</div>
                 <div class="settings-table-meta">${category === "shift"
                   ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
-                  : escapeHtml(`${item.defaultAllDay ? "整天" : ""}${item.defaultAllDay && item.requireReason ? " · " : ""}${item.requireReason ? "需填原因" : ""}` || "可用於排班與請假顯示")
+                  : item.defaultAllDay ? "否" : "是"
                 }</div>
                 ${category === "shift"
                   ? `<div class="settings-table-meta">${escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)}</div>`
                   : ""}
+                ${category === "leave"
+                  ? `<div class="settings-table-meta">${item.requireReason ? "是" : "否"}</div>`
+                  : ""}
                 <div class="settings-table-actions">
-                  <button class="ghost-btn compact-btn" type="button" data-edit-item="${category}" data-edit-id="${item.id}">修改</button>
-                  <button class="ghost-btn compact-btn" type="button" data-delete-category="${category}" data-delete-id="${item.id}">刪除</button>
+                  <button class="settings-icon-btn" type="button" data-edit-item="${category}" data-edit-id="${item.id}" aria-label="修改" title="修改">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16v4z"></path>
+                      <path d="M13.5 6.5l4 4"></path>
+                    </svg>
+                  </button>
+                  <button class="settings-icon-btn settings-icon-btn-danger" type="button" data-delete-category="${category}" data-delete-id="${item.id}" aria-label="刪除" title="刪除">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 7h16"></path>
+                      <path d="M9 7V4h6v3"></path>
+                      <path d="M7 7l1 13h8l1-13"></path>
+                      <path d="M10 11v6"></path>
+                      <path d="M14 11v6"></path>
+                    </svg>
+                  </button>
                 </div>
               </div>
             `).join("")}
