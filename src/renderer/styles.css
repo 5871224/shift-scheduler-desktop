@@ -13,8 +13,8 @@
   --today: #f8ead1;
   --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
   --dept-col-width: 82px;
-  --person-col-width: calc(4.5em + 16px);
-  --day-col-width: 38px;
+  --person-col-width: 104px;
+  --day-col-width: 44px;
 }
 
 * {
@@ -472,7 +472,7 @@ button {
 table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 100%;
+  width: max-content;
 }
 
 th,
