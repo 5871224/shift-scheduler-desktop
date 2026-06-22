@@ -37,6 +37,20 @@ npm run web:publish
 npm run web:check
 ```
 
+## Supabase Edge Function
+
+人員新增、Excel 匯入預設密碼 `0000`，以及「修改人員 > 重設密碼為 0000」需要部署這支 Function：
+
+- `supabase/functions/member-auth-admin/index.ts`
+
+如果你之後有安裝 Supabase CLI，可用：
+
+```powershell
+supabase functions deploy member-auth-admin
+```
+
+也可以直接用 Supabase Dashboard 建立同名 Edge Function 後貼上這份程式。
+
 ## Supabase SQL
 
 至少需要先執行：

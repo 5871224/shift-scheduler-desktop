@@ -2171,6 +2171,11 @@ function openMemberForm(mode, memberId = "") {
             <option value="daily" ${member.payByDay ? "selected" : ""}>按日計薪</option>
           </select>
         </div>
+        ${mode === "edit" ? `
+          <div class="form-row form-row-wide">
+            <button class="ghost-btn" type="button" data-reset-member-password="${escapeHtml(member.code)}">重設密碼為 0000</button>
+          </div>
+        ` : ""}
       </div>
     `,
     footerButtons: `<button class="btn-primary" type="button" data-save-member="${mode}">${mode === "edit" ? "儲存修改" : "新增人員"}</button>`
@@ -2202,6 +2207,12 @@ async function saveMember(mode) {
   if (!payload.code || !payload.name || !payload.deptId) {
     return;
   }
+  try {
+    await window.schedulerApi.syncMemberProfile(payload, previousMember?.code || "");
+  } catch (error) {
+    setSaveStatus(`同步人員資料失敗：${error.message}`);
+    return;
+  }
   if (mode === "edit") {
     state.members = state.members.map((member) => member.id === payload.id ? payload : member);
   } else {
@@ -2218,11 +2229,6 @@ async function saveMember(mode) {
   currentMember = resolveCurrentMember();
   closeModal();
   renderAll();
-  try {
-    await window.schedulerApi.syncMemberProfile(payload, previousMember?.code || "");
-  } catch (error) {
-    setSaveStatus(`同步人員權限失敗：${error.message}`);
-  }
   queueSave();
 }
 
@@ -2275,17 +2281,18 @@ async function importMembersFromSettings() {
         payByDay: Boolean(row.payByDay),
         role: row.role === "manager" ? "manager" : "employee"
       };
+      try {
+        await window.schedulerApi.syncMemberProfile(payload, existing?.code || "");
+      } catch {
+        skipped += 1;
+        continue;
+      }
       if (existing) {
         state.members = state.members.map((member) => member.id === existing.id ? payload : member);
         updated += 1;
       } else {
         state.members.push(payload);
         imported += 1;
-      }
-      try {
-        await window.schedulerApi.syncMemberProfile(payload, existing?.code || "");
-      } catch {
-        // ponytail: 匯入主流程先完成，後端身份同步失敗只略過；若日後要追蹤失敗名單可再補報表。
       }
     }
 
@@ -2313,6 +2320,23 @@ async function deleteMember(memberId) {
   renderAll();
   openMemberSettings();
   queueSave();
+}
+
+async function resetMemberPasswordFromModal(employeeCode) {
+  const code = String(employeeCode || "").trim();
+  if (!code) {
+    return;
+  }
+  const confirmed = await confirmAction(`確定要將 ${code} 的密碼重設為 0000 嗎？`);
+  if (!confirmed) {
+    return;
+  }
+  try {
+    await window.schedulerApi.resetMemberPassword(code);
+    showInfoMessage(`${code} 的密碼已重設為 0000`);
+  } catch (error) {
+    setSaveStatus(`重設密碼失敗：${error.message}`);
+  }
 }
 
 async function refreshRequestData() {
@@ -3106,7 +3130,8 @@ function bindEvents() {
       target.dataset.importMembers ||
       target.dataset.editMember ||
       target.dataset.saveMember ||
-      target.dataset.deleteMember
+      target.dataset.deleteMember ||
+      target.dataset.resetMemberPassword
     );
     if (managerOnlyAction && !isManager()) {
       promptManagerAccess("此功能需先登入主管帳號");
@@ -3118,6 +3143,10 @@ function bindEvents() {
     }
     if (target.dataset.openOvertimeRequest) {
       await openOvertimeRequestModal();
+      return;
+    }
+    if (target.dataset.resetMemberPassword) {
+      await resetMemberPasswordFromModal(target.dataset.resetMemberPassword);
       return;
     }
     if (target.dataset.chipType !== undefined) {

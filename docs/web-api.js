@@ -132,6 +132,24 @@
     return text ? JSON.parse(text) : null;
   }
 
+  async function requestFunction(functionName, payload) {
+    const response = await fetch(`${baseUrl}/functions/v1/${functionName}`, {
+      method: "POST",
+      headers: buildHeaders({
+        auth: true,
+        extra: {
+          Accept: "application/json"
+        }
+      }),
+      body: JSON.stringify(payload || {})
+    });
+    if (!response.ok) {
+      throw new Error(await readError(response));
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  }
+
   function buildQuery(params = {}) {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -404,25 +422,28 @@
 
   async function syncMemberProfile(member, previousEmployeeCode = "") {
     ensureManager();
-    const employeeCode = String(member?.code || "").trim();
-    const sourceEmployeeCode = String(previousEmployeeCode || employeeCode).trim();
-    if (!employeeCode || !sourceEmployeeCode) {
-      return { ok: false, updated: false };
-    }
-    await restUpdate("profiles", {
-      employee_code: `eq.${sourceEmployeeCode}`
-    }, {
-      employee_code: employeeCode,
-      full_name: member?.name || "",
-      role: member?.role === "manager" ? "manager" : "employee",
-      hire_date: member?.hireDate || null,
-      leave_date: member?.leaveDate || null,
-      pay_by_day: Boolean(member?.payByDay)
-    }, {
-      auth: true,
-      prefer: "return=minimal"
+    return requestFunction("member-auth-admin", {
+      action: "upsert_member",
+      member: {
+        employeeCode: String(member?.code || "").trim(),
+        fullName: member?.name || "",
+        role: member?.role === "manager" ? "manager" : "employee",
+        hireDate: member?.hireDate || null,
+        leaveDate: member?.leaveDate || null,
+        payByDay: Boolean(member?.payByDay)
+      },
+      previousEmployeeCode: String(previousEmployeeCode || member?.code || "").trim(),
+      defaultPassword: "0000"
     });
-    return { ok: true, updated: true };
+  }
+
+  async function resetMemberPassword(employeeCode) {
+    ensureManager();
+    return requestFunction("member-auth-admin", {
+      action: "reset_password",
+      employeeCode: String(employeeCode || "").trim(),
+      password: "0000"
+    });
   }
 
   async function getLeaveTypeByCode(code) {
@@ -735,6 +756,7 @@
     saveState,
     syncCatalogs,
     syncMemberProfile,
+    resetMemberPassword,
     createLeaveRequest,
     createOvertimeRequest,
     listLeaveRequests,
