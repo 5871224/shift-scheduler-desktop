@@ -1,59 +1,10 @@
 {
   "name": "shift-scheduler-desktop",
   "version": "1.0.0",
-  "description": "免安裝排班桌面程式",
   "author": "Codex",
-  "main": "src/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron .",
     "web": "node src/web-server.js",
     "web:check": "node scripts/check-public-supabase.js",
-    "web:publish": "node scripts/publish-static-web.js",
-    "pack": "electron-builder --dir",
-    "dist": "node scripts/build-portable.js"
-  },
-  "build": {
-    "appId": "com.indar.shift-scheduler",
-    "productName": "排班工具",
-    "directories": {
-      "output": "release"
-    },
-    "electronLanguages": [
-      "zh-TW",
-      "en-US"
-    ],
-    "files": [
-      "src/**/*",
-      "package.json",
-      "!**/node_modules/*/{test,tests,__tests__,example,examples,docs,doc,benchmark,benchmarks,coverage,.github}/**/*",
-      "!**/node_modules/**/*.map",
-      "!**/node_modules/**/*.d.ts",
-      "!**/node_modules/**/{README,README.md,README.markdown,readme,readme.md,readme.markdown,CHANGELOG.md,CHANGES.md,HISTORY.md,AUTHORS}",
-      "!**/node_modules/jszip/dist/**",
-      "!**/node_modules/jszip/vendor/**",
-      "!**/node_modules/jszip/graph.svg",
-      "!**/node_modules/jszip/.jekyll-metadata",
-      "!**/node_modules/jszip/tsconfig.json",
-      "!**/node_modules/better-sqlite3/deps/**",
-      "!**/node_modules/better-sqlite3/src/**"
-    ],
-    "win": {
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "target": [
-        "portable"
-      ]
-    },
-    "portable": {
-      "artifactName": "${productName}-${version}-portable.${ext}"
-    }
-  },
-  "dependencies": {
-    "better-sqlite3": "^11.10.0",
-    "exceljs": "^4.4.0"
-  },
-  "devDependencies": {
-    "electron": "^36.5.0",
-    "electron-builder": "^26.0.12"
+    "web:publish": "node scripts/publish-static-web.js"
   }
 }
