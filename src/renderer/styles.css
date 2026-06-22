@@ -730,6 +730,17 @@ thead th.today,
   overflow: hidden;
 }
 
+.department-settings-modal {
+  width: min(980px, 100%);
+  height: min(74vh, 720px);
+}
+
+.department-settings-modal .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 .modal-form-compact {
   width: min(440px, 100%);
 }
@@ -1121,6 +1132,10 @@ thead th.today,
   border-radius: 18px;
   padding: 12px;
   background: #fff;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
 }
 
 .dept-header {
@@ -1135,6 +1150,7 @@ thead th.today,
   align-items: center;
   gap: 10px;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .dept-name {
@@ -1153,6 +1169,14 @@ thead th.today,
   border-style: solid;
 }
 
+.member-inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  align-items: flex-start;
+}
+
 .draggable-member {
   cursor: grab;
   user-select: none;
@@ -1160,6 +1184,15 @@ thead th.today,
 
 .draggable-member:active {
   cursor: grabbing;
+}
+
+.dept-empty-pill {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  background: #fff;
 }
 
 .result-item {
@@ -1501,5 +1534,17 @@ thead th.today,
 
   .settings-table-name {
     font-size: 12px;
+  }
+
+  .dept-block {
+    grid-template-columns: 1fr;
+  }
+
+  .member-inline-list {
+    order: 3;
+  }
+
+  .dept-block .list-item-actions {
+    justify-content: flex-end;
   }
 }

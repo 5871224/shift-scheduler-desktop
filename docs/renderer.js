@@ -2093,26 +2093,24 @@ function openDepartmentSettings() {
     ? state.departments.map((department) => {
       const members = state.members.filter((member) => member.deptId === department.id);
       return `
-        <div class="dept-block drop-zone" data-drop-department="${department.id}">
-          <div class="dept-header">
-            <div class="dept-heading">
-              <div class="dept-name">${escapeHtml(department.name)}</div>
-              <div class="dept-count">${members.length} 位</div>
-            </div>
-            <div class="list-item-actions">
-              ${renderActionIconButton("edit", `data-edit-department="${department.id}"`)}
-              ${renderActionIconButton("delete", `data-delete-department="${department.id}"`)}
-            </div>
+        <div class="dept-block drop-zone sortable-settings-item" draggable="true" data-sort-category="department" data-sort-item="${department.id}" data-drop-department="${department.id}">
+          <div class="dept-heading">
+            <div class="dept-name">${escapeHtml(department.name)}</div>
+            <div class="dept-count">${members.length} 位</div>
           </div>
-          <div class="member-list">
+          <div class="member-inline-list">
             ${members.length
               ? members.map((member) => `
-                <div class="member-item draggable-member" draggable="true" data-member-card="${member.id}">
-                  <span>${escapeHtml(member.code)} · ${escapeHtml(member.name)}</span>
+                <div class="member-item draggable-member" draggable="true" data-member-card="${member.id}" data-drop-member="${member.id}" data-drop-department="${department.id}">
+                  <span>${escapeHtml(member.name)}</span>
                 </div>
               `).join("")
-              : '<div class="empty-state">目前沒有指派人員</div>'
+              : '<div class="dept-empty-pill">拖曳人員到這裡</div>'
             }
+          </div>
+          <div class="list-item-actions">
+            ${renderActionIconButton("edit", `data-edit-department="${department.id}"`)}
+            ${renderActionIconButton("delete", `data-delete-department="${department.id}"`)}
           </div>
         </div>
       `;
@@ -2120,7 +2118,7 @@ function openDepartmentSettings() {
     : '<div class="empty-state">目前還沒有單位</div>';
   openEntityListModal({
     title: "單位設定",
-    modalClass: "modal modal-form-compact",
+    modalClass: "modal modal-wide department-settings-modal",
     body,
     footerButtons: `<button class="btn-primary" type="button" data-open-add-department="true">新增單位</button>`
   });
@@ -2188,12 +2186,33 @@ async function deleteDepartment(departmentId) {
   queueSave();
 }
 
-function moveMemberToDepartment(memberId, departmentId) {
+function moveMemberToDepartment(memberId, departmentId, targetMemberId = "") {
   const member = state.members.find((item) => item.id === memberId);
-  if (!member || member.deptId === departmentId) {
+  if (!member || targetMemberId === memberId) {
     return;
   }
-  state.members = state.members.map((item) => item.id === memberId ? { ...item, deptId: departmentId } : item);
+  const remaining = state.members.filter((item) => item.id !== memberId);
+  const targetDeptId = targetMemberId
+    ? (remaining.find((item) => item.id === targetMemberId)?.deptId || departmentId)
+    : departmentId;
+  const grouped = new Map(state.departments.map((department) => [department.id, []]));
+  remaining.forEach((item) => {
+    if (grouped.has(item.deptId)) {
+      grouped.get(item.deptId).push(item);
+    }
+  });
+  if (!grouped.has(targetDeptId)) {
+    return;
+  }
+  const movedMember = { ...member, deptId: targetDeptId };
+  const targetList = grouped.get(targetDeptId);
+  const targetIndex = targetMemberId ? targetList.findIndex((item) => item.id === targetMemberId) : -1;
+  if (targetIndex >= 0) {
+    targetList.splice(targetIndex, 0, movedMember);
+  } else {
+    targetList.push(movedMember);
+  }
+  state.members = state.departments.flatMap((department) => grouped.get(department.id) || []);
   openDepartmentSettings();
   renderAll();
   queueSave();
@@ -2203,7 +2222,9 @@ function reorderListItem(category, draggedId, targetId) {
   if (!draggedId || !targetId || draggedId === targetId) {
     return;
   }
-  const currentList = [...getItemList(category)];
+  const currentList = category === "department"
+    ? [...state.departments]
+    : [...getItemList(category)];
   const fromIndex = currentList.findIndex((item) => item.id === draggedId);
   const targetIndex = currentList.findIndex((item) => item.id === targetId);
   if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) {
@@ -2211,6 +2232,9 @@ function reorderListItem(category, draggedId, targetId) {
   }
   const [moved] = currentList.splice(fromIndex, 1);
   currentList.splice(targetIndex, 0, moved);
+  if (category === "department") {
+    state.departments = currentList;
+  }
   if (category === "shift") {
     state.shifts = currentList;
   }
@@ -2218,7 +2242,11 @@ function reorderListItem(category, draggedId, targetId) {
     state.leaves = currentList;
   }
   renderAll();
-  openListSettings(category);
+  if (category === "department") {
+    openDepartmentSettings();
+  } else {
+    openListSettings(category);
+  }
   queueSave();
 }
 
@@ -3495,6 +3523,13 @@ function bindEvents() {
   });
 
   document.body.addEventListener("dragstart", (event) => {
+    const card = event.target.closest("[data-member-card]");
+    if (card) {
+      dragMemberId = card.dataset.memberCard || "";
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", dragMemberId);
+      return;
+    }
     const sortItem = event.target.closest("[data-sort-item]");
     if (sortItem) {
       dragSortItemId = sortItem.dataset.sortItem || "";
@@ -3503,16 +3538,15 @@ function bindEvents() {
       event.dataTransfer.setData("text/plain", dragSortItemId);
       return;
     }
-    const card = event.target.closest("[data-member-card]");
-    if (!card) {
-      return;
-    }
-    dragMemberId = card.dataset.memberCard || "";
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", dragMemberId);
   });
 
   document.body.addEventListener("dragover", (event) => {
+    const memberTarget = event.target.closest("[data-drop-member]");
+    if (memberTarget && dragMemberId) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      return;
+    }
     const sortItem = event.target.closest("[data-sort-item]");
     if (sortItem && dragSortItemId && dragSortCategory === (sortItem.dataset.sortCategory || "")) {
       event.preventDefault();
@@ -3528,6 +3562,17 @@ function bindEvents() {
   });
 
   document.body.addEventListener("drop", (event) => {
+    const memberTarget = event.target.closest("[data-drop-member]");
+    if (memberTarget && dragMemberId) {
+      event.preventDefault();
+      moveMemberToDepartment(
+        dragMemberId,
+        memberTarget.dataset.dropDepartment || "",
+        memberTarget.dataset.dropMember || ""
+      );
+      dragMemberId = "";
+      return;
+    }
     const sortItem = event.target.closest("[data-sort-item]");
     if (sortItem && dragSortItemId && dragSortCategory === (sortItem.dataset.sortCategory || "")) {
       event.preventDefault();
