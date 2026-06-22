@@ -1921,7 +1921,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         <div class="form-section">
           <div class="form-row checkbox-row checkbox-row-left">
             <label class="leave-toggle-label">
-              <input id="leaveDefaultAllDay" type="checkbox" ${item.defaultAllDay ? "" : "checked"}>
+              <input id="leaveDefaultAllDay" type="checkbox" ${item.defaultAllDay ? "checked" : ""}>
               需填時間
             </label>
           </div>
@@ -2037,7 +2037,7 @@ function saveNamedColorItem(category, mode) {
     code: category === "leave" ? selectedLeave?.code : undefined,
     name,
     color: modalColor,
-    defaultAllDay: category === "leave" ? !document.getElementById("leaveDefaultAllDay")?.checked : undefined,
+    defaultAllDay: category === "leave" ? document.getElementById("leaveDefaultAllDay")?.checked : undefined,
     requireReason: category === "leave" ? document.getElementById("leaveRequireReason")?.checked : undefined,
     startTime: category === "overtime" ? readTimeInputValue("overtimeStartTime") : undefined,
     endTime: category === "overtime" ? readTimeInputValue("overtimeEndTime") : undefined,
