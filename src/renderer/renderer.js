@@ -2172,32 +2172,34 @@ function buildSelectOptions(items, valueField, labelBuilder, selectedValue, incl
 function openMemberSettings() {
   const body = state.members.length
     ? `
-      <div class="member-table">
-        <div class="member-table-row member-table-head">
-          <div>工號</div>
-          <div>姓名</div>
-          <div>單位</div>
-          <div>權限</div>
-          <div>到職日</div>
-          <div>離職日</div>
-          <div>薪資方式</div>
-          <div class="member-table-actions-head">操作</div>
-        </div>
-        ${state.members.map((member) => `
-          <div class="member-table-row">
-            <div class="member-table-code">${escapeHtml(member.code)}</div>
-            <div class="member-table-name">${escapeHtml(member.name)}</div>
-            <div>${escapeHtml(getDepartmentName(member.deptId))}</div>
-            <div>${member.role === "manager" ? "主管" : "員工"}</div>
-            <div>${escapeHtml(member.hireDate || "-")}</div>
-            <div>${escapeHtml(member.leaveDate || "-")}</div>
-            <div>${getSalaryTypeLabel(member)}</div>
-            <div class="member-table-actions">
-              <button class="ghost-btn compact-btn" type="button" data-edit-member="${member.id}">修改</button>
-              <button class="ghost-btn compact-btn" type="button" data-delete-member="${member.id}">刪除</button>
-            </div>
+      <div class="member-table-wrap">
+        <div class="member-table">
+          <div class="member-table-row member-table-head">
+            <div>工號</div>
+            <div>姓名</div>
+            <div>單位</div>
+            <div>權限</div>
+            <div>到職日</div>
+            <div>離職日</div>
+            <div>薪資方式</div>
+            <div class="member-table-actions-head">操作</div>
           </div>
-        `).join("")}
+          ${state.members.map((member) => `
+            <div class="member-table-row">
+              <div class="member-table-code">${escapeHtml(member.code)}</div>
+              <div class="member-table-name">${escapeHtml(member.name)}</div>
+              <div>${escapeHtml(getDepartmentName(member.deptId))}</div>
+              <div>${member.role === "manager" ? "主管" : "員工"}</div>
+              <div>${escapeHtml(member.hireDate || "-")}</div>
+              <div>${escapeHtml(member.leaveDate || "-")}</div>
+              <div>${getSalaryTypeLabel(member)}</div>
+              <div class="member-table-actions">
+                <button class="ghost-btn compact-btn" type="button" data-edit-member="${member.id}">修改</button>
+                <button class="ghost-btn compact-btn" type="button" data-delete-member="${member.id}">刪除</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
       </div>
     `
     : '<div class="empty-state">目前還沒有人員</div>';
