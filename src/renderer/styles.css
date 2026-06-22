@@ -1299,7 +1299,7 @@ thead th.today,
 }
 
 .settings-table-row-leave {
-  grid-template-columns: 48px minmax(140px, 1fr) 92px 92px 92px;
+  grid-template-columns: 48px 74px minmax(120px, 1fr) 92px 92px 92px;
 }
 
 .settings-table-head {
@@ -1325,6 +1325,13 @@ thead th.today,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.settings-table-code {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .settings-table-meta {
@@ -1557,7 +1564,7 @@ thead th.today,
   }
 
   .settings-table-row-leave {
-    grid-template-columns: 40px minmax(96px, 1fr) 84px 84px 88px;
+    grid-template-columns: 40px 64px minmax(82px, 1fr) 84px 84px 88px;
   }
 
   .settings-table-name {

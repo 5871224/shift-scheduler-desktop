@@ -1676,6 +1676,7 @@ function openListSettings(category) {
           <div class="settings-table">
             <div class="settings-table-row settings-table-head settings-table-row-${category}">
               <div>顏色</div>
+              ${category === "leave" ? "<div>假別代碼</div>" : ""}
               <div>${category === "shift" ? "班別" : "假別"}</div>
               <div>${category === "shift" ? "適用單位" : "需填時間"}</div>
               ${category === "shift" ? "<div>時段</div>" : ""}
@@ -1685,7 +1686,8 @@ function openListSettings(category) {
             ${list.map((item) => `
               <div class="settings-table-row settings-table-row-${category} sortable-settings-item" draggable="true" data-sort-category="${category}" data-sort-item="${item.id}">
                 <div class="settings-table-color"><div class="dot" style="background:${item.color}"></div></div>
-                <div class="settings-table-name">${escapeHtml(category === "leave" ? getLeaveLabel(item) : item.name)}</div>
+                ${category === "leave" ? `<div class="settings-table-code">${escapeHtml(item.code || "")}</div>` : ""}
+                <div class="settings-table-name">${escapeHtml(item.name)}</div>
                 <div class="settings-table-meta">${category === "shift"
                   ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
                   : item.defaultAllDay ? "否" : "是"
@@ -1864,6 +1866,7 @@ function saveShiftFromModal(mode) {
   }
   closeModal();
   renderAll();
+  openListSettings("shift");
   queueSave();
 }
 
@@ -1918,7 +1921,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         <div class="form-section">
           <div class="form-row checkbox-row checkbox-row-left">
             <label class="leave-toggle-label">
-              <input id="leaveDefaultAllDay" type="checkbox" ${item.defaultAllDay ? "checked" : ""}>
+              <input id="leaveDefaultAllDay" type="checkbox" ${item.defaultAllDay ? "" : "checked"}>
               需填時間
             </label>
           </div>
@@ -2034,7 +2037,7 @@ function saveNamedColorItem(category, mode) {
     code: category === "leave" ? selectedLeave?.code : undefined,
     name,
     color: modalColor,
-    defaultAllDay: category === "leave" ? document.getElementById("leaveDefaultAllDay")?.checked : undefined,
+    defaultAllDay: category === "leave" ? !document.getElementById("leaveDefaultAllDay")?.checked : undefined,
     requireReason: category === "leave" ? document.getElementById("leaveRequireReason")?.checked : undefined,
     startTime: category === "overtime" ? readTimeInputValue("overtimeStartTime") : undefined,
     endTime: category === "overtime" ? readTimeInputValue("overtimeEndTime") : undefined,
@@ -2063,6 +2066,7 @@ function saveNamedColorItem(category, mode) {
   if (category === "overtime") state.overtime = nextList;
   closeModal();
   renderAll();
+  openListSettings(category);
   queueSave();
   if (category === "leave" || category === "overtime") {
     syncRequestCatalogs().catch((error) => setSaveStatus(`同步設定失敗：${error.message}`));
@@ -2158,6 +2162,7 @@ function saveDepartment(mode) {
   }
   closeModal();
   renderAll();
+  openDepartmentSettings();
   queueSave();
 }
 
@@ -2424,6 +2429,7 @@ async function saveMember(mode) {
   currentMember = resolveCurrentMember();
   closeModal();
   renderAll();
+  openMemberSettings();
   queueSave();
 }
 
