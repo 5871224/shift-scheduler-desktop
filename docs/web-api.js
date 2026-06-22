@@ -144,6 +144,9 @@
       body: JSON.stringify(payload || {})
     });
     if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`尚未部署 ${functionName} Edge Function`);
+      }
       throw new Error(await readError(response));
     }
     const text = await response.text();

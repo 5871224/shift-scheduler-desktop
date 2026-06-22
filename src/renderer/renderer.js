@@ -2138,7 +2138,7 @@ function openMemberForm(mode, memberId = "") {
     body: `
       <div class="form-grid two-col">
         <div class="form-row">
-          <label for="memberCode">代碼</label>
+          <label for="memberCode">工號</label>
           <input id="memberCode" type="text" maxlength="12" value="${escapeHtml(member.code)}" placeholder="例如 A001">
         </div>
         <div class="form-row">

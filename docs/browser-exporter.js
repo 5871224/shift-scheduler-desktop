@@ -389,7 +389,7 @@
   async function createMemberWorkbook(payload) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("人員資料");
-    const headers = ["代碼", "姓名", "所屬單位", "權限", "到職日", "離職日", "薪資方式"];
+    const headers = ["工號", "姓名", "所屬單位", "權限", "到職日", "離職日", "薪資方式"];
 
     sheet.addRow(headers);
     (payload.state?.members || []).forEach((member) => {
