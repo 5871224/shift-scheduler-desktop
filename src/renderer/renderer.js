@@ -189,6 +189,8 @@ let authErrorMessage = "";
 let authPromptMessage = "";
 let authModalOpen = false;
 let eventsBound = false;
+let dragSortItemId = "";
+let dragSortCategory = "";
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -1606,7 +1608,7 @@ function openListSettings(category) {
   const list = getItemList(category);
   const body = list.length
     ? list.map((item) => `
-      <div class="settings-item list-item-wide">
+      <div class="settings-item list-item-wide ${category === "leave" ? "sortable-settings-item" : ""}" ${category === "leave" ? `draggable="true" data-sort-category="leave" data-sort-item="${item.id}"` : ""}>
         <div class="list-item-main">
           <div class="dot" style="background:${item.color}"></div>
           <div class="settings-text-row">
@@ -1691,7 +1693,7 @@ function openShiftFormModal(mode, shiftId = "") {
       <div class="form-grid">
         <div class="form-row">
           <label for="shiftName">名稱</label>
-          <input id="shiftName" type="text" maxlength="12" value="${escapeHtml(shift.name)}" placeholder="例如早班">
+          <textarea id="shiftName" class="single-line-textarea" rows="1" maxlength="12" lang="zh-Hant" spellcheck="false" placeholder="例如早班">${escapeHtml(shift.name)}</textarea>
         </div>
       </div>
       <div class="form-section">
@@ -1787,7 +1789,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         <label for="${category === "leave" ? "leaveCatalogCode" : "namedItemName"}">${category === "leave" ? "假別" : "名稱"}</label>
         ${category === "leave"
           ? `<select id="leaveCatalogCode">${buildSelectOptions(LEAVE_CATALOG, "code", (entry) => `${entry.code} ${entry.name}`, item.code || "")}</select>`
-          : `<input id="namedItemName" type="text" maxlength="12" value="${escapeHtml(item.name)}" placeholder="請輸入名稱">`
+          : `<textarea id="namedItemName" class="single-line-textarea" rows="1" maxlength="12" lang="zh-Hant" spellcheck="false" placeholder="請輸入名稱">${escapeHtml(item.name)}</textarea>`
         }
       </div>
       ${category === "leave" ? `
@@ -2072,6 +2074,26 @@ function moveMemberToDepartment(memberId, departmentId) {
   state.members = state.members.map((item) => item.id === memberId ? { ...item, deptId: departmentId } : item);
   openDepartmentSettings();
   renderAll();
+  queueSave();
+}
+
+function reorderListItem(category, draggedId, targetId) {
+  if (!draggedId || !targetId || draggedId === targetId) {
+    return;
+  }
+  const currentList = [...getItemList(category)];
+  const fromIndex = currentList.findIndex((item) => item.id === draggedId);
+  const targetIndex = currentList.findIndex((item) => item.id === targetId);
+  if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) {
+    return;
+  }
+  const [moved] = currentList.splice(fromIndex, 1);
+  currentList.splice(targetIndex, 0, moved);
+  if (category === "leave") {
+    state.leaves = currentList;
+  }
+  renderAll();
+  openListSettings(category);
   queueSave();
 }
 
@@ -3322,6 +3344,14 @@ function bindEvents() {
   });
 
   document.body.addEventListener("dragstart", (event) => {
+    const sortItem = event.target.closest("[data-sort-item]");
+    if (sortItem) {
+      dragSortItemId = sortItem.dataset.sortItem || "";
+      dragSortCategory = sortItem.dataset.sortCategory || "";
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", dragSortItemId);
+      return;
+    }
     const card = event.target.closest("[data-member-card]");
     if (!card) {
       return;
@@ -3332,6 +3362,12 @@ function bindEvents() {
   });
 
   document.body.addEventListener("dragover", (event) => {
+    const sortItem = event.target.closest("[data-sort-item]");
+    if (sortItem && dragSortItemId && dragSortCategory === (sortItem.dataset.sortCategory || "")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      return;
+    }
     const dropZone = event.target.closest("[data-drop-department]");
     if (!dropZone || !dragMemberId) {
       return;
@@ -3341,6 +3377,14 @@ function bindEvents() {
   });
 
   document.body.addEventListener("drop", (event) => {
+    const sortItem = event.target.closest("[data-sort-item]");
+    if (sortItem && dragSortItemId && dragSortCategory === (sortItem.dataset.sortCategory || "")) {
+      event.preventDefault();
+      reorderListItem(dragSortCategory, dragSortItemId, sortItem.dataset.sortItem || "");
+      dragSortItemId = "";
+      dragSortCategory = "";
+      return;
+    }
     const dropZone = event.target.closest("[data-drop-department]");
     if (!dropZone || !dragMemberId) {
       return;
@@ -3352,6 +3396,8 @@ function bindEvents() {
 
   document.body.addEventListener("dragend", () => {
     dragMemberId = "";
+    dragSortItemId = "";
+    dragSortCategory = "";
   });
 
   document.addEventListener("click", (event) => {

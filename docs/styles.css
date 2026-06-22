@@ -782,6 +782,14 @@ thead th.today,
   flex-shrink: 0;
 }
 
+.sortable-settings-item {
+  cursor: move;
+}
+
+.sortable-settings-item:active {
+  opacity: 0.8;
+}
+
 .compact-btn {
   padding: 8px 12px;
 }
@@ -876,6 +884,27 @@ thead th.today,
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 8px 10px;
+}
+
+.single-line-textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 44px;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 11px 14px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.single-line-textarea:focus {
+  outline: none;
+  border-color: rgba(166, 111, 47, 0.55);
+  box-shadow: 0 0 0 3px rgba(166, 111, 47, 0.12);
 }
 
 .requirement-check input[type="checkbox"] {
