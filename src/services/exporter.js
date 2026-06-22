@@ -60,7 +60,7 @@ function getScheduleCellText(cell, maps) {
     names.push(maps.leaves.get(cell.leave).name);
   }
   if (cell.overtime && maps.overtime.has(cell.overtime)) {
-    names.push(maps.overtime.get(cell.overtime).name);
+    names.push("加班");
   }
   return names.join("\n");
 }
@@ -114,7 +114,7 @@ function getOvertimeExportRows(payload) {
         continue;
       }
       const slot = state.schedule[getScheduleKey(member.id, year, month, day)];
-      const overtime = overtimeMap.get(slot?.overtime);
+      const overtime = slot?.overtimeMeta || overtimeMap.get(slot?.overtime);
       if (!overtime) {
         continue;
       }

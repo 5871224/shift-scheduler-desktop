@@ -452,6 +452,19 @@
     return rows[0];
   }
 
+  async function getDefaultOvertimeType() {
+    const rows = await restSelect("overtime_types", {
+      select: "id,name",
+      order: "created_at.asc",
+      limit: "1",
+      auth: true
+    });
+    if (!rows?.length) {
+      throw new Error("找不到可用的加班設定");
+    }
+    return rows[0];
+  }
+
   async function createLeaveRequest(payload) {
     ensureSignedIn();
     const leaveType = await getLeaveTypeByCode(payload.leaveCode);
@@ -473,11 +486,21 @@
 
   async function createOvertimeRequest(payload) {
     ensureSignedIn();
-    const overtimeType = await getOvertimeTypeByName(payload.overtimeName);
+    const overtimeType = payload.overtimeName
+      ? await getOvertimeTypeByName(payload.overtimeName)
+      : await getDefaultOvertimeType();
     await restInsert("overtime_requests", [{
       member_id: currentSession.user.id,
       overtime_type_id: overtimeType.id,
       work_date: payload.workDate,
+      start_time: payload.startTime || null,
+      end_time: payload.endTime || null,
+      use_rest_1: Boolean(payload.useRest1),
+      rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
+      rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
+      use_rest_2: Boolean(payload.useRest2),
+      rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
+      rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
       reason: payload.reason || ""
     }], {
       auth: true,
@@ -591,6 +614,14 @@
       memberName: profileMap.get(item.member_id)?.full_name || "",
       overtimeName: overtimeTypeMap.get(item.overtime_type_id)?.name || "",
       workDate: item.work_date,
+      startTime: item.start_time || "",
+      endTime: item.end_time || "",
+      useRest1: Boolean(item.use_rest_1),
+      rest1StartTime: item.rest_1_start_time || "",
+      rest1EndTime: item.rest_1_end_time || "",
+      useRest2: Boolean(item.use_rest_2),
+      rest2StartTime: item.rest_2_start_time || "",
+      rest2EndTime: item.rest_2_end_time || "",
       reason: item.reason || "",
       status: item.status,
       managerNote: item.manager_note || "",
@@ -633,13 +664,19 @@
     return { ok: true };
   }
 
-  async function updateOvertimeRequestType(payload) {
+  async function updateOvertimeRequestDetails(payload) {
     ensureManager();
-    const overtimeType = await getOvertimeTypeByName(payload.overtimeName);
     await restUpdate("overtime_requests", {
       id: `eq.${payload.id}`
     }, {
-      overtime_type_id: overtimeType.id
+      start_time: payload.startTime || null,
+      end_time: payload.endTime || null,
+      use_rest_1: Boolean(payload.useRest1),
+      rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
+      rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
+      use_rest_2: Boolean(payload.useRest2),
+      rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
+      rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -703,7 +740,7 @@
     listOvertimeRequests,
     updateLeaveRequest,
     updateOvertimeRequest,
-    updateOvertimeRequestType,
+    updateOvertimeRequestDetails,
     exportSapCsv,
     exportOvertime,
     exportLeave,
