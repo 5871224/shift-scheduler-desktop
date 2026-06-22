@@ -51,6 +51,7 @@ button {
   flex-direction: column;
   min-height: 100vh;
   padding: 20px;
+  padding-bottom: 250px;
   gap: 16px;
 }
 
@@ -144,9 +145,21 @@ button {
   padding: 18px;
 }
 
+.toolbar-floating-card {
+  position: fixed;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  z-index: 35;
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 253, 248, 0.96);
+}
+
 .toolbar-grid {
   display: grid;
-  grid-template-columns: 0.9fr 1fr 1fr;
+  grid-template-columns: 1.35fr 0.95fr;
   gap: 14px;
 }
 
@@ -175,6 +188,13 @@ button {
 .toolbar-title-row,
 .ops-title-row {
   justify-content: space-between;
+}
+
+.toolbar-action-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .toolbar-top-row {
@@ -277,6 +297,10 @@ button {
 
 .dept-filter-row {
   gap: 10px;
+}
+
+.toolbar-section-combined .dept-filter-row {
+  margin-bottom: 10px;
 }
 
 .dept-filter-row label {
@@ -1123,4 +1147,27 @@ thead th.today,
 .request-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    padding-bottom: 320px;
+  }
+
+  .toolbar-floating-card {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    max-height: min(52vh, 420px);
+  }
+
+  .toolbar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar-top-row .db-hint {
+    margin-left: 0;
+    text-align: left;
+    width: 100%;
+  }
 }
