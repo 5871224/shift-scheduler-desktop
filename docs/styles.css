@@ -159,7 +159,7 @@ button {
 
 .toolbar-grid {
   display: grid;
-  grid-template-columns: 1.35fr 0.95fr;
+  grid-template-columns: 1.62fr 0.78fr;
   gap: 14px;
 }
 
@@ -168,6 +168,10 @@ button {
   border: 1px solid rgba(156, 107, 47, 0.12);
   border-radius: 18px;
   padding: 12px;
+}
+
+.toolbar-section-leave {
+  padding: 10px;
 }
 
 .toolbar-top-row,
@@ -301,6 +305,7 @@ button {
 
 .toolbar-section-combined .dept-filter-row {
   margin-bottom: 10px;
+  justify-content: flex-start;
 }
 
 .dept-filter-row label {
@@ -326,6 +331,17 @@ button {
   min-width: 160px;
 }
 
+.toolbar-section-combined .dept-filter-row select {
+  width: 132px;
+  min-width: 132px;
+  flex: 0 0 132px;
+}
+
+.toolbar-section-combined .dept-filter-row .text-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -333,11 +349,20 @@ button {
   min-height: 42px;
 }
 
+.toolbar-section-leave .chips {
+  gap: 6px;
+  min-height: 36px;
+}
+
 .chip {
   padding: 8px 12px;
   border: 1px solid currentColor;
   background: #fff;
   font-size: 12px;
+}
+
+.toolbar-section-leave .chip {
+  padding: 7px 11px;
 }
 
 .chip.active {
