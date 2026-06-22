@@ -654,30 +654,26 @@ thead th.today,
 }
 
 .seg-pending {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  animation: pending-fill-blink 1.2s steps(2, end) infinite;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 0 999px rgba(255, 255, 255, 0.04);
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
-.seg-pending::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 2px solid rgba(255, 255, 255, 0.92);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
-  pointer-events: none;
-  opacity: 1;
-  animation: pending-border-blink 1.2s steps(2, end) infinite;
-}
-
-@keyframes pending-border-blink {
+@keyframes pending-fill-blink {
   0%,
   49% {
-    opacity: 1;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+      inset 0 0 0 999px rgba(255, 255, 255, 0.04);
   }
 
   50%,
   100% {
-    opacity: 0.18;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.46),
+      inset 0 0 0 999px rgba(255, 255, 255, 0.24);
   }
 }
 
