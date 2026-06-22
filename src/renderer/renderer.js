@@ -1272,7 +1272,6 @@ function applySelectionToCell(memberId, day) {
 
 function selectChip(type, id) {
   if (!canEditSchedule()) {
-    promptManagerAccess("修改班表需先登入主管帳號");
     return;
   }
   if (state.selected.type === type && state.selected.id === id) {
