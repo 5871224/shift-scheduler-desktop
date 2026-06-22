@@ -2171,24 +2171,37 @@ function buildSelectOptions(items, valueField, labelBuilder, selectedValue, incl
 
 function openMemberSettings() {
   const body = state.members.length
-    ? state.members.map((member) => `
-      <div class="settings-item list-item-wide">
-        <div class="list-item-main">
-          <div class="settings-text-row">
-            <span class="list-item-title">${escapeHtml(member.code)} · ${escapeHtml(member.name)}</span>
-            <span class="list-item-subtitle">${escapeHtml(getDepartmentName(member.deptId))}</span>
-            <span class="list-item-subtitle">${member.role === "manager" ? "主管" : "員工"} · 到職 ${escapeHtml(member.hireDate || "-")} · 離職 ${escapeHtml(member.leaveDate || "-")} · ${getSalaryTypeLabel(member)}</span>
+    ? `
+      <div class="member-table">
+        <div class="member-table-row member-table-head">
+          <div>工號 / 姓名</div>
+          <div>單位</div>
+          <div>權限</div>
+          <div>到職日</div>
+          <div>離職日</div>
+          <div>薪資方式</div>
+          <div class="member-table-actions-head">操作</div>
+        </div>
+        ${state.members.map((member) => `
+          <div class="member-table-row">
+            <div class="member-table-name">${escapeHtml(member.code)} · ${escapeHtml(member.name)}</div>
+            <div>${escapeHtml(getDepartmentName(member.deptId))}</div>
+            <div>${member.role === "manager" ? "主管" : "員工"}</div>
+            <div>${escapeHtml(member.hireDate || "-")}</div>
+            <div>${escapeHtml(member.leaveDate || "-")}</div>
+            <div>${getSalaryTypeLabel(member)}</div>
+            <div class="member-table-actions">
+              <button class="ghost-btn compact-btn" type="button" data-edit-member="${member.id}">修改</button>
+              <button class="ghost-btn compact-btn" type="button" data-delete-member="${member.id}">刪除</button>
+            </div>
           </div>
-        </div>
-        <div class="list-item-actions">
-          <button class="ghost-btn compact-btn" type="button" data-edit-member="${member.id}">修改</button>
-          <button class="ghost-btn compact-btn" type="button" data-delete-member="${member.id}">刪除</button>
-        </div>
+        `).join("")}
       </div>
-    `).join("")
+    `
     : '<div class="empty-state">目前還沒有人員</div>';
   openEntityListModal({
     title: "人員設定",
+    modalClass: "modal modal-wide",
     body,
     footerButtons: `
       <button class="ghost-btn" type="button" data-export-members="true">匯出人員資料</button>
