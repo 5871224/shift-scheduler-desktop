@@ -2254,6 +2254,8 @@ async function importMembersFromSettings() {
     let imported = 0;
     let updated = 0;
     let skipped = 0;
+    let syncFailed = 0;
+    let firstSyncError = "";
 
     for (const row of result.rows || []) {
       const code = String(row.code || "").trim();
@@ -2283,8 +2285,11 @@ async function importMembersFromSettings() {
       };
       try {
         await window.schedulerApi.syncMemberProfile(payload, existing?.code || "");
-      } catch {
-        skipped += 1;
+      } catch (error) {
+        syncFailed += 1;
+        if (!firstSyncError) {
+          firstSyncError = `${code || "(空白工號)"}：${error.message || "同步失敗"}`;
+        }
         continue;
       }
       if (existing) {
@@ -2300,7 +2305,13 @@ async function importMembersFromSettings() {
     renderAll();
     openMemberSettings();
     queueSave();
-    showInfoMessage(`匯入完成：新增 ${imported} 筆，更新 ${updated} 筆，略過 ${skipped} 筆`);
+    const summary = `匯入完成：新增 ${imported} 筆，更新 ${updated} 筆，略過 ${skipped} 筆，同步失敗 ${syncFailed} 筆`;
+    if (syncFailed > 0) {
+      showInfoMessage(`${summary}\n第一筆同步失敗：${firstSyncError}`);
+      setSaveStatus(`匯入同步失敗：${firstSyncError}`);
+      return;
+    }
+    showInfoMessage(summary);
   } catch (error) {
     setSaveStatus(`匯入失敗：${error.message}`);
   }
