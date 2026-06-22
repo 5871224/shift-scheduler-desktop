@@ -2174,7 +2174,8 @@ function openMemberSettings() {
     ? `
       <div class="member-table">
         <div class="member-table-row member-table-head">
-          <div>工號 / 姓名</div>
+          <div>工號</div>
+          <div>姓名</div>
           <div>單位</div>
           <div>權限</div>
           <div>到職日</div>
@@ -2184,7 +2185,8 @@ function openMemberSettings() {
         </div>
         ${state.members.map((member) => `
           <div class="member-table-row">
-            <div class="member-table-name">${escapeHtml(member.code)} · ${escapeHtml(member.name)}</div>
+            <div class="member-table-code">${escapeHtml(member.code)}</div>
+            <div class="member-table-name">${escapeHtml(member.name)}</div>
             <div>${escapeHtml(getDepartmentName(member.deptId))}</div>
             <div>${member.role === "manager" ? "主管" : "員工"}</div>
             <div>${escapeHtml(member.hireDate || "-")}</div>
@@ -2201,7 +2203,7 @@ function openMemberSettings() {
     : '<div class="empty-state">目前還沒有人員</div>';
   openEntityListModal({
     title: "人員設定",
-    modalClass: "modal modal-wide",
+    modalClass: "modal modal-wide member-settings-modal",
     body,
     footerButtons: `
       <button class="ghost-btn" type="button" data-export-members="true">匯出人員資料</button>
