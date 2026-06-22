@@ -213,7 +213,38 @@ function renderStickyTableHeader(days) {
     );
   }
   container.innerHTML = cells.join("");
-  syncStickyHeaderScroll();
+  requestAnimationFrame(() => {
+    syncStickyHeaderLayout();
+    syncStickyHeaderScroll();
+  });
+}
+
+function syncStickyHeaderLayout() {
+  const table = document.getElementById("mainTable");
+  const deptCell = document.querySelector(".table-sticky-cell-dept");
+  const personCell = document.querySelector(".table-sticky-cell-person");
+  const dayCells = Array.from(document.querySelectorAll(".table-sticky-cell-day"));
+  const headerCells = Array.from(table?.querySelectorAll("thead th") || []);
+  if (!deptCell || !personCell || headerCells.length < 2) {
+    return;
+  }
+
+  const setWidth = (element, width) => {
+    const px = `${Math.round(width)}px`;
+    element.style.width = px;
+    element.style.minWidth = px;
+    element.style.maxWidth = px;
+  };
+
+  setWidth(deptCell, headerCells[0].getBoundingClientRect().width);
+  setWidth(personCell, headerCells[1].getBoundingClientRect().width);
+  dayCells.forEach((cell, index) => {
+    const headerCell = headerCells[index + 2];
+    if (!headerCell) {
+      return;
+    }
+    setWidth(cell, headerCell.getBoundingClientRect().width);
+  });
 }
 
 function syncStickyHeaderScroll() {
@@ -3129,7 +3160,10 @@ function bindEvents() {
   if (tableWrap) {
     tableWrap.addEventListener("scroll", syncStickyHeaderScroll, { passive: true });
   }
-  window.addEventListener("resize", syncStickyHeaderScroll);
+  window.addEventListener("resize", () => {
+    syncStickyHeaderLayout();
+    syncStickyHeaderScroll();
+  });
 
   const deptFilter = document.getElementById("deptFilter");
   if (deptFilter) {
