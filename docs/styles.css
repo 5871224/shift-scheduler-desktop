@@ -409,6 +409,7 @@ button {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: var(--day-col-width);
+  width: max-content;
   will-change: transform;
 }
 
@@ -473,6 +474,18 @@ table {
   border-collapse: separate;
   border-spacing: 0;
   width: max-content;
+}
+
+.col-dept {
+  width: var(--dept-col-width);
+}
+
+.col-person {
+  width: var(--person-col-width);
+}
+
+.col-day {
+  width: var(--day-col-width);
 }
 
 th,
@@ -588,6 +601,10 @@ thead th.today,
 }
 
 .cell.inactive-cell:hover {
+  background: #9b9b9b;
+}
+
+.cell.inactive-cell .cell-inner {
   background: #9b9b9b;
 }
 

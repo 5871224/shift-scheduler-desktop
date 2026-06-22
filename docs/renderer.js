@@ -1196,13 +1196,11 @@ function renderTable() {
     today.getDate() === day
   );
 
-  let html = '<thead><tr><th class="dept-col">單位</th><th class="person-col">人員</th>';
+  let html = '<colgroup><col class="col-dept"><col class="col-person">';
   for (let day = 1; day <= days; day += 1) {
-    const weekday = weekdayOf(day);
-    const cls = weekday === 0 ? "sun" : weekday === 6 ? "sat" : "";
-    html += `<th class="${cls} ${isToday(day) ? "today" : ""}">${day}<br><span>${WEEKDAY_LABELS[weekday]}</span></th>`;
+    html += '<col class="col-day">';
   }
-  html += "</tr></thead><tbody>";
+  html += "</colgroup><tbody>";
 
   const groups = state.departments
     .map((department) => ({
@@ -1224,7 +1222,7 @@ function renderTable() {
         for (let day = 1; day <= days; day += 1) {
           const active = isMemberActiveOnDate(member, state.year, state.month, day);
           if (!active) {
-            html += `<td class="cell inactive-cell" data-disabled="true"></td>`;
+            html += '<td class="cell inactive-cell" data-disabled="true"><div class="cell-inner"></div></td>';
             continue;
           }
           const key = scheduleKey(member.id, state.year, state.month, day);
