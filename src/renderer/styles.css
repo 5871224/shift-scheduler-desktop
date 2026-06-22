@@ -570,9 +570,9 @@ thead th.person-col {
 }
 
 .member-main {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.4;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1.35;
   word-break: break-all;
 }
 
@@ -1112,10 +1112,8 @@ thead th.today,
 .leave-tooltip-btn {
   margin-top: 0;
   flex-shrink: 0;
-  padding: 4px 8px;
-  min-width: 0;
-  font-size: 11px;
-  line-height: 1.1;
+  width: 28px;
+  height: 28px;
 }
 
 .dept-block {
@@ -1367,10 +1365,9 @@ thead th.today,
   gap: 6px;
 }
 
-.member-table-actions .compact-btn {
-  padding: 5px 10px;
-  min-height: 30px;
-  font-size: 12px;
+.member-table-actions .settings-icon-btn {
+  width: 30px;
+  height: 30px;
 }
 
 .request-section {

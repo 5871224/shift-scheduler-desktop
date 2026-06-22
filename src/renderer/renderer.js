@@ -1074,7 +1074,7 @@ function showLeaveTooltip(memberId, day, anchorRect) {
   root.innerHTML = `
     <div class="leave-tooltip-head">
       <div class="leave-tooltip-title">${escapeHtml(getLeaveLabel(leave))}</div>
-      ${isManager() ? `<button class="ghost-btn compact-btn leave-tooltip-btn" type="button" data-edit-leave-assignment="${memberId}:${day}">修改</button>` : ""}
+      ${isManager() ? renderActionIconButton("edit", `data-edit-leave-assignment="${memberId}:${day}"`, "leave-tooltip-btn") : ""}
     </div>
     ${lines.map((line) => `<div class="leave-tooltip-line">${escapeHtml(line)}</div>`).join("")}
   `;
@@ -1697,21 +1697,8 @@ function openListSettings(category) {
                   ? `<div class="settings-table-meta">${item.requireReason ? "是" : "否"}</div>`
                   : ""}
                 <div class="settings-table-actions">
-                  <button class="settings-icon-btn" type="button" data-edit-item="${category}" data-edit-id="${item.id}" aria-label="修改" title="修改">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16v4z"></path>
-                      <path d="M13.5 6.5l4 4"></path>
-                    </svg>
-                  </button>
-                  <button class="settings-icon-btn settings-icon-btn-danger" type="button" data-delete-category="${category}" data-delete-id="${item.id}" aria-label="刪除" title="刪除">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M4 7h16"></path>
-                      <path d="M9 7V4h6v3"></path>
-                      <path d="M7 7l1 13h8l1-13"></path>
-                      <path d="M10 11v6"></path>
-                      <path d="M14 11v6"></path>
-                    </svg>
-                  </button>
+                  ${renderActionIconButton("edit", `data-edit-item="${category}" data-edit-id="${item.id}"`)}
+                  ${renderActionIconButton("delete", `data-delete-category="${category}" data-delete-id="${item.id}"`)}
                 </div>
               </div>
             `).join("")}
@@ -1730,8 +1717,8 @@ function openListSettings(category) {
             </div>
           </div>
           <div class="list-item-actions">
-            <button class="ghost-btn compact-btn" type="button" data-edit-item="${category}" data-edit-id="${item.id}">修改</button>
-            <button class="ghost-btn compact-btn" type="button" data-delete-category="${category}" data-delete-id="${item.id}">刪除</button>
+            ${renderActionIconButton("edit", `data-edit-item="${category}" data-edit-id="${item.id}"`)}
+            ${renderActionIconButton("delete", `data-delete-category="${category}" data-delete-id="${item.id}"`)}
           </div>
         </div>
       `).join("")
@@ -1760,6 +1747,30 @@ function renderCompactColorPicker(selectedHex) {
       </button>
       <input class="native-color-input hidden-color-input" type="color" value="${selectedHex}" data-native-color="true">
     </div>
+  `;
+}
+
+function renderActionIconButton(kind, attrs, extraClass = "") {
+  const title = kind === "delete" ? "刪除" : "修改";
+  const dangerClass = kind === "delete" ? " settings-icon-btn-danger" : "";
+  const icon = kind === "delete"
+    ? `
+      <path d="M4 7h16"></path>
+      <path d="M9 7V4h6v3"></path>
+      <path d="M7 7l1 13h8l1-13"></path>
+      <path d="M10 11v6"></path>
+      <path d="M14 11v6"></path>
+    `
+    : `
+      <path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16v4z"></path>
+      <path d="M13.5 6.5l4 4"></path>
+    `;
+  return `
+    <button class="settings-icon-btn${dangerClass}${extraClass ? ` ${extraClass}` : ""}" type="button" ${attrs} aria-label="${title}" title="${title}">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        ${icon}
+      </svg>
+    </button>
   `;
 }
 
@@ -2089,8 +2100,8 @@ function openDepartmentSettings() {
               <div class="dept-count">${members.length} 位</div>
             </div>
             <div class="list-item-actions">
-              <button class="ghost-btn compact-btn" type="button" data-edit-department="${department.id}">修改</button>
-              <button class="ghost-btn compact-btn" type="button" data-delete-department="${department.id}">刪除</button>
+              ${renderActionIconButton("edit", `data-edit-department="${department.id}"`)}
+              ${renderActionIconButton("delete", `data-delete-department="${department.id}"`)}
             </div>
           </div>
           <div class="member-list">
@@ -2245,8 +2256,8 @@ function openMemberSettings() {
               <div>${escapeHtml(member.leaveDate || "-")}</div>
               <div>${getSalaryTypeLabel(member)}</div>
               <div class="member-table-actions">
-                <button class="ghost-btn compact-btn" type="button" data-edit-member="${member.id}">修改</button>
-                <button class="ghost-btn compact-btn" type="button" data-delete-member="${member.id}">刪除</button>
+                ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
+                ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
               </div>
             </div>
           `).join("")}
