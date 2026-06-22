@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>排班工具</title>
-  <link rel="stylesheet" href="./styles.css?v=20260622t">
+  <link rel="stylesheet" href="./styles.css?v=20260622u">
 </head>
 <body>
   <div class="app-shell">
@@ -30,15 +30,13 @@
         <div class="toolbar-section toolbar-section-combined">
           <div class="toolbar-title-row">
             <span class="toolbar-title">單位 / 班別</span>
-            <div class="toolbar-action-group">
-              <button class="text-btn" id="deptSettingsButton" type="button">單位設定</button>
-            </div>
+            <button class="text-btn toolbar-inline-link" id="deptSettingsButton" type="button">單位設定</button>
           </div>
-          <div class="dept-filter-row">
+          <div class="dept-filter-row dept-filter-row-combined">
             <select id="deptFilter"></select>
-            <button class="text-btn" id="shiftSettingsButton" type="button">班別設定</button>
+            <button class="text-btn toolbar-inline-link" id="shiftSettingsButton" type="button">班別設定</button>
           </div>
-          <div id="shiftChips" class="chips"></div>
+          <div id="shiftChips" class="chips chips-shift"></div>
         </div>
 
         <div class="toolbar-section toolbar-section-leave">
@@ -63,7 +61,7 @@
         </div>
       </div>
 
-      <div class="table-sticky-header" id="tableStickyHeader" aria-hidden="true">
+      <div class="table-sticky-header" id="tableStickyHeader">
         <div class="table-sticky-header-left">
           <div class="table-sticky-cell table-sticky-cell-dept">單位</div>
           <div class="table-sticky-cell table-sticky-cell-person">人員</div>
@@ -83,9 +81,9 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260622t"></script>
-  <script src="./browser-exporter.js?v=20260622t"></script>
-  <script src="./web-api.js?v=20260622t"></script>
-  <script src="./renderer.js?v=20260622t"></script>
+  <script src="./app-config.js?v=20260622u"></script>
+  <script src="./browser-exporter.js?v=20260622u"></script>
+  <script src="./web-api.js?v=20260622u"></script>
+  <script src="./renderer.js?v=20260622u"></script>
 </body>
 </html>

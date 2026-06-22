@@ -198,6 +198,7 @@ function renderStickyTableHeader(days) {
   if (!container || !stickyHeader) {
     return;
   }
+  renderStickyHeaderTitleCells();
   const today = new Date();
   const isToday = (day) => (
     today.getFullYear() === state.year &&
@@ -217,6 +218,22 @@ function renderStickyTableHeader(days) {
     syncStickyHeaderLayout();
     syncStickyHeaderScroll();
   });
+}
+
+function renderStickyHeaderTitleCells() {
+  const deptCell = document.querySelector(".table-sticky-cell-dept");
+  const personCell = document.querySelector(".table-sticky-cell-person");
+  if (!deptCell || !personCell) {
+    return;
+  }
+  const renderCell = (label, dataAttr) => `
+    <div class="table-sticky-cell-title">
+      <span class="table-sticky-cell-label">${label}</span>
+      ${isManager() ? renderActionIconButton("edit", `${dataAttr}=\"true\"`, "table-header-settings-btn") : ""}
+    </div>
+  `;
+  deptCell.innerHTML = renderCell("單位", "data-open-department-settings");
+  personCell.innerHTML = renderCell("人員", "data-open-member-settings");
 }
 
 function syncStickyHeaderLayout() {
@@ -3335,6 +3352,8 @@ function bindEvents() {
       return;
     }
     const managerOnlyAction = Boolean(
+      target.dataset.openDepartmentSettings ||
+      target.dataset.openMemberSettings ||
       target.dataset.deleteCategory ||
       target.dataset.editLeaveAssignment ||
       target.dataset.openAdd ||
@@ -3360,6 +3379,14 @@ function bindEvents() {
     }
     if (target.dataset.openLeaveRequest) {
       await openLeaveRequestModal();
+      return;
+    }
+    if (target.dataset.openDepartmentSettings) {
+      openDepartmentSettings();
+      return;
+    }
+    if (target.dataset.openMemberSettings) {
+      openMemberSettings();
       return;
     }
     if (target.dataset.openOvertimeRequest) {

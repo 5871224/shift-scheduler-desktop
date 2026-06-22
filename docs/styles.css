@@ -229,6 +229,13 @@ button {
   font-weight: 700;
 }
 
+.toolbar-inline-link {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .ops-title-row {
   align-items: flex-start;
   gap: 12px;
@@ -308,6 +315,10 @@ button {
   justify-content: flex-start;
 }
 
+.dept-filter-row-combined {
+  gap: 8px;
+}
+
 .dept-filter-row label {
   display: none;
 }
@@ -334,12 +345,23 @@ button {
 .toolbar-section-combined .dept-filter-row select {
   width: 132px;
   min-width: 132px;
+  max-width: 132px;
   flex: 0 0 132px;
+  padding: 8px 32px 8px 12px;
 }
 
 .toolbar-section-combined .dept-filter-row .text-btn {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.chips-shift {
+  gap: 6px;
+  min-height: 34px;
+}
+
+.chips-shift .chip {
+  padding: 7px 11px;
 }
 
 .chips {
@@ -451,6 +473,21 @@ button {
   text-align: center;
 }
 
+.table-sticky-cell-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  padding: 0 4px;
+  text-align: left;
+}
+
+.table-sticky-cell-label {
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .table-sticky-cell-dept {
   width: var(--dept-col-width);
   min-width: var(--dept-col-width);
@@ -484,6 +521,17 @@ button {
   color: var(--muted);
   font-size: 10px;
   font-weight: 500;
+}
+
+.table-header-settings-btn {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+
+.table-header-settings-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 .table-wrap {
@@ -1392,6 +1440,7 @@ thead th.today,
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+  pointer-events: none;
 }
 
 .settings-icon-btn-danger {
