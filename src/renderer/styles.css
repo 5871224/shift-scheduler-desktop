@@ -719,6 +719,17 @@ thead th.today,
   overflow: hidden;
 }
 
+.catalog-settings-modal {
+  width: min(980px, 100%);
+  height: min(74vh, 720px);
+}
+
+.catalog-settings-modal .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .modal-form-compact {
   width: min(440px, 100%);
 }
@@ -1195,6 +1206,100 @@ thead th.today,
   background: #fff;
 }
 
+.settings-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.settings-table {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.settings-table-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-top: 1px solid #ebe3d8;
+  min-height: 42px;
+  font-size: 13px;
+}
+
+.settings-table-row:first-child {
+  border-top: none;
+}
+
+.settings-table-row-shift {
+  grid-template-columns: 58px 48px minmax(110px, 1fr) 132px 120px 108px;
+}
+
+.settings-table-row-leave {
+  grid-template-columns: 58px 48px minmax(140px, 1fr) minmax(160px, 1.1fr) 108px;
+}
+
+.settings-table-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fbf8f1;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-table-sort,
+.settings-table-color {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-table-sort {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-table-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-table-meta {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-table-actions-head {
+  text-align: right;
+}
+
+.settings-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.settings-table-actions .compact-btn {
+  padding: 5px 10px;
+  min-height: 30px;
+  font-size: 12px;
+}
+
 .member-table {
   display: flex;
   flex-direction: column;
@@ -1363,5 +1468,22 @@ thead th.today,
   .member-table-code,
   .member-table-name {
     font-size: 13px;
+  }
+
+  .settings-table-row {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .settings-table-row-shift {
+    grid-template-columns: 52px 40px minmax(88px, 1fr) 96px 102px 96px;
+  }
+
+  .settings-table-row-leave {
+    grid-template-columns: 52px 40px minmax(96px, 1fr) minmax(100px, 1fr) 96px;
+  }
+
+  .settings-table-name {
+    font-size: 12px;
   }
 }

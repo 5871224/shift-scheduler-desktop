@@ -1669,33 +1669,66 @@ function openListSettings(category) {
     overtime: "加班設定"
   };
   const list = getItemList(category);
-  const body = list.length
-    ? list.map((item) => `
-      <div class="settings-item list-item-wide ${category === "leave" ? "sortable-settings-item" : ""}" ${category === "leave" ? `draggable="true" data-sort-category="leave" data-sort-item="${item.id}"` : ""}>
-        <div class="list-item-main">
-          <div class="dot" style="background:${item.color}"></div>
-          <div class="settings-text-row">
-            <span class="list-item-title">${escapeHtml(category === "leave" ? getLeaveLabel(item) : item.name)}</span>
-            <span class="list-item-subtitle">${category === "shift"
-              ? `適用單位 ${escapeHtml(getDepartmentSummary(item.applicableDeptIds))} · ${escapeHtml(item.startTime || "--:--")} - ${escapeHtml(item.endTime || "--:--")}`
-              : category === "overtime"
-              ? `時段 ${escapeHtml(item.startTime || "--:--")} - ${escapeHtml(item.endTime || "--:--")}`
-              : `${item.defaultAllDay ? "整天" : ""}${item.defaultAllDay && item.requireReason ? " · " : ""}${item.requireReason ? "需填原因" : ""}` || "可用於排班與請假顯示"
-            }</span>
+  const body = (category === "shift" || category === "leave")
+    ? (list.length
+      ? `
+        <div class="settings-table-wrap">
+          <div class="settings-table">
+            <div class="settings-table-row settings-table-head settings-table-row-${category}">
+              <div>排序</div>
+              <div>顏色</div>
+              <div>${category === "shift" ? "班別" : "假別"}</div>
+              <div>${category === "shift" ? "適用單位" : "規則"}</div>
+              ${category === "shift" ? "<div>時段</div>" : ""}
+              <div class="settings-table-actions-head">操作</div>
+            </div>
+            ${list.map((item) => `
+              <div class="settings-table-row settings-table-row-${category} sortable-settings-item" draggable="true" data-sort-category="${category}" data-sort-item="${item.id}">
+                <div class="settings-table-sort">拖曳</div>
+                <div class="settings-table-color"><div class="dot" style="background:${item.color}"></div></div>
+                <div class="settings-table-name">${escapeHtml(category === "leave" ? getLeaveLabel(item) : item.name)}</div>
+                <div class="settings-table-meta">${category === "shift"
+                  ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
+                  : escapeHtml(`${item.defaultAllDay ? "整天" : ""}${item.defaultAllDay && item.requireReason ? " · " : ""}${item.requireReason ? "需填原因" : ""}` || "可用於排班與請假顯示")
+                }</div>
+                ${category === "shift"
+                  ? `<div class="settings-table-meta">${escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)}</div>`
+                  : ""}
+                <div class="settings-table-actions">
+                  <button class="ghost-btn compact-btn" type="button" data-edit-item="${category}" data-edit-id="${item.id}">修改</button>
+                  <button class="ghost-btn compact-btn" type="button" data-delete-category="${category}" data-delete-id="${item.id}">刪除</button>
+                </div>
+              </div>
+            `).join("")}
           </div>
         </div>
-        <div class="list-item-actions">
-          <button class="ghost-btn compact-btn" type="button" data-edit-item="${category}" data-edit-id="${item.id}">修改</button>
-          <button class="ghost-btn compact-btn" type="button" data-delete-category="${category}" data-delete-id="${item.id}">刪除</button>
+      `
+      : '<div class="empty-state">目前還沒有資料</div>')
+    : (list.length
+      ? list.map((item) => `
+        <div class="settings-item list-item-wide">
+          <div class="list-item-main">
+            <div class="dot" style="background:${item.color}"></div>
+            <div class="settings-text-row">
+              <span class="list-item-title">${escapeHtml(item.name)}</span>
+              <span class="list-item-subtitle">時段 ${escapeHtml(item.startTime || "--:--")} - ${escapeHtml(item.endTime || "--:--")}</span>
+            </div>
+          </div>
+          <div class="list-item-actions">
+            <button class="ghost-btn compact-btn" type="button" data-edit-item="${category}" data-edit-id="${item.id}">修改</button>
+            <button class="ghost-btn compact-btn" type="button" data-delete-category="${category}" data-delete-id="${item.id}">刪除</button>
+          </div>
         </div>
-      </div>
-    `).join("")
-    : '<div class="empty-state">目前還沒有資料</div>';
+      `).join("")
+      : '<div class="empty-state">目前還沒有資料</div>');
 
   openEntityListModal({
     title: titleMap[category],
+    modalClass: category === "shift" || category === "leave"
+      ? "modal modal-wide catalog-settings-modal"
+      : undefined,
     body,
-    footerButtons: `<button class="btn-primary" type="button" data-open-add="${category}">新增</button>`
+    footerButtons: `<button class="btn-primary" type="button" data-open-add="${category}">新增${escapeHtml(titleMap[category].replace("設定", ""))}</button>`
   });
 }
 
@@ -2152,6 +2185,9 @@ function reorderListItem(category, draggedId, targetId) {
   }
   const [moved] = currentList.splice(fromIndex, 1);
   currentList.splice(targetIndex, 0, moved);
+  if (category === "shift") {
+    state.shifts = currentList;
+  }
   if (category === "leave") {
     state.leaves = currentList;
   }
