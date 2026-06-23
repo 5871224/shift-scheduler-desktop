@@ -11,7 +11,7 @@
   --accent-soft: #efe2c8;
   --danger: #ae3c33;
   --today: #f8ead1;
-  --week-alt: #f6f0e4;
+  --week-alt: #ede1cc;
   --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
   --dept-col-width: 72px;
   --person-col-width: 92px;
@@ -797,7 +797,7 @@ thead th.today,
 }
 
 .cell.inactive-cell.week-alt {
-  background: #8f8f8f;
+  background: #868686;
 }
 
 .cell.inactive-cell:hover {
