@@ -372,6 +372,18 @@
     return { session: null, profile: null };
   }
 
+  async function changePassword(newPassword) {
+    ensureSignedIn();
+    await requestJson("/auth/v1/user", {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify({
+        password: String(newPassword || "")
+      })
+    });
+    return { ok: true };
+  }
+
   async function loadState() {
     try {
       const rows = await restSelect("schedule_documents", {
@@ -860,6 +872,7 @@
     getAuthContext: () => ({ session: currentSession, profile: currentProfile }),
     signIn,
     signOut,
+    changePassword,
     loadState,
     saveState,
     syncCatalogs,

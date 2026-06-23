@@ -1128,6 +1128,7 @@ function renderAuthBar() {
   const requestButtons = currentProfile ? `
     <button class="ghost-btn compact-btn" type="button" data-open-leave-request="true">請假申請</button>
     <button class="ghost-btn compact-btn" type="button" data-open-overtime-request="true">加班申請</button>
+    <button class="ghost-btn compact-btn" type="button" data-open-change-password="true">修改密碼</button>
   ` : "";
   container.innerHTML = `
     <div class="session-pill">${escapeHtml(getCurrentProfileName())}</div>
@@ -1172,6 +1173,49 @@ function renderAuthGate() {
     return;
   }
   root.innerHTML = "";
+}
+
+function openChangePasswordModal() {
+  if (!isLoggedIn()) {
+    openSignInDialog("修改密碼前請先登入");
+    return;
+  }
+  openEntityListModal({
+    title: "修改密碼",
+    modalClass: "modal modal-form-compact",
+    body: `
+      <div class="form-row">
+        <label for="changePasswordValue">新密碼</label>
+        <input id="changePasswordValue" type="password" maxlength="64" placeholder="請輸入新密碼">
+      </div>
+      <div class="form-row">
+        <label for="changePasswordConfirm">確認新密碼</label>
+        <input id="changePasswordConfirm" type="password" maxlength="64" placeholder="請再次輸入新密碼">
+      </div>
+    `,
+    headerButtons: '<button class="btn-primary" type="button" data-save-change-password="true">儲存修改</button>',
+    hideFooterClose: true
+  });
+}
+
+async function saveChangedPassword() {
+  const password = document.getElementById("changePasswordValue")?.value || "";
+  const confirmPassword = document.getElementById("changePasswordConfirm")?.value || "";
+  if (password.length < 4) {
+    reportValidationError("密碼至少需要 4 碼");
+    return;
+  }
+  if (password !== confirmPassword) {
+    reportValidationError("兩次輸入的密碼不一致");
+    return;
+  }
+  try {
+    await window.schedulerApi.changePassword(password);
+    closeModal();
+    showInfoMessage("密碼已修改");
+  } catch (error) {
+    setSaveStatus(`修改密碼失敗：${error.message}`);
+  }
 }
 
 function hasSapLeaveRows() {
@@ -3934,6 +3978,10 @@ function bindEvents() {
       await openOvertimeRequestModal();
       return;
     }
+    if (target.dataset.openChangePassword) {
+      openChangePasswordModal();
+      return;
+    }
     if (target.dataset.resetMemberPassword) {
       await resetMemberPasswordFromModal(target.dataset.resetMemberPassword);
       return;
@@ -4013,6 +4061,10 @@ function bindEvents() {
     }
     if (target.dataset.saveOvertimeRequest) {
       await saveOvertimeRequestFromModal();
+      return;
+    }
+    if (target.dataset.saveChangePassword) {
+      await saveChangedPassword();
       return;
     }
     if (target.dataset.saveRequestReview) {
