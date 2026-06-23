@@ -193,6 +193,7 @@ let dragSortItemId = "";
 let dragSortCategory = "";
 let toolbarCollapsed = false;
 let toolbarCollapseInitialized = false;
+let measureTextContext = null;
 
 function renderStickyTableHeader(days) {
   const container = document.getElementById("tableStickyHeaderDays");
@@ -294,6 +295,60 @@ function escapeHtml(value) {
 
 function uid(prefix) {
   return `${prefix}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function getMeasureTextContext() {
+  if (!measureTextContext) {
+    measureTextContext = document.createElement("canvas").getContext("2d");
+  }
+  return measureTextContext;
+}
+
+function measureTextWidth(text, computedStyle) {
+  const context = getMeasureTextContext();
+  if (!context) {
+    return String(text || "").length * 16;
+  }
+  context.font = [
+    computedStyle.fontStyle,
+    computedStyle.fontVariant,
+    computedStyle.fontWeight,
+    computedStyle.fontSize,
+    computedStyle.fontFamily
+  ].filter(Boolean).join(" ");
+  return context.measureText(String(text || "")).width;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function syncScheduleColumnWidths() {
+  const root = document.documentElement;
+  const deptSample = document.querySelector(".dept-col");
+  const personSample = document.querySelector(".person-col .member-main") || document.querySelector(".person-col");
+  if (!root || !deptSample || !personSample) {
+    return;
+  }
+
+  const deptStyle = getComputedStyle(deptSample);
+  const personStyle = getComputedStyle(personSample);
+  const headerStyle = getComputedStyle(document.querySelector(".table-sticky-cell") || deptSample);
+  const visibleDepartments = state.departments
+    .filter((department) => state.members.some((member) => member.deptId === department.id))
+    .map((department) => department.name);
+  const visibleMembers = state.members
+    .filter((member) => state.departments.some((department) => department.id === member.deptId))
+    .map((member) => member.name);
+  const managerButtonAllowance = isManager() ? 28 : 0;
+  const deptContentWidth = visibleDepartments.reduce((max, text) => Math.max(max, measureTextWidth(text, deptStyle)), 0);
+  const personContentWidth = visibleMembers.reduce((max, text) => Math.max(max, measureTextWidth(text, personStyle)), 0);
+  const deptHeaderWidth = measureTextWidth("單位", headerStyle) + managerButtonAllowance;
+  const personHeaderWidth = measureTextWidth("人員", headerStyle) + managerButtonAllowance;
+  const deptWidth = clamp(Math.ceil(Math.max(deptContentWidth, deptHeaderWidth) + 18), 52, 88);
+  const personWidth = clamp(Math.ceil(Math.max(personContentWidth, personHeaderWidth) + 18), 64, 118);
+  root.style.setProperty("--dept-col-width", `${deptWidth}px`);
+  root.style.setProperty("--person-col-width", `${personWidth}px`);
 }
 
 function scheduleKey(memberId, year, month, day) {
@@ -1307,6 +1362,7 @@ function renderTable() {
 
   html += "</tbody>";
   table.innerHTML = html;
+  syncScheduleColumnWidths();
   renderStickyTableHeader(days);
 }
 

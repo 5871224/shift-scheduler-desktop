@@ -12,8 +12,8 @@
   --danger: #ae3c33;
   --today: #f8ead1;
   --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
-  --dept-col-width: 82px;
-  --person-col-width: 104px;
+  --dept-col-width: 72px;
+  --person-col-width: 92px;
   --day-col-width: clamp(32px, calc((100vw - 280px) / 31), 44px);
 }
 
@@ -363,6 +363,7 @@ button {
   position: absolute;
   bottom: calc(100% + 10px);
   right: 0;
+  left: auto;
   z-index: 30;
   display: none;
   width: min(260px, calc(100vw - 56px));
@@ -485,6 +486,8 @@ button {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .calendar-nav {
@@ -1687,6 +1690,14 @@ thead th.today,
     gap: 8px;
   }
 
+  .core-actions-menu {
+    left: 0;
+    right: auto;
+    bottom: calc(100% + 8px);
+    width: min(220px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+  }
+
   .toolbar-top-row .db-hint {
     margin-left: 0;
     text-align: left;
@@ -1770,6 +1781,11 @@ thead th.today,
 
   .table-sticky-header {
     top: 8px;
+  }
+
+  .calendar-card {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .month-title-wrap h2 {
@@ -1874,5 +1890,10 @@ thead th.today,
 
   .toolbar-floating-card {
     max-height: min(42vh, 300px);
+  }
+
+  .core-actions-menu {
+    width: min(200px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
   }
 }
