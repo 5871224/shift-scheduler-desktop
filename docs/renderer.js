@@ -628,7 +628,8 @@ function sanitizeDepartment(department, fallbackIndex) {
     id: department?.id || uid(`d${fallbackIndex}`),
     name: department?.name || `單位 ${fallbackIndex + 1}`,
     startDate: department?.startDate || "",
-    endDate: department?.endDate || ""
+    endDate: department?.endDate || "",
+    hiddenFromLeave: Boolean(department?.hiddenFromLeave)
   };
 }
 
@@ -1210,6 +1211,10 @@ function hasOvertimeRows() {
 function hasLeaveRows() {
   const excludedLeaveCodes = new Set(["0036", "0047"]);
   return state.members.some((member) => {
+    const department = state.departments.find((item) => item.id === member.deptId);
+    if (department?.hiddenFromLeave) {
+      return false;
+    }
     for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
       if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
         continue;
@@ -2479,7 +2484,7 @@ function openDepartmentSettings() {
 function openDepartmentForm(mode, departmentId = "") {
   const department = mode === "edit"
     ? state.departments.find((item) => item.id === departmentId)
-    : { id: "", name: "", startDate: "", endDate: "" };
+    : { id: "", name: "", startDate: "", endDate: "", hiddenFromLeave: false };
   if (!department) {
     return;
   }
@@ -2502,6 +2507,12 @@ function openDepartmentForm(mode, departmentId = "") {
           <input id="departmentEndDate" type="date" value="${escapeHtml(department.endDate || "")}">
         </div>
       </div>
+      <div class="form-row checkbox-row checkbox-row-left">
+        <label class="catalog-visibility-toggle">
+          <input id="departmentHiddenFromLeave" type="checkbox" ${department.hiddenFromLeave ? "checked" : ""}>
+          不顯示
+        </label>
+      </div>
     `,
     headerButtons: `<button class="btn-primary" type="button" data-save-department="${mode}">${mode === "edit" ? "儲存修改" : "新增單位"}</button>`,
     hideFooterClose: true
@@ -2512,6 +2523,7 @@ function saveDepartment(mode) {
   const name = document.getElementById("departmentName")?.value.trim();
   const startDate = document.getElementById("departmentStartDate")?.value || "";
   const endDate = document.getElementById("departmentEndDate")?.value || "";
+  const hiddenFromLeave = Boolean(document.getElementById("departmentHiddenFromLeave")?.checked);
   if (!name) {
     document.getElementById("departmentName")?.focus();
     return;
@@ -2520,7 +2532,7 @@ function saveDepartment(mode) {
     reportValidationError("開始日期必須早於結束日期");
     return;
   }
-  const payload = { id: mode === "edit" ? modalContext.targetId : uid("d"), name, startDate, endDate };
+  const payload = { id: mode === "edit" ? modalContext.targetId : uid("d"), name, startDate, endDate, hiddenFromLeave };
   if (mode === "edit") {
     state.departments = state.departments.map((department) => department.id === modalContext.targetId ? payload : department);
   } else {

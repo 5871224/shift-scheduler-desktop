@@ -176,8 +176,16 @@
     const leaveMap = getItemMap(state.leaves);
     const excludedLeaveCodes = new Set(["0036", "0047"]);
     const rows = [];
+    const hiddenDepartmentIds = new Set(
+      (state.departments || [])
+        .filter((department) => department?.hiddenFromLeave)
+        .map((department) => department.id)
+    );
 
     for (const member of state.members) {
+      if (hiddenDepartmentIds.has(member.deptId)) {
+        continue;
+      }
       for (let day = 1; day <= daysInMonth(year, month); day += 1) {
         if (!isMemberActiveOnDate(member, year, month, day)) {
           continue;
