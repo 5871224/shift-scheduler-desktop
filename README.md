@@ -99,6 +99,41 @@ npm run web:publish
 - `manager`：可編輯班表、設定資料、審核申請、重設員工密碼
 - `employee`：可看班表、送出自己的請假 / 加班申請、修改自己的密碼
 
+## Supabase 資料表對照
+
+### 目前前端實際有在使用
+
+| 名稱 | 類型 | 用途 | 前端使用方式 |
+| --- | --- | --- | --- |
+| `profiles` | table | 登入者資料、工號、姓名、角色、登入 email | 登入後讀取目前使用者、查申請人的姓名工號、主管重設帳號相關操作 |
+| `schedule_documents` | table | 班表主文件 JSON | 讀取整份班表、儲存整份班表 |
+| `leave_types` | table | 請假類型對照 | 員工送出請假申請時依代碼查 `id`，主管同步假別設定時更新 |
+| `overtime_types` | table | 加班類型對照 | 員工送出加班申請時查類型，主管同步加班設定時更新 |
+| `leave_requests` | table | 請假申請單 | 員工新增 / 刪除自己的申請，主管查詢與審核 |
+| `overtime_requests` | table | 加班申請單 | 員工新增 / 刪除自己的申請，主管查詢、審核、修改時段 |
+| `login_email_by_employee_code(text)` | RPC function | 用工號換登入 email | 登入時先查 email，再走 Supabase Auth password login |
+| `get_public_schedule_requests()` | RPC function | 匿名可讀的公開請假 / 加班覆蓋資料 | 未登入時讓班表仍可看到請假與加班覆蓋 |
+| `member-auth-admin` | Edge Function | 員工帳號建立 / 更新 / 重設密碼 | 人員新增 / 修改同步登入帳號、主管重設員工密碼 |
+
+### 目前仍在 schema，但前端主流程沒有直接使用
+
+以下表在 `supabase/001_initial_schema.sql` 裡存在，但目前這個前端版本沒有直接以它們做主資料來源：
+
+- `departments`
+- `manager_departments`
+- `member_departments`
+- `shift_types`
+- `schedule_months`
+- `schedule_entries`
+- `clock_locations`
+- `attendance_logs`
+
+重點：
+
+- 目前單位、班別、人員、假別、加班設定，主來源仍是 `schedule_documents.payload`
+- 也就是說，前端設定頁不是直接 CRUD `departments` 或 `shift_types`
+- `leave_types` / `overtime_types` 是為了申請流程與公開覆蓋資料同步使用，不是前端設定頁唯一真實來源
+
 ## 前端狀態邏輯
 
 `renderer.js` 採單一 `state` 物件驅動畫面。
