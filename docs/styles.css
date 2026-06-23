@@ -1617,18 +1617,22 @@ thead th.today,
 
 @media (max-width: 960px) {
   .app-shell {
-    padding-bottom: 460px;
+    padding: 12px;
+    padding-bottom: 280px;
+    gap: 10px;
   }
 
   .toolbar-floating-card {
     left: 12px;
     right: 12px;
     bottom: 12px;
-    max-height: min(52vh, 420px);
+    max-height: min(36vh, 260px);
+    padding: 12px;
   }
 
   .toolbar-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1.2fr) minmax(120px, 0.8fr);
+    gap: 8px;
   }
 
   .toolbar-top-row .db-hint {
@@ -1637,8 +1641,110 @@ thead th.today,
     width: 100%;
   }
 
+  .toolbar-top-row {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .toolbar-main-title {
+    font-size: 18px;
+  }
+
+  .auth-bar {
+    gap: 6px;
+  }
+
+  .session-pill {
+    min-height: 28px;
+    font-size: 13px;
+  }
+
+  .compact-btn,
+  .core-actions-toggle,
+  .nav-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .toolbar-section {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .toolbar-section-leave {
+    padding: 8px;
+  }
+
+  .toolbar-title {
+    font-size: 13px;
+  }
+
+  .toolbar-settings-btn {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+  }
+
+  .toolbar-settings-btn svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .chips {
+    gap: 6px;
+    min-height: 30px;
+  }
+
+  .chip {
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+
+  .toolbar-section-leave .chip,
+  .chips-shift .chip {
+    padding: 5px 8px;
+  }
+
   .table-sticky-header {
     top: 8px;
+  }
+
+  .month-title-wrap h2 {
+    font-size: 19px;
+  }
+
+  .table-sticky-cell {
+    min-height: 32px;
+    padding: 4px 2px;
+    font-size: 10px;
+  }
+
+  .table-sticky-cell-day span {
+    font-size: 9px;
+  }
+
+  .dept-col,
+  .person-col {
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+
+  .member-main {
+    line-height: 1.2;
+  }
+
+  .cell {
+    padding: 1px;
+  }
+
+  .cell-inner {
+    min-height: 28px;
+    border-radius: 8px;
+  }
+
+  .seg {
+    font-size: 9px;
+    padding: 1px;
   }
 
   .member-table-row {
@@ -1691,5 +1797,19 @@ thead th.today,
 
   .dept-block .list-item-actions {
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .toolbar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell {
+    padding-bottom: 320px;
+  }
+
+  .toolbar-floating-card {
+    max-height: min(42vh, 300px);
   }
 }
