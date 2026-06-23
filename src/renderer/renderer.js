@@ -3655,15 +3655,17 @@ async function saveOvertimeRequestFromModal() {
   await openOvertimeRequestModal();
 }
 
-async function openLeaveApprovalModal() {
+async function openLeaveApprovalModal(resetFilters = true) {
   if (!promptManagerAccess("審核請假前請先登入主管帳號")) {
     return;
   }
-  requestReviewFilters.leave = {
-    memberCode: "",
-    date: "",
-    status: "pending"
-  };
+  if (resetFilters) {
+    requestReviewFilters.leave = {
+      memberCode: "",
+      date: "",
+      status: "pending"
+    };
+  }
   await refreshRequestData();
   openEntityListModal({
     title: "請假審核",
@@ -3672,15 +3674,17 @@ async function openLeaveApprovalModal() {
   });
 }
 
-async function openOvertimeApprovalModal() {
+async function openOvertimeApprovalModal(resetFilters = true) {
   if (!promptManagerAccess("審核加班前請先登入主管帳號")) {
     return;
   }
-  requestReviewFilters.overtime = {
-    memberCode: "",
-    date: "",
-    status: "pending"
-  };
+  if (resetFilters) {
+    requestReviewFilters.overtime = {
+      memberCode: "",
+      date: "",
+      status: "pending"
+    };
+  }
   await refreshRequestData();
   openEntityListModal({
     title: "加班審核",
@@ -3697,14 +3701,14 @@ async function openRequestReviewFromTooltip(kind, requestId) {
   const records = kind === "leave" ? leaveRequestRecords : overtimeRequestRecords;
   const record = records.find((item) => item.id === requestId);
   requestReviewFilters[kind] = {
-    memberCode: record?.memberCode || "",
+    memberCode: record?.memberName || "",
     date: kind === "leave" ? (record?.startDate || "") : (record?.workDate || ""),
     status: record?.status || ""
   };
   if (kind === "leave") {
-    await openLeaveApprovalModal();
+    await openLeaveApprovalModal(false);
   } else {
-    await openOvertimeApprovalModal();
+    await openOvertimeApprovalModal(false);
   }
 }
 
@@ -4178,9 +4182,9 @@ function bindEvents() {
     if (target.dataset.clearRequestFilters) {
       requestReviewFilters[target.dataset.clearRequestFilters] = { memberCode: "", date: "", status: "" };
       if (target.dataset.clearRequestFilters === "leave") {
-        await openLeaveApprovalModal();
+        await openLeaveApprovalModal(false);
       } else {
-        await openOvertimeApprovalModal();
+        await openOvertimeApprovalModal(false);
       }
       return;
     }
@@ -4363,9 +4367,9 @@ function bindEvents() {
       [field]: target.value || ""
     };
     if (kind === "leave") {
-      await openLeaveApprovalModal();
+      await openLeaveApprovalModal(false);
     } else {
-      await openOvertimeApprovalModal();
+      await openOvertimeApprovalModal(false);
     }
   });
 
