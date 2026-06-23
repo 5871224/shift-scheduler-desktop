@@ -193,7 +193,9 @@ let requestReviewFilters = {
 };
 let memberSettingsFilters = {
   name: "",
-  employment: "active"
+  employment: "active",
+  role: "all",
+  department: "all"
 };
 let authErrorMessage = "";
 let authPromptMessage = "";
@@ -390,10 +392,10 @@ function getWeekStripeClass(day) {
 function getWeekBoundaryClass(day, daysInCurrentMonth) {
   const classes = [];
   const weekday = weekdayOf(day);
-  if (day === 1 || weekday === 0) {
+  if (weekday === 0 && day !== 1) {
     classes.push("week-boundary-start");
   }
-  if (day === daysInCurrentMonth || weekday === 6) {
+  if (weekday === 6 && day !== daysInCurrentMonth) {
     classes.push("week-boundary-end");
   }
   return classes.join(" ");
@@ -2692,9 +2694,31 @@ function buildSelectOptions(items, valueField, labelBuilder, selectedValue, incl
   return entries.join("");
 }
 
+function getMemberSettingsSourceMembers() {
+  const members = [...state.members];
+  const profileCode = String(currentProfile?.employee_code || "").trim();
+  if (profileCode && !members.some((member) => member.code === profileCode)) {
+    members.unshift({
+      id: `profile:${profileCode}`,
+      code: profileCode,
+      name: currentProfile?.full_name || getCurrentProfileName() || profileCode,
+      deptId: "",
+      positionId: "",
+      proxyMemberId: "",
+      hireDate: "",
+      leaveDate: "",
+      payByDay: false,
+      role: currentProfile?.role === "manager" ? "manager" : "employee",
+      readonlyProfile: true
+    });
+  }
+  return members;
+}
+
 function openMemberSettings() {
   const normalizedName = memberSettingsFilters.name.trim().toLowerCase();
-  const filteredMembers = state.members.filter((member) => {
+  const sourceMembers = getMemberSettingsSourceMembers();
+  const filteredMembers = sourceMembers.filter((member) => {
     const matchesName = !normalizedName || member.name.toLowerCase().includes(normalizedName);
     const active = isMemberCurrentlyActive(member);
     const matchesEmployment = memberSettingsFilters.employment === "all"
@@ -2702,7 +2726,15 @@ function openMemberSettings() {
       : memberSettingsFilters.employment === "inactive"
         ? !active
         : active;
-    return matchesName && matchesEmployment;
+    const matchesRole = memberSettingsFilters.role === "all"
+      ? true
+      : member.role === memberSettingsFilters.role;
+    const matchesDepartment = memberSettingsFilters.department === "all"
+      ? true
+      : memberSettingsFilters.department === "__none__"
+        ? !member.deptId
+        : member.deptId === memberSettingsFilters.department;
+    return matchesName && matchesEmployment && matchesRole && matchesDepartment;
   });
   const body = `
       <div class="member-settings-filters">
@@ -2718,8 +2750,24 @@ function openMemberSettings() {
             <option value="all" ${memberSettingsFilters.employment === "all" ? "selected" : ""}>全部</option>
           </select>
         </div>
+        <div class="form-row">
+          <label for="memberSettingsRoleFilter">權限</label>
+          <select id="memberSettingsRoleFilter" data-member-settings-filter-field="role">
+            <option value="all" ${memberSettingsFilters.role === "all" ? "selected" : ""}>全部</option>
+            <option value="manager" ${memberSettingsFilters.role === "manager" ? "selected" : ""}>主管</option>
+            <option value="employee" ${memberSettingsFilters.role === "employee" ? "selected" : ""}>員工</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="memberSettingsDepartmentFilter">單位</label>
+          <select id="memberSettingsDepartmentFilter" data-member-settings-filter-field="department">
+            <option value="all" ${memberSettingsFilters.department === "all" ? "selected" : ""}>全部</option>
+            ${state.departments.map((department) => `<option value="${escapeHtml(department.id)}" ${memberSettingsFilters.department === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("")}
+            <option value="__none__" ${memberSettingsFilters.department === "__none__" ? "selected" : ""}>未指定</option>
+          </select>
+        </div>
       </div>
-      ${state.members.length
+      ${sourceMembers.length
         ? `
       <div class="member-table-wrap">
         <div class="member-table">
@@ -2741,10 +2789,13 @@ function openMemberSettings() {
               <div>${member.role === "manager" ? "主管" : "員工"}</div>
               <div>${escapeHtml(member.hireDate || "-")}</div>
               <div>${escapeHtml(member.leaveDate || "-")}</div>
-              <div>${getSalaryTypeLabel(member)}</div>
+              <div>${member.readonlyProfile ? "-" : getSalaryTypeLabel(member)}</div>
               <div class="member-table-actions">
-                ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
-                ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
+                ${member.readonlyProfile
+                  ? ""
+                  : `${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
+                ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}`
+                }
               </div>
             </div>
           `).join("")}
@@ -2753,7 +2804,7 @@ function openMemberSettings() {
         `
         : '<div class="empty-state">目前還沒有人員</div>'
       }
-      ${state.members.length && !filteredMembers.length ? '<div class="empty-state">沒有符合篩選條件的人員</div>' : ""}
+      ${sourceMembers.length && !filteredMembers.length ? '<div class="empty-state">沒有符合篩選條件的人員</div>' : ""}
     `;
   openEntityListModal({
     title: "人員設定",
@@ -4118,8 +4169,9 @@ function bindEvents() {
 
   document.body.addEventListener("change", (event) => {
     const target = event.target;
-    if (target instanceof HTMLSelectElement && target.dataset.memberSettingsFilterField === "employment") {
-      memberSettingsFilters.employment = target.value || "active";
+    if (target instanceof HTMLSelectElement && target.dataset.memberSettingsFilterField) {
+      const field = target.dataset.memberSettingsFilterField;
+      memberSettingsFilters[field] = target.value || (field === "employment" ? "active" : "all");
       openMemberSettings();
       return;
     }

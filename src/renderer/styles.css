@@ -649,11 +649,11 @@ button {
 }
 
 .table-sticky-cell-day.week-boundary-start {
-  border-left: 2px solid #8b7351;
+  border-left: 2px solid #b39a75;
 }
 
 .table-sticky-cell-day.week-boundary-end {
-  border-right: 2px solid #8b7351;
+  border-right: 2px solid #b39a75;
 }
 
 .table-sticky-cell-day span {
@@ -804,11 +804,11 @@ thead th.today,
 }
 
 .cell.week-boundary-start {
-  border-left: 2px solid #8b7351;
+  border-left: 2px solid #b39a75;
 }
 
 .cell.week-boundary-end {
-  border-right: 2px solid #8b7351;
+  border-right: 2px solid #b39a75;
 }
 
 .cell:hover {
@@ -1554,7 +1554,7 @@ thead th.today,
 
 .member-settings-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px;
+  grid-template-columns: minmax(0, 1fr) 132px 132px 160px;
   gap: 12px;
 }
 
