@@ -224,9 +224,15 @@ button {
   margin-bottom: 10px;
 }
 
+.toolbar-title-row-combined {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
 .toolbar-title {
   font-size: 14px;
   font-weight: 700;
+  flex: 0 0 auto;
 }
 
 .toolbar-inline-link {
@@ -315,10 +321,6 @@ button {
   justify-content: flex-start;
 }
 
-.dept-filter-row-combined {
-  gap: 8px;
-}
-
 .dept-filter-row label {
   display: none;
 }
@@ -342,7 +344,7 @@ button {
   min-width: 160px;
 }
 
-.toolbar-section-combined .dept-filter-row select {
+.toolbar-section-combined #deptFilter {
   width: 132px;
   min-width: 132px;
   max-width: 132px;
@@ -350,7 +352,7 @@ button {
   padding: 8px 32px 8px 12px;
 }
 
-.toolbar-section-combined .dept-filter-row .text-btn {
+.toolbar-title-row-combined .text-btn {
   flex: 0 0 auto;
   white-space: nowrap;
 }
