@@ -1032,13 +1032,12 @@ function renderAuthBar() {
     }
     return;
   }
-  const memberText = currentProfile.employee_code ? `${escapeHtml(currentProfile.employee_code)} · ` : "";
   const requestButtons = currentProfile ? `
     <button class="ghost-btn compact-btn" type="button" data-open-leave-request="true">請假申請</button>
     <button class="ghost-btn compact-btn" type="button" data-open-overtime-request="true">加班申請</button>
   ` : "";
   container.innerHTML = `
-    <div class="session-pill">${memberText}${escapeHtml(getCurrentProfileName())}</div>
+    <div class="session-pill">${escapeHtml(getCurrentProfileName())}</div>
     ${requestButtons}
   `;
   if (signOutSlot) {

@@ -431,11 +431,13 @@ button {
 }
 
 .toolbar-section-combined #deptFilter {
-  width: 132px;
-  min-width: 132px;
-  max-width: 132px;
-  flex: 0 0 132px;
-  padding: 8px 32px 8px 12px;
+  width: 108px;
+  min-width: 108px;
+  max-width: 108px;
+  flex: 0 0 108px;
+  border-radius: 999px;
+  padding: 7px 30px 7px 12px;
+  font-size: 13px;
 }
 
 .chips-shift {
@@ -1731,6 +1733,15 @@ thead th.today,
   .session-pill {
     min-height: 28px;
     font-size: 13px;
+  }
+
+  .toolbar-section-combined #deptFilter {
+    width: 96px;
+    min-width: 96px;
+    max-width: 96px;
+    flex: 0 0 96px;
+    padding: 6px 26px 6px 10px;
+    font-size: 12px;
   }
 
   .compact-btn,
