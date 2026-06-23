@@ -1750,6 +1750,55 @@ thead th.today,
   margin-top: 2px;
 }
 
+.request-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) auto minmax(340px, 0.95fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.request-review-main {
+  min-width: 0;
+}
+
+.request-review-person {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.request-review-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.request-review-controls {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+
+.request-review-controls .form-row {
+  margin-bottom: 0;
+}
+
+.request-review-controls label {
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.request-review-controls input,
+.request-review-controls select {
+  padding: 8px 10px;
+}
+
 @media (max-width: 960px) {
   .app-shell {
     padding: 12px;
@@ -2004,6 +2053,14 @@ thead th.today,
   }
 
   .request-review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .request-review-row {
+    grid-template-columns: 1fr;
+  }
+
+  .request-review-controls {
     grid-template-columns: 1fr;
   }
 

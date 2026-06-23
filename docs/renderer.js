@@ -2877,7 +2877,7 @@ function renderRequestSummaryLines(record, kind) {
 function getCompactManagerRequestMetaLines(record, kind) {
   const lines = [
     kind === "leave"
-      ? `${record.leaveCode || ""} ${record.leaveName || ""}｜${formatRequestDateText(record.startDate, record.endDate)}｜${formatRequestTimeText(record)}`
+      ? `${record.leaveName || ""}｜${formatRequestDateText(record.startDate, record.endDate)}｜${formatRequestTimeText(record)}`
       : `加班｜${record.workDate || ""}｜${formatOvertimeTimeText(record)}`
   ];
   if (kind === "overtime") {
@@ -2911,7 +2911,7 @@ function renderManagerRequestList(kind, records) {
   const filter = requestReviewFilters[kind] || { memberCode: "", date: "", status: "" };
   const filteredRecords = records.filter((record) => {
     const memberKeyword = String(filter.memberCode || "").trim();
-    const memberMatch = !memberKeyword || `${record.memberCode || ""} ${record.memberName || ""}`.includes(memberKeyword);
+    const memberMatch = !memberKeyword || `${record.memberName || ""}`.includes(memberKeyword);
     const dateValue = kind === "leave" ? record.startDate : record.workDate;
     const dateMatch = !filter.date || dateValue === filter.date;
     const statusMatch = !filter.status || record.status === filter.status;
@@ -2924,7 +2924,7 @@ function renderManagerRequestList(kind, records) {
     <div class="request-filter-bar">
       <div class="form-row">
         <label for="${kind}ReviewFilterMember">申請人</label>
-        <input id="${kind}ReviewFilterMember" type="text" value="${escapeHtml(filter.memberCode)}" placeholder="輸入工號或姓名" data-request-filter-kind="${kind}" data-request-filter-field="memberCode">
+        <input id="${kind}ReviewFilterMember" type="text" value="${escapeHtml(filter.memberCode)}" placeholder="輸入姓名" data-request-filter-kind="${kind}" data-request-filter-field="memberCode">
       </div>
       <div class="form-row">
         <label for="${kind}ReviewFilterDate">日期</label>
@@ -2946,24 +2946,26 @@ function renderManagerRequestList(kind, records) {
     </div>
     <div class="request-list-wrap">
       ${filteredRecords.length ? filteredRecords.map((record) => `
-    <div class="request-item">
-      <div class="request-head">
-        <div class="request-title">${escapeHtml(record.memberCode || "-")} · ${escapeHtml(record.memberName || "-")}</div>
-        <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
+    <div class="request-review-row">
+      <div class="request-review-main">
+        <div class="request-review-person">${escapeHtml(record.memberName || "-")}</div>
+        <div class="request-review-summary">
+          ${getCompactManagerRequestMetaLines(record, kind).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
+        </div>
       </div>
-      ${getCompactManagerRequestMetaLines(record, kind).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
-      <div class="request-review-grid">
+      <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
+      <div class="request-review-controls">
         <div class="form-row">
-          <label for="${kind}ReviewStatus_${record.id}">審核結果</label>
+          <label for="${kind}ReviewStatus_${record.id}">審核</label>
           <select id="${kind}ReviewStatus_${record.id}">${getRequestStatusOptions(record.status)}</select>
         </div>
         <div class="form-row">
-          <label for="${kind}ReviewNote_${record.id}">主管備註</label>
+          <label for="${kind}ReviewNote_${record.id}">備註</label>
           <input id="${kind}ReviewNote_${record.id}" type="text" maxlength="120" value="${escapeHtml(record.managerNote || "")}" placeholder="可選填">
         </div>
-      </div>
-      <div class="request-actions">
-        <button class="btn-primary" type="button" data-save-request-review="${kind}:${record.id}">儲存審核</button>
+        <div class="request-actions">
+          <button class="btn-primary" type="button" data-save-request-review="${kind}:${record.id}">儲存審核</button>
+        </div>
       </div>
     </div>
   `).join("") : '<div class="empty-state">沒有符合篩選條件的資料</div>'}
