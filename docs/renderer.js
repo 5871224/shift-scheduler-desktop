@@ -2076,7 +2076,7 @@ function openListSettings(category) {
         <div class="settings-table-wrap">
           <div class="settings-table">
             <div class="settings-table-row settings-table-head settings-table-row-${category}">
-              <div>顏色</div>
+              <div>${category === "leave" ? "圖示" : "顏色"}</div>
               ${category === "leave" ? "<div>假別代碼</div>" : ""}
               <div>${category === "shift" ? "班別" : category === "leave" ? "假別" : "加班"}</div>
               <div>${category === "shift" ? "適用單位" : category === "leave" ? "需填時間" : "時段"}</div>
@@ -2088,7 +2088,12 @@ function openListSettings(category) {
             </div>
             ${list.map((item) => `
               <div class="settings-table-row settings-table-row-${category} sortable-settings-item" draggable="true" data-sort-category="${category}" data-sort-item="${item.id}">
-                <div class="settings-table-color"><div class="dot" style="background:${item.color}"></div></div>
+                <div class="settings-table-color">
+                  ${category === "leave"
+                    ? `<div class="settings-table-leave-preview" style="background:${escapeHtml(item.color)};color:${escapeHtml(item.textColor || autoLeaveTextColor(item.color))}">${escapeHtml(item.name || item.code || "名稱")}</div>`
+                    : `<div class="dot" style="background:${item.color}"></div>`
+                  }
+                </div>
                 ${category === "leave" ? `<div class="settings-table-code">${escapeHtml(item.code || "")}</div>` : ""}
                 <div class="settings-table-name">${escapeHtml(item.name)}</div>
                 <div class="settings-table-meta">${category === "shift"
