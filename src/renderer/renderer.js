@@ -3278,6 +3278,16 @@ function renderEmployeeRequestList(kind, records) {
   `).join("");
 }
 
+function getOwnRequestRecords(kind) {
+  const employeeCode = currentProfile?.employee_code || currentMember?.code || "";
+  const memberId = currentSession?.user?.id || "";
+  const source = kind === "leave" ? leaveRequestRecords : overtimeRequestRecords;
+  return source.filter((record) => (
+    (employeeCode && record.memberCode === employeeCode) ||
+    (memberId && record.memberId === memberId)
+  ));
+}
+
 async function deleteEmployeeRequest(kind, requestId) {
   const label = kind === "leave" ? "請假申請" : "加班申請";
   const confirmed = await confirmAction(`確定要刪除這筆${label}嗎？`);
@@ -3435,6 +3445,7 @@ async function openLeaveRequestModal() {
     return;
   }
   await refreshRequestData();
+  const ownLeaveRequestRecords = getOwnRequestRecords("leave");
   const leaveItems = getAllowedLeaveRequestItems();
   const defaultLeave = leaveItems[0];
   openEntityListModal({
@@ -3481,7 +3492,7 @@ async function openLeaveRequestModal() {
       </div>
       <div class="request-section">
         <div class="section-title">我的請假申請</div>
-        ${renderEmployeeRequestList("leave", leaveRequestRecords)}
+        ${renderEmployeeRequestList("leave", ownLeaveRequestRecords)}
       </div>
     `,
     footerButtons: '<button class="btn-primary" type="button" data-save-leave-request="true">送出申請</button>'
@@ -3515,7 +3526,7 @@ async function saveLeaveRequestFromModal() {
     reason: document.getElementById("leaveRequestReason")?.value.trim() || ""
   });
   await refreshRequestData();
-  const nextRecord = leaveRequestRecords.find((record) => (
+  const nextRecord = getOwnRequestRecords("leave").find((record) => (
     record.memberCode === currentProfile?.employee_code &&
     record.leaveCode === leave.code &&
     record.startDate === startDate &&
@@ -3540,6 +3551,7 @@ async function openOvertimeRequestModal() {
     return;
   }
   await refreshRequestData();
+  const ownOvertimeRequestRecords = getOwnRequestRecords("overtime");
   openEntityListModal({
     title: "加班申請",
     modalClass: "modal modal-wide",
@@ -3606,7 +3618,7 @@ async function openOvertimeRequestModal() {
       </div>
       <div class="request-section">
         <div class="section-title">我的加班申請</div>
-        ${renderEmployeeRequestList("overtime", overtimeRequestRecords)}
+        ${renderEmployeeRequestList("overtime", ownOvertimeRequestRecords)}
       </div>
     `,
     footerButtons: '<button class="btn-primary" type="button" data-save-overtime-request="true">送出申請</button>'
@@ -3658,7 +3670,7 @@ async function saveOvertimeRequestFromModal() {
     return;
   }
   await refreshRequestData();
-  const nextRecord = overtimeRequestRecords.find((record) => (
+  const nextRecord = getOwnRequestRecords("overtime").find((record) => (
     record.memberCode === currentProfile?.employee_code &&
     record.workDate === workDate &&
     record.startTime === startTime &&
