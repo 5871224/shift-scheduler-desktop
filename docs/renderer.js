@@ -185,6 +185,7 @@ let currentProfile = null;
 let currentMember = null;
 let leaveRequestRecords = [];
 let overtimeRequestRecords = [];
+let requestOverlaySourceLoaded = false;
 let authErrorMessage = "";
 let authPromptMessage = "";
 let authModalOpen = false;
@@ -2705,16 +2706,25 @@ async function resetMemberPasswordFromModal(employeeCode) {
 
 async function refreshRequestData() {
   if (!isLoggedIn() || !currentProfile) {
-    leaveRequestRecords = [];
-    overtimeRequestRecords = [];
+    try {
+      const publicRequests = await window.schedulerApi.listPublicScheduleRequests();
+      leaveRequestRecords = publicRequests.leaveRequests;
+      overtimeRequestRecords = publicRequests.overtimeRequests;
+      requestOverlaySourceLoaded = true;
+    } catch {
+      requestOverlaySourceLoaded = false;
+      leaveRequestRecords = [];
+      overtimeRequestRecords = [];
+    }
     return;
   }
   leaveRequestRecords = await window.schedulerApi.listLeaveRequests({ manager: isManager() });
   overtimeRequestRecords = await window.schedulerApi.listOvertimeRequests({ manager: isManager() });
+  requestOverlaySourceLoaded = true;
 }
 
 function syncApprovedRequestsToSchedule() {
-  if (!isLoggedIn() || !currentProfile) {
+  if (!requestOverlaySourceLoaded) {
     return;
   }
   Object.values(state.schedule).forEach((slot) => {
@@ -3826,6 +3836,7 @@ async function loadApp() {
     currentMember = null;
     leaveRequestRecords = [];
     overtimeRequestRecords = [];
+    requestOverlaySourceLoaded = false;
     appInfo = null;
   }
   renderAll();

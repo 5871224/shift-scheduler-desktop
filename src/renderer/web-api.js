@@ -221,6 +221,22 @@
     );
   }
 
+  async function restRpc(functionName, payload = {}, options = {}) {
+    const { auth = false, prefer = "return=representation" } = options;
+    return requestJson(
+      `/rest/v1/rpc/${functionName}`,
+      {
+        method: "POST",
+        auth,
+        headers: {
+          Accept: "application/json",
+          Prefer: prefer
+        },
+        body: JSON.stringify(payload || {})
+      }
+    );
+  }
+
   function ensureSignedIn() {
     if (!currentSession?.user) {
       throw new Error("請先登入");
@@ -655,6 +671,57 @@
     }));
   }
 
+  async function listPublicScheduleRequests() {
+    const rows = await restRpc("get_public_schedule_requests", {}, { auth: false });
+    const leaveRequests = [];
+    const overtimeRequests = [];
+    (rows || []).forEach((item) => {
+      if (item.kind === "leave") {
+        leaveRequests.push({
+          id: item.request_id,
+          memberCode: item.member_code || "",
+          memberName: item.member_name || "",
+          leaveCode: item.leave_code || "",
+          leaveName: item.leave_name || "",
+          startDate: item.start_date,
+          endDate: item.end_date,
+          isAllDay: item.is_all_day !== false,
+          startTime: item.start_time || "",
+          endTime: item.end_time || "",
+          reason: "",
+          status: item.status,
+          managerNote: "",
+          approvedAt: "",
+          createdAt: item.created_at || ""
+        });
+        return;
+      }
+      if (item.kind === "overtime") {
+        overtimeRequests.push({
+          id: item.request_id,
+          memberCode: item.member_code || "",
+          memberName: item.member_name || "",
+          overtimeName: item.overtime_name || "",
+          workDate: item.work_date,
+          startTime: item.start_time || "",
+          endTime: item.end_time || "",
+          useRest1: Boolean(item.use_rest_1),
+          rest1StartTime: item.rest_1_start_time || "",
+          rest1EndTime: item.rest_1_end_time || "",
+          useRest2: Boolean(item.use_rest_2),
+          rest2StartTime: item.rest_2_start_time || "",
+          rest2EndTime: item.rest_2_end_time || "",
+          reason: "",
+          status: item.status,
+          managerNote: "",
+          approvedAt: "",
+          createdAt: item.created_at || ""
+        });
+      }
+    });
+    return { leaveRequests, overtimeRequests };
+  }
+
   async function updateLeaveRequest(payload) {
     ensureManager();
     const nextStatus = payload.status;
@@ -764,6 +831,7 @@
     createOvertimeRequest,
     listLeaveRequests,
     listOvertimeRequests,
+    listPublicScheduleRequests,
     updateLeaveRequest,
     updateOvertimeRequest,
     updateOvertimeRequestDetails,
