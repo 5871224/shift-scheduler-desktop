@@ -3655,16 +3655,9 @@ async function saveOvertimeRequestFromModal() {
   await openOvertimeRequestModal();
 }
 
-async function openLeaveApprovalModal(resetFilters = true) {
+async function openLeaveApprovalModal() {
   if (!promptManagerAccess("審核請假前請先登入主管帳號")) {
     return;
-  }
-  if (resetFilters) {
-    requestReviewFilters.leave = {
-      memberCode: "",
-      date: "",
-      status: "pending"
-    };
   }
   await refreshRequestData();
   openEntityListModal({
@@ -3674,16 +3667,9 @@ async function openLeaveApprovalModal(resetFilters = true) {
   });
 }
 
-async function openOvertimeApprovalModal(resetFilters = true) {
+async function openOvertimeApprovalModal() {
   if (!promptManagerAccess("審核加班前請先登入主管帳號")) {
     return;
-  }
-  if (resetFilters) {
-    requestReviewFilters.overtime = {
-      memberCode: "",
-      date: "",
-      status: "pending"
-    };
   }
   await refreshRequestData();
   openEntityListModal({
@@ -3821,9 +3807,9 @@ async function saveRequestReview(kind, requestId) {
   }
   renderAll();
   if (kind === "leave") {
-    await openLeaveApprovalModal();
+    await openLeaveApprovalModal(false);
   } else {
-    await openOvertimeApprovalModal();
+    await openOvertimeApprovalModal(false);
   }
 }
 
@@ -3990,11 +3976,21 @@ function bindEvents() {
   bindClick("overtimeSettingsButton", () => openListSettings("overtime"));
   bindClick("leaveApprovalButton", async () => {
     closeCoreActionsMenu();
-    await openLeaveApprovalModal();
+    requestReviewFilters.leave = {
+      memberCode: "",
+      date: "",
+      status: "pending"
+    };
+    await openLeaveApprovalModal(false);
   });
   bindClick("overtimeApprovalButton", async () => {
     closeCoreActionsMenu();
-    await openOvertimeApprovalModal();
+    requestReviewFilters.overtime = {
+      memberCode: "",
+      date: "",
+      status: "pending"
+    };
+    await openOvertimeApprovalModal(false);
   });
 
   const tableWrap = document.getElementById("tableWrap");
