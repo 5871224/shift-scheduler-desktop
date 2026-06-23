@@ -396,8 +396,7 @@
       return rows?.[0]?.payload || null;
     } catch (error) {
       if (!currentSession?.access_token && /permission denied|42501|401|403/i.test(error.message || "")) {
-        // ponytail: 未開放匿名讀取時，先讓頁面用預設資料進得去；要顯示正式班表可執行 anon select SQL。
-        return null;
+        throw new Error("未登入時無法讀取正式班表，請檢查 schedule_documents 的匿名讀取權限");
       }
       throw error;
     }

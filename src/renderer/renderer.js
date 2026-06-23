@@ -171,7 +171,7 @@ const REQUEST_STATUS_LABELS = {
   cancelled: "已取消"
 };
 
-let state = createDefaultState();
+let state = createEmptyState();
 let modalColor = COLORS[0].hex;
 let modalTextColor = "#ffffff";
 let modalTextColorAuto = true;
@@ -299,6 +299,21 @@ function deepClone(value) {
 
 function createDefaultState() {
   return deepClone(DEFAULT_STATE);
+}
+
+function createEmptyState() {
+  const empty = createDefaultState();
+  empty.departments = [];
+  empty.members = [];
+  empty.shifts = [];
+  empty.leaves = [];
+  empty.overtime = [];
+  empty.holidays = [];
+  empty.schedule = {};
+  empty.selected = { type: null, id: null };
+  empty.deptFilter = "all";
+  empty.tableDeptScopeFilter = "all";
+  return empty;
 }
 
 function escapeHtml(value) {
@@ -821,10 +836,10 @@ function mergeDefaultLeaves(leaves) {
 
 function normalizeState(payload) {
   if (!payload || typeof payload !== "object") {
-    return createDefaultState();
+    return createEmptyState();
   }
 
-  const merged = createDefaultState();
+  const merged = createEmptyState();
   merged.role = "manager";
   merged.year = Number.isInteger(payload.year) ? payload.year : merged.year;
   merged.month = Number.isInteger(payload.month) ? payload.month : merged.month;
@@ -840,18 +855,20 @@ function normalizeState(payload) {
   merged.members = Array.isArray(payload.members)
     ? payload.members.map((member, index) => sanitizeMember(member, index, merged))
     : merged.members;
-  merged.shifts = Array.isArray(payload.shifts) && payload.shifts.length
+  merged.shifts = Array.isArray(payload.shifts)
     ? payload.shifts.map((shift, index) => sanitizeShift(shift, index, merged))
     : merged.shifts;
   merged.shifts = merged.shifts.filter((shift) => shift.name !== "休息");
-  merged.leaves = Array.isArray(payload.leaves) && payload.leaves.length
+  merged.leaves = Array.isArray(payload.leaves)
     ? payload.leaves.map((item, index) => sanitizeLeaveItem(item, index))
     : merged.leaves;
-  merged.leaves = mergeDefaultLeaves(merged.leaves);
-  merged.overtime = Array.isArray(payload.overtime) && payload.overtime.length
+  if (merged.leaves.length) {
+    merged.leaves = mergeDefaultLeaves(merged.leaves);
+  }
+  merged.overtime = Array.isArray(payload.overtime)
     ? payload.overtime.map((item, index) => sanitizeOvertimeItem(item, index))
     : merged.overtime;
-  merged.overtime = merged.overtime.length ? [merged.overtime[0]] : [{ ...DEFAULT_STATE.overtime[0] }];
+  merged.overtime = merged.overtime.length ? [merged.overtime[0]] : [];
   merged.holidays = Array.isArray(payload.holidays)
     ? payload.holidays.map((holiday, index) => sanitizeHoliday(holiday, index)).filter((holiday) => holiday.date)
     : merged.holidays;
@@ -4475,7 +4492,7 @@ async function loadApp() {
   } catch (error) {
     setSaveStatus(`載入失敗：${error.message}`);
     authErrorMessage = error.message || "載入失敗";
-    state = createDefaultState();
+    state = createEmptyState();
     currentSession = null;
     currentProfile = null;
     currentMember = null;
