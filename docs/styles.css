@@ -14,7 +14,7 @@
   --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
   --dept-col-width: 72px;
   --person-col-width: 92px;
-  --day-col-width: clamp(32px, calc((100vw - 280px) / 31), 44px);
+  --day-col-width: 36px;
 }
 
 * {
@@ -511,6 +511,12 @@ button {
   margin-bottom: 14px;
 }
 
+.calendar-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .month-title-wrap {
   text-align: center;
   flex: 1;
@@ -525,6 +531,14 @@ button {
 .nav-actions {
   display: flex;
   gap: 8px;
+}
+
+.calendar-nav-left select {
+  min-width: 124px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 30px 8px 12px;
+  background: #fff;
 }
 
 .table-sticky-header {
@@ -1953,6 +1967,20 @@ thead th.today,
 @media (max-width: 640px) {
   .toolbar-grid {
     grid-template-columns: 1fr;
+  }
+
+  .calendar-nav {
+    flex-wrap: wrap;
+  }
+
+  .calendar-nav-left {
+    width: 100%;
+  }
+
+  .calendar-nav-left select {
+    min-width: 0;
+    width: 100%;
+    font-size: 12px;
   }
 
   .request-filter-bar {

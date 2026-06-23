@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>班表</title>
-  <link rel="stylesheet" href="./styles.css?v=20260623n">
+  <link rel="stylesheet" href="./styles.css?v=20260623s">
 </head>
 <body>
   <div class="app-shell">
@@ -77,11 +77,14 @@
 
     <section class="calendar-card">
       <div class="calendar-nav">
-        <button class="nav-btn" id="prevMonthButton" type="button">上一月</button>
+        <div class="calendar-nav-left">
+          <select id="tableDeptScopeFilter" aria-label="班表顯示範圍"></select>
+        </div>
         <div class="month-title-wrap">
           <h2 id="monthTitle"></h2>
         </div>
         <div class="nav-actions">
+          <button class="nav-btn" id="prevMonthButton" type="button">上一月</button>
           <button class="nav-btn" id="nextMonthButton" type="button">下一月</button>
         </div>
       </div>
@@ -109,6 +112,6 @@
   <script src="./app-config.js?v=20260623j"></script>
   <script src="./browser-exporter.js?v=20260623j"></script>
   <script src="./web-api.js?v=20260623q"></script>
-  <script src="./renderer.js?v=20260623r"></script>
+  <script src="./renderer.js?v=20260623s"></script>
 </body>
 </html>

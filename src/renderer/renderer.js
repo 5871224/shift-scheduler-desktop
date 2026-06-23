@@ -84,6 +84,7 @@ const DEFAULT_STATE = {
   month: new Date().getMonth(),
   selected: { type: null, id: null },
   deptFilter: "all",
+  tableDeptScopeFilter: "all",
   departments: [
     { id: "d1", name: "門市" },
     { id: "d2", name: "行政" }
@@ -332,6 +333,7 @@ function syncScheduleColumnWidths() {
   const root = document.documentElement;
   const deptSample = document.querySelector(".dept-col");
   const personSample = document.querySelector(".person-col .member-main") || document.querySelector(".person-col");
+  const tableWrap = document.getElementById("tableWrap");
   if (!root || !deptSample || !personSample) {
     return;
   }
@@ -339,12 +341,9 @@ function syncScheduleColumnWidths() {
   const deptStyle = getComputedStyle(deptSample);
   const personStyle = getComputedStyle(personSample);
   const headerStyle = getComputedStyle(document.querySelector(".table-sticky-cell") || deptSample);
-  const visibleDepartments = state.departments
-    .filter((department) => state.members.some((member) => member.deptId === department.id))
-    .map((department) => department.name);
-  const visibleMembers = state.members
-    .filter((member) => state.departments.some((department) => department.id === member.deptId))
-    .map((member) => member.name);
+  const visibleGroups = getVisibleTableGroups();
+  const visibleDepartments = visibleGroups.map(({ department }) => department.name);
+  const visibleMembers = visibleGroups.flatMap(({ members }) => members.map((member) => member.name));
   const managerButtonAllowance = isManager() ? 28 : 0;
   const deptContentWidth = visibleDepartments.reduce((max, text) => Math.max(max, measureTextWidth(text, deptStyle)), 0);
   const personContentWidth = visibleMembers.reduce((max, text) => Math.max(max, measureTextWidth(text, personStyle)), 0);
@@ -352,8 +351,14 @@ function syncScheduleColumnWidths() {
   const personHeaderWidth = measureTextWidth("人員", headerStyle) + managerButtonAllowance;
   const deptWidth = clamp(Math.ceil(Math.max(deptContentWidth, deptHeaderWidth) + 18), 52, 88);
   const personWidth = clamp(Math.ceil(Math.max(personContentWidth, personHeaderWidth) + 18), 64, 118);
+  const days = daysInMonth(state.year, state.month);
+  const availableDayWidth = tableWrap
+    ? Math.floor((tableWrap.clientWidth - deptWidth - personWidth - 2) / Math.max(days, 1))
+    : 0;
+  const dayWidth = clamp(availableDayWidth || 36, 32, 48);
   root.style.setProperty("--dept-col-width", `${deptWidth}px`);
   root.style.setProperty("--person-col-width", `${personWidth}px`);
+  root.style.setProperty("--day-col-width", `${dayWidth}px`);
 }
 
 function scheduleKey(memberId, year, month, day) {
@@ -773,10 +778,14 @@ function normalizeState(payload) {
     requireEmploymentWindow: payload.rules?.requireEmploymentWindow !== false
   };
   merged.deptFilter = typeof payload.deptFilter === "string" ? payload.deptFilter : merged.deptFilter;
+  merged.tableDeptScopeFilter = typeof payload.tableDeptScopeFilter === "string" ? payload.tableDeptScopeFilter : merged.tableDeptScopeFilter;
   merged.schedule = cleanupScheduleEntries(payload.schedule && typeof payload.schedule === "object" ? payload.schedule : merged.schedule, merged);
 
   if (!merged.departments.some((department) => department.id === merged.deptFilter)) {
     merged.deptFilter = "all";
+  }
+  if (!merged.departments.some((department) => department.id === merged.tableDeptScopeFilter)) {
+    merged.tableDeptScopeFilter = "all";
   }
 
   return merged;
@@ -1282,6 +1291,19 @@ function renderDeptFilter() {
   `;
 }
 
+function renderTableDeptScopeFilter() {
+  const select = document.getElementById("tableDeptScopeFilter");
+  if (!select) {
+    return;
+  }
+  select.innerHTML = `
+    <option value="all">全部顯示</option>
+    ${state.departments.map((department) => (
+      `<option value="${department.id}" ${state.tableDeptScopeFilter === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`
+    )).join("")}
+  `;
+}
+
 function renderChips(containerId, category, items) {
   const container = document.getElementById(containerId);
   const chips = items.map((item) => {
@@ -1299,6 +1321,7 @@ function renderChips(containerId, category, items) {
 
 function renderToolbar() {
   renderDeptFilter();
+  renderTableDeptScopeFilter();
   const visibleShifts = state.deptFilter === "all"
     ? state.shifts
     : state.shifts.filter((shift) => shiftAllowsDepartment(shift, state.deptFilter));
@@ -1310,6 +1333,36 @@ function renderToolbar() {
 
 function memberLabel(member) {
   return `<div class="member-main">${escapeHtml(member.name)}</div>`;
+}
+
+function memberHasScheduledShiftInDepartment(member, departmentId) {
+  for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
+    if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
+      continue;
+    }
+    const shift = getItem("shift", getSlot(member.id, day)?.shift);
+    if (shift && shiftAllowsDepartment(shift, departmentId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getVisibleTableGroups() {
+  return state.departments
+    .map((department) => ({
+      department,
+      members: state.members.filter((member) => {
+        if (member.deptId !== department.id) {
+          return false;
+        }
+        if (state.tableDeptScopeFilter === "all") {
+          return true;
+        }
+        return memberHasScheduledShiftInDepartment(member, state.tableDeptScopeFilter);
+      })
+    }))
+    .filter(({ members }) => members.length);
 }
 
 function renderCellInner(key, memberId = "", day = 0) {
@@ -1376,15 +1429,10 @@ function renderTable() {
   }
   html += "</colgroup><tbody>";
 
-  const groups = state.departments
-    .map((department) => ({
-      department,
-      members: state.members.filter((member) => member.deptId === department.id)
-    }))
-    .filter(({ members }) => members.length);
+  const groups = getVisibleTableGroups();
 
   if (!groups.length) {
-    html += `<tr><td class="empty-table" colspan="${days + 2}">目前還沒有人員</td></tr>`;
+    html += `<tr><td class="empty-table" colspan="${days + 2}">${state.tableDeptScopeFilter === "all" ? "目前還沒有人員" : "當月沒有排到此單位班別的人員"}</td></tr>`;
   } else {
     groups.forEach(({ department, members }) => {
       members.forEach((member, index) => {
@@ -2378,6 +2426,9 @@ async function deleteDepartment(departmentId) {
   memberIds.forEach(removeScheduleByMember);
   if (state.deptFilter === departmentId) {
     state.deptFilter = "all";
+  }
+  if (state.tableDeptScopeFilter === departmentId) {
+    state.tableDeptScopeFilter = "all";
   }
   renderAll();
   openDepartmentSettings();
@@ -3527,6 +3578,7 @@ function bindEvents() {
     tableWrap.addEventListener("scroll", syncStickyHeaderScroll, { passive: true });
   }
   window.addEventListener("resize", () => {
+    syncScheduleColumnWidths();
     syncStickyHeaderLayout();
     syncStickyHeaderScroll();
     if (!toolbarCollapseInitialized) {
@@ -3539,6 +3591,15 @@ function bindEvents() {
   if (deptFilter) {
     deptFilter.addEventListener("change", (event) => {
       state.deptFilter = event.target.value;
+      renderToolbar();
+      renderTable();
+      queueSave();
+    });
+  }
+  const tableDeptScopeFilter = document.getElementById("tableDeptScopeFilter");
+  if (tableDeptScopeFilter) {
+    tableDeptScopeFilter.addEventListener("change", (event) => {
+      state.tableDeptScopeFilter = event.target.value;
       renderToolbar();
       renderTable();
       queueSave();
