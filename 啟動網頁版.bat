@@ -11,16 +11,6 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "node_modules" (
-  echo Installing dependencies...
-  call npm install
-  if errorlevel 1 (
-    echo npm install failed.
-    pause
-    exit /b 1
-  )
-)
-
 set "PID="
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr /r /c:":3010 .*LISTENING"') do (
   set "PID=%%a"

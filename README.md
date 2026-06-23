@@ -36,7 +36,7 @@
 
 ## 執行方式
 
-安裝相依後可用以下指令：
+安裝好 Node.js 後可用以下指令：
 
 ```powershell
 npm run web
@@ -50,6 +50,10 @@ npm run web:publish
   檢查 `src/renderer/app-config.js` 的 Supabase 公開設定
 - `npm run web:publish`
   清空並重建 `docs/`，供 GitHub Pages 使用
+
+目前這個專案不依賴本地 `node_modules` 套件目錄。
+`web`、`web:check`、`web:publish` 都只使用 Node 內建模組；
+前端 Excel 匯出功能則是由頁面直接載入 CDN 的 `exceljs`。
 
 ## 發佈規則
 
