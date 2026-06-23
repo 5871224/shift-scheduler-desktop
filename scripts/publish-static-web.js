@@ -8,6 +8,7 @@ const files = [
   "index.html",
   "styles.css",
   "renderer.js",
+  "rest-compliance.js",
   "web-api.js",
   "browser-exporter.js",
   "app-config.js"

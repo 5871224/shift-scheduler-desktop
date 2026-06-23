@@ -1551,6 +1551,28 @@ thead th.today,
   line-height: 1.5;
 }
 
+.compliance-check-modal {
+  width: min(920px, 100%);
+}
+
+.compliance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.compliance-check-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compliance-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .member-table-wrap {
   flex: 1;
   min-height: 0;
@@ -2156,6 +2178,10 @@ thead th.today,
 
   .settings-table-name {
     font-size: 12px;
+  }
+
+  .compliance-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .dept-name {

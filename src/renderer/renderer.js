@@ -461,6 +461,19 @@ function enumerateDateRange(startDate, endDate) {
   return dates;
 }
 
+function isMemberActiveOnDateString(member, dateString) {
+  if (!dateString) {
+    return false;
+  }
+  if (member.hireDate && dateString < member.hireDate) {
+    return false;
+  }
+  if (member.leaveDate && dateString > member.leaveDate) {
+    return false;
+  }
+  return true;
+}
+
 function normalizeTimeText(value) {
   const match = String(value ?? "").trim().match(/^(\d{1,2}):(\d{1,2})$/);
   if (!match) {
@@ -3223,6 +3236,137 @@ function renderRequestSummaryLines(record, kind) {
   return lines.filter(Boolean);
 }
 
+function formatMonthText(year, month) {
+  return `${year} 年 ${month + 1} 月`;
+}
+
+function formatDateTextFromIso(dateString) {
+  const date = toDateObject(dateString);
+  if (!date) {
+    return dateString || "";
+  }
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatWeekRangeText(startDate, endDate) {
+  return `${formatDateTextFromIso(startDate)} - ${formatDateTextFromIso(endDate)}`;
+}
+
+function getScheduleSlotByDateString(memberId, dateString) {
+  const date = toDateObject(dateString);
+  if (!date) {
+    return null;
+  }
+  return state.schedule[scheduleKey(memberId, date.getFullYear(), date.getMonth(), date.getDate())] || null;
+}
+
+function buildRestComplianceCalendars() {
+  const checker = window.restCompliance;
+  if (!checker) {
+    return [];
+  }
+  const weeks = checker.buildCalendarWeeks(state.year, state.month, checker.DEFAULT_WEEK_START);
+  const dateRange = [...new Set(weeks.flatMap((week) => week.dates))];
+
+  return state.members.map((member) => {
+    const days = dateRange.map((dateString) => {
+      const slot = getScheduleSlotByDateString(member.id, dateString);
+      const leave = getItem("leave", slot?.leave);
+      return {
+        date: dateString,
+        active: isMemberActiveOnDateString(member, dateString),
+        leaveCode: leave?.code || "",
+        hasShift: Boolean(slot?.shift),
+        hasOvertime: Boolean(slot?.overtime)
+      };
+    });
+    return {
+      memberId: member.id,
+      memberName: member.name,
+      memberCode: member.code || "",
+      days
+    };
+  }).filter((member) => member.days.some((day) => day.active));
+}
+
+function openRestComplianceModal() {
+  if (!promptManagerAccess("執行例休檢查前請先登入主管帳號")) {
+    return;
+  }
+  const checker = window.restCompliance;
+  if (!checker) {
+    showInfoMessage("例休檢查模組尚未載入");
+    return;
+  }
+
+  const result = checker.checkRestCompliance({
+    year: state.year,
+    month: state.month,
+    weekStart: checker.DEFAULT_WEEK_START,
+    memberCalendars: buildRestComplianceCalendars()
+  });
+  const issueCount = result.issues.length;
+  const errorCount = result.issues.filter((issue) => issue.severity === "error").length;
+  const warningCount = result.issues.filter((issue) => issue.severity === "warning").length;
+  const summaryCards = `
+    <div class="compliance-summary-grid">
+      <div class="result-item">
+        <div class="result-title">檢查月份</div>
+        <div class="result-detail">${escapeHtml(formatMonthText(state.year, state.month))}</div>
+      </div>
+      <div class="result-item">
+        <div class="result-title">人員數</div>
+        <div class="result-detail">${result.checkedMembers} 人</div>
+      </div>
+      <div class="result-item">
+        <div class="result-title">週期數</div>
+        <div class="result-detail">${result.checkedWeeks} 個人員週期</div>
+      </div>
+      <div class="result-item ${issueCount ? "warning" : "success"}">
+        <div class="result-title">檢查結果</div>
+        <div class="result-detail">${issueCount ? `${errorCount} 筆缺漏，${warningCount} 筆待確認` : "目前未發現缺少例假或休息日"}</div>
+      </div>
+    </div>
+  `;
+  const notes = `
+    <div class="result-item">
+      <div class="result-title">檢查說明</div>
+      <div class="result-detail compliance-check-note">
+        <div>目前先依系統週欄位，以星期日到星期六為 1 週期檢查。</div>
+        <div>ponytail: 這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援自訂週期或彈性工時例外，下一步再加週期設定與例外規則。</div>
+      </div>
+    </div>
+  `;
+  const issuesMarkup = issueCount
+    ? `
+      <div class="compliance-check-list">
+        ${result.issues.map((issue) => `
+          <div class="result-item ${issue.severity}">
+            <div class="result-title">${escapeHtml(`${issue.memberCode ? `${issue.memberCode} ` : ""}${issue.memberName}`.trim() || issue.memberId)}</div>
+            <div class="result-detail">
+              <div>${escapeHtml(issue.message)}</div>
+              <div>週期：${escapeHtml(formatWeekRangeText(issue.weekStart, issue.weekEnd))}</div>
+              ${issue.date ? `<div>日期：${escapeHtml(formatDateTextFromIso(issue.date))}</div>` : ""}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `
+    : `
+      <div class="result-item success">
+        <div class="result-title">檢查完成</div>
+        <div class="result-detail">目前依系統標記，當月未發現例假或休息日缺漏。</div>
+      </div>
+    `;
+
+  openEntityListModal({
+    title: "例休檢查",
+    modalClass: "modal modal-wide compliance-check-modal",
+    body: `${summaryCards}${notes}${issuesMarkup}`,
+    hideFooterClose: true
+  });
+}
+
 function getCompactManagerRequestMetaLines(record, kind) {
   const lines = [
     kind === "leave"
@@ -4017,6 +4161,10 @@ function bindEvents() {
       status: "pending"
     };
     await openOvertimeApprovalModal(false);
+  });
+  bindClick("restComplianceButton", () => {
+    closeCoreActionsMenu();
+    openRestComplianceModal();
   });
 
   const tableWrap = document.getElementById("tableWrap");
