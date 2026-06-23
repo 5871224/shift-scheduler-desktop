@@ -923,7 +923,7 @@ function renderAuthBar() {
   if (!currentProfile) {
     container.innerHTML = `
       <div class="session-pill">已登入，但尚未建立身份資料</div>
-      <button class="ghost-btn compact-btn" id="signOutButton" type="button">登出</button>
+      <button class="ghost-btn compact-btn auth-signout-btn" id="signOutButton" type="button">登出</button>
     `;
     return;
   }
@@ -933,9 +933,9 @@ function renderAuthBar() {
     <button class="ghost-btn compact-btn" type="button" data-open-overtime-request="true">加班申請</button>
   ` : "";
   container.innerHTML = `
-    <div class="session-pill">${escapeHtml(getCurrentRoleLabel())} · ${memberText}${escapeHtml(getCurrentProfileName())}</div>
+    <div class="session-pill">${memberText}${escapeHtml(getCurrentProfileName())}</div>
     ${requestButtons}
-    <button class="ghost-btn compact-btn" id="signOutButton" type="button">登出</button>
+    <button class="ghost-btn compact-btn auth-signout-btn" id="signOutButton" type="button">登出</button>
   `;
 }
 

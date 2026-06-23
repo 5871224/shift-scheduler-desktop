@@ -74,19 +74,23 @@ button {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .session-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fff;
+  min-height: 34px;
+  padding: 2px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .primary-btn,
@@ -154,7 +158,7 @@ button {
   max-height: min(42vh, 320px);
   overflow: visible;
   backdrop-filter: blur(10px);
-  background: rgba(255, 253, 248, 0.96);
+  background: rgba(244, 236, 220, 0.98);
 }
 
 .toolbar-grid {
@@ -240,6 +244,10 @@ button {
 
 .toolbar-floating-card.toolbar-floating-card-compact .auth-bar {
   flex: 0 1 auto;
+}
+
+.auth-signout-btn {
+  margin-left: auto;
 }
 
 .toolbar-floating-card.toolbar-floating-card-compact .toolbar-top-row .db-hint {
