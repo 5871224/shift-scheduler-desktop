@@ -476,6 +476,7 @@ button {
   border: 1px solid currentColor;
   background: #fff;
   font-size: 12px;
+  font-weight: 700;
 }
 
 .toolbar-section-leave .chip {
@@ -487,7 +488,7 @@ button {
 }
 
 .chip.active {
-  box-shadow: inset 0 0 0 1px currentColor;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72), 0 0 0 1px currentColor;
 }
 
 .chips-readonly .chip {
@@ -1250,46 +1251,13 @@ thead th.today,
   flex-wrap: wrap;
 }
 
-.compact-color-picker {
-  display: inline-flex;
-  position: relative;
-}
-
-.compact-color-trigger {
-  min-width: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: #fff;
-  text-align: left;
-}
-
-.compact-color-chip {
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-
-.native-color-input {
+.hidden-color-input {
   position: absolute;
-  left: 54px;
-  top: 0;
   width: 1px;
   height: 1px;
   padding: 0;
   opacity: 0;
   pointer-events: none;
-}
-
-.hidden-color-input {
-  width: 1px;
-  height: 1px;
 }
 
 .leave-preview-row {
@@ -1627,16 +1595,16 @@ thead th.today,
 }
 
 .settings-table-row-shift {
-  grid-template-columns: 48px minmax(110px, 1fr) 132px 120px 74px 92px;
+  grid-template-columns: minmax(120px, 0.95fr) minmax(110px, 1fr) 132px 120px 74px 92px;
 }
 
 .settings-table-row-leave {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: minmax(120px, 1.1fr) 104px minmax(120px, 1fr) 88px 88px 74px 92px;
   text-align: center;
 }
 
 .settings-table-row-overtime {
-  grid-template-columns: 48px minmax(96px, 1fr) 118px 118px 118px 74px 92px;
+  grid-template-columns: minmax(120px, 0.95fr) minmax(96px, 1fr) 118px 118px 118px 74px 92px;
 }
 
 .settings-table-head {
@@ -1655,7 +1623,7 @@ thead th.today,
   justify-content: center;
 }
 
-.settings-table-leave-preview {
+.settings-table-preview {
   min-width: 0;
   max-width: 100%;
   padding: 8px 12px;
@@ -1663,14 +1631,16 @@ thead th.today,
   border: 1px solid rgba(0, 0, 0, 0.08);
   font-size: 13px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.15;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.settings-table-row-shift .settings-table-color,
 .settings-table-row-leave .settings-table-color,
+.settings-table-row-overtime .settings-table-color,
 .settings-table-row-leave .settings-table-code,
 .settings-table-row-leave .settings-table-name,
 .settings-table-row-leave .settings-table-meta,
