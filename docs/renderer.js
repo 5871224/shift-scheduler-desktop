@@ -191,6 +191,8 @@ let authModalOpen = false;
 let eventsBound = false;
 let dragSortItemId = "";
 let dragSortCategory = "";
+let toolbarCollapsed = false;
+let toolbarCollapseInitialized = false;
 
 function renderStickyTableHeader(days) {
   const container = document.getElementById("tableStickyHeaderDays");
@@ -870,8 +872,37 @@ function promptManagerAccess(message) {
   return true;
 }
 
+function shouldDefaultCollapseToolbar() {
+  return window.innerWidth <= 960;
+}
+
+function syncToolbarCollapseUi() {
+  const toolbarCard = document.querySelector(".toolbar-floating-card");
+  const toggle = document.getElementById("toolbarCollapseToggle");
+  if (!toolbarCard || !toggle) {
+    return;
+  }
+  toolbarCard.classList.toggle("toolbar-floating-card-collapsed", toolbarCollapsed);
+  toggle.textContent = toolbarCollapsed ? "展開" : "收合";
+  toggle.setAttribute("aria-expanded", toolbarCollapsed ? "false" : "true");
+}
+
+function initializeToolbarCollapse() {
+  if (toolbarCollapseInitialized) {
+    return;
+  }
+  toolbarCollapsed = shouldDefaultCollapseToolbar();
+  toolbarCollapseInitialized = true;
+}
+
+function toggleToolbarCollapse() {
+  toolbarCollapsed = !toolbarCollapsed;
+  syncToolbarCollapseUi();
+}
+
 function syncRoleUi() {
   const toolbarCard = document.querySelector(".toolbar-floating-card");
+  initializeToolbarCollapse();
   const toolbarGrid = document.getElementById("toolbarGrid");
   if (toolbarGrid) {
     toolbarGrid.style.display = isManager() ? "grid" : "none";
@@ -879,6 +910,7 @@ function syncRoleUi() {
   if (toolbarCard) {
     toolbarCard.classList.toggle("toolbar-floating-card-compact", !isManager());
   }
+  syncToolbarCollapseUi();
   const coreActionsShell = document.getElementById("coreActionsShell");
   if (coreActionsShell) {
     coreActionsShell.style.display = isManager() ? "" : "none";
@@ -3260,6 +3292,10 @@ function bindEvents() {
     event.stopPropagation();
     toggleCoreActionsMenu();
   });
+  bindClick("toolbarCollapseToggle", (event) => {
+    event.stopPropagation();
+    toggleToolbarCollapse();
+  });
   bindClick("prevMonthButton", () => changeMonth(-1));
   bindClick("nextMonthButton", () => changeMonth(1));
   bindClick("exportSapButton", () => {
@@ -3293,6 +3329,10 @@ function bindEvents() {
   window.addEventListener("resize", () => {
     syncStickyHeaderLayout();
     syncStickyHeaderScroll();
+    if (!toolbarCollapseInitialized) {
+      initializeToolbarCollapse();
+    }
+    syncToolbarCollapseUi();
   });
 
   const deptFilter = document.getElementById("deptFilter");

@@ -161,6 +161,20 @@ button {
   background: rgba(244, 236, 220, 0.98);
 }
 
+.toolbar-floating-card.toolbar-floating-card-collapsed {
+  max-height: none;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.toolbar-floating-card.toolbar-floating-card-collapsed .toolbar-top-row {
+  margin-bottom: 0;
+}
+
+.toolbar-floating-card.toolbar-floating-card-collapsed .toolbar-grid {
+  display: none !important;
+}
+
 .toolbar-grid {
   display: grid;
   grid-template-columns: 1.62fr 0.78fr;
@@ -1628,6 +1642,11 @@ thead th.today,
     bottom: 12px;
     max-height: min(36vh, 260px);
     padding: 12px;
+  }
+
+  .toolbar-floating-card.toolbar-floating-card-collapsed {
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
 
   .toolbar-grid {
