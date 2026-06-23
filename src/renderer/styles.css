@@ -962,6 +962,18 @@ thead th.today,
   font-size: 20px;
 }
 
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modal-close-btn {
+  flex: 0 0 auto;
+}
+
 .modal-body {
   overflow: auto;
   display: flex;
@@ -1480,6 +1492,12 @@ thead th.today,
   border: 1px solid var(--line);
   border-radius: 18px;
   background: #fff;
+}
+
+.member-settings-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 12px;
 }
 
 .settings-table-wrap {
@@ -2049,6 +2067,10 @@ thead th.today,
   }
 
   .request-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .member-settings-filters {
     grid-template-columns: 1fr;
   }
 

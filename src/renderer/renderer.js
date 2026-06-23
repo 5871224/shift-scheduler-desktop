@@ -191,6 +191,10 @@ let requestReviewFilters = {
   leave: { memberCode: "", date: "", status: "" },
   overtime: { memberCode: "", date: "", status: "" }
 };
+let memberSettingsFilters = {
+  name: "",
+  employment: "active"
+};
 let authErrorMessage = "";
 let authPromptMessage = "";
 let authModalOpen = false;
@@ -381,6 +385,15 @@ function resetVisibleMonthToToday() {
   const today = new Date();
   state.year = today.getFullYear();
   state.month = today.getMonth();
+}
+
+function isMemberCurrentlyActive(member) {
+  const today = new Date();
+  const todayString = toDateString(today.getFullYear(), today.getMonth(), today.getDate());
+  if (member.hireDate && member.hireDate > todayString) {
+    return false;
+  }
+  return !member.leaveDate || member.leaveDate >= todayString;
 }
 
 function toDateObject(dateString) {
@@ -1600,21 +1613,36 @@ function removeAssignmentsByItem(category, id) {
 }
 
 function openEntityListModal(config) {
+  const headerButtons = config.headerButtons || "";
+  const closeButton = `
+    <button class="settings-icon-btn modal-close-btn" type="button" data-close-button="true" aria-label="關閉" title="關閉">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 6l12 12"></path>
+        <path d="M18 6l-12 12"></path>
+      </svg>
+    </button>
+  `;
+  const showFooter = !config.hideFooterClose || config.footerButtons;
   setModal(`
     <div class="modal-overlay" data-close-modal="true">
       <div class="${config.modalClass || "modal modal-wide"}">
         <div class="modal-header">
           <h3>${escapeHtml(config.title)}</h3>
-          <button class="icon-btn" type="button" data-close-button="true">關閉</button>
+          <div class="modal-header-actions">
+            ${headerButtons}
+            ${closeButton}
+          </div>
         </div>
         <div class="modal-body">
           ${config.description ? `<p class="modal-description">${escapeHtml(config.description)}</p>` : ""}
           ${config.body}
         </div>
-        <div class="modal-footer">
-          <button class="btn-cancel" type="button" data-close-button="true">關閉</button>
-          ${config.footerButtons || ""}
-        </div>
+        ${showFooter ? `
+          <div class="modal-footer">
+            ${config.hideFooterClose ? "" : '<button class="btn-cancel" type="button" data-close-button="true">關閉</button>'}
+            ${config.footerButtons || ""}
+          </div>
+        ` : ""}
       </div>
     </div>
   `);
@@ -1976,7 +2004,8 @@ function openListSettings(category) {
       ? "modal modal-wide catalog-settings-modal"
       : undefined,
     body,
-    footerButtons: `<button class="btn-primary" type="button" data-open-add="${category}">新增${escapeHtml(titleMap[category].replace("設定", ""))}</button>`
+    headerButtons: `<button class="btn-primary" type="button" data-open-add="${category}">新增${escapeHtml(titleMap[category].replace("設定", ""))}</button>`,
+    hideFooterClose: true
   });
 }
 
@@ -2368,7 +2397,8 @@ function openDepartmentSettings() {
     title: "單位設定",
     modalClass: "modal modal-wide department-settings-modal",
     body,
-    footerButtons: `<button class="btn-primary" type="button" data-open-add-department="true">新增單位</button>`
+    headerButtons: `<button class="btn-primary" type="button" data-open-add-department="true">新增單位</button>`,
+    hideFooterClose: true
   });
 }
 
@@ -2515,8 +2545,34 @@ function buildSelectOptions(items, valueField, labelBuilder, selectedValue, incl
 }
 
 function openMemberSettings() {
-  const body = state.members.length
-    ? `
+  const normalizedName = memberSettingsFilters.name.trim().toLowerCase();
+  const filteredMembers = state.members.filter((member) => {
+    const matchesName = !normalizedName || member.name.toLowerCase().includes(normalizedName);
+    const active = isMemberCurrentlyActive(member);
+    const matchesEmployment = memberSettingsFilters.employment === "all"
+      ? true
+      : memberSettingsFilters.employment === "inactive"
+        ? !active
+        : active;
+    return matchesName && matchesEmployment;
+  });
+  const body = `
+      <div class="member-settings-filters">
+        <div class="form-row">
+          <label for="memberSettingsNameFilter">姓名</label>
+          <input id="memberSettingsNameFilter" type="text" value="${escapeHtml(memberSettingsFilters.name)}" placeholder="輸入姓名" data-member-settings-filter-field="name">
+        </div>
+        <div class="form-row">
+          <label for="memberSettingsEmploymentFilter">狀態</label>
+          <select id="memberSettingsEmploymentFilter" data-member-settings-filter-field="employment">
+            <option value="active" ${memberSettingsFilters.employment === "active" ? "selected" : ""}>在職</option>
+            <option value="inactive" ${memberSettingsFilters.employment === "inactive" ? "selected" : ""}>離職</option>
+            <option value="all" ${memberSettingsFilters.employment === "all" ? "selected" : ""}>全部</option>
+          </select>
+        </div>
+      </div>
+      ${state.members.length
+        ? `
       <div class="member-table-wrap">
         <div class="member-table">
           <div class="member-table-row member-table-head">
@@ -2529,7 +2585,7 @@ function openMemberSettings() {
             <div>薪資方式</div>
             <div class="member-table-actions-head">操作</div>
           </div>
-          ${state.members.map((member) => `
+          ${filteredMembers.map((member) => `
             <div class="member-table-row">
               <div class="member-table-code">${escapeHtml(member.code)}</div>
               <div class="member-table-name">${escapeHtml(member.name)}</div>
@@ -2546,17 +2602,21 @@ function openMemberSettings() {
           `).join("")}
         </div>
       </div>
-    `
-    : '<div class="empty-state">目前還沒有人員</div>';
+        `
+        : '<div class="empty-state">目前還沒有人員</div>'
+      }
+      ${state.members.length && !filteredMembers.length ? '<div class="empty-state">沒有符合篩選條件的人員</div>' : ""}
+    `;
   openEntityListModal({
     title: "人員設定",
     modalClass: "modal modal-wide member-settings-modal",
     body,
-    footerButtons: `
-      <button class="ghost-btn" type="button" data-export-members="true">匯出人員資料</button>
-      <button class="ghost-btn" type="button" data-import-members="true">匯入人員資料</button>
+    headerButtons: `
+      <button class="ghost-btn" type="button" data-export-members="true">匯出</button>
+      <button class="ghost-btn" type="button" data-import-members="true">匯入</button>
       <button class="btn-primary" type="button" data-open-add-member="true">新增人員</button>
-    `
+    `,
+    hideFooterClose: true
   });
 }
 
@@ -3845,6 +3905,11 @@ function bindEvents() {
     if (!(target instanceof HTMLInputElement)) {
       return;
     }
+    if (target.dataset.memberSettingsFilterField === "name") {
+      memberSettingsFilters.name = target.value || "";
+      openMemberSettings();
+      return;
+    }
     if (target.dataset.nativeColor) {
       modalColor = target.value;
       syncColorPickerUi();
@@ -3853,6 +3918,11 @@ function bindEvents() {
 
   document.body.addEventListener("change", (event) => {
     const target = event.target;
+    if (target instanceof HTMLSelectElement && target.dataset.memberSettingsFilterField === "employment") {
+      memberSettingsFilters.employment = target.value || "active";
+      openMemberSettings();
+      return;
+    }
     if (!(target instanceof HTMLInputElement)) {
       return;
     }
