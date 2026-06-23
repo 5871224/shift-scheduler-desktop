@@ -512,7 +512,7 @@
   async function createOvertimeRequest(payload) {
     ensureSignedIn();
     const overtimeType = payload.overtimeName
-      ? await getOvertimeTypeByName(payload.overtimeName)
+      ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
       : await getDefaultOvertimeType();
     await restInsert("overtime_requests", [{
       member_id: currentSession.user.id,

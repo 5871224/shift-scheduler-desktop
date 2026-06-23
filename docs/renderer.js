@@ -3075,19 +3075,23 @@ async function saveOvertimeRequestFromModal() {
     reportValidationError("休息2開始時間必須早於結束時間");
     return;
   }
-  await window.schedulerApi.createOvertimeRequest({
-    overtimeName: "加班",
-    workDate,
-    startTime,
-    endTime,
-    useRest1,
-    rest1StartTime,
-    rest1EndTime,
-    useRest2,
-    rest2StartTime,
-    rest2EndTime,
-    reason: document.getElementById("overtimeRequestReason")?.value.trim() || ""
-  });
+  try {
+    await window.schedulerApi.createOvertimeRequest({
+      workDate,
+      startTime,
+      endTime,
+      useRest1,
+      rest1StartTime,
+      rest1EndTime,
+      useRest2,
+      rest2StartTime,
+      rest2EndTime,
+      reason: document.getElementById("overtimeRequestReason")?.value.trim() || ""
+    });
+  } catch (error) {
+    showInfoMessage(`加班申請送出失敗：${error.message}`);
+    return;
+  }
   await refreshRequestData();
   const nextRecord = overtimeRequestRecords.find((record) => (
     record.memberCode === currentProfile?.employee_code &&
