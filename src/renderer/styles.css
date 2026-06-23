@@ -11,6 +11,7 @@
   --accent-soft: #efe2c8;
   --danger: #ae3c33;
   --today: #f8ead1;
+  --week-alt: #f6f0e4;
   --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
   --dept-col-width: 72px;
   --person-col-width: 92px;
@@ -631,6 +632,10 @@ button {
   background: var(--today);
 }
 
+.table-sticky-cell-day.week-alt {
+  background: var(--week-alt);
+}
+
 .table-sticky-cell-day span {
   color: var(--muted);
   font-size: 10px;
@@ -778,6 +783,10 @@ thead th.today,
   background: var(--today);
 }
 
+.cell.week-alt {
+  background: var(--week-alt);
+}
+
 .cell:hover {
   background: #faf4ea;
 }
@@ -785,6 +794,10 @@ thead th.today,
 .cell.inactive-cell {
   background: #9b9b9b;
   cursor: not-allowed;
+}
+
+.cell.inactive-cell.week-alt {
+  background: #8f8f8f;
 }
 
 .cell.inactive-cell:hover {
