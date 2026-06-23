@@ -1317,7 +1317,7 @@ function renderCellInner(key, memberId = "", day = 0) {
       segment.category === "leave" && shouldPromptLeaveDetail(segment, cellState.leaveMeta)
         ? `data-hover-leave-detail="${memberId}:${day}"`
         : ""
-    }>${escapeHtml(segment.status === "pending" ? `${segment.name} 待` : segment.name)}</div>`
+    }>${escapeHtml(segment.name)}</div>`
   )).join("")}</div>`;
 }
 
