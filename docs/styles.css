@@ -1347,7 +1347,7 @@ thead th.today,
 
 .request-filter-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 180px) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 148px) minmax(0, 132px) auto;
   gap: 10px;
   align-items: end;
   margin-bottom: 12px;
@@ -1680,17 +1680,6 @@ thead th.today,
   gap: 12px;
 }
 
-.request-title {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.request-meta {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .request-status {
   display: inline-flex;
   align-items: center;
@@ -1723,15 +1712,42 @@ thead th.today,
   background: #fff3f1;
 }
 
+.request-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.request-meta {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .request-review-grid {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 8px;
+  align-items: end;
+}
+
+.request-review-grid .form-row {
+  margin-bottom: 0;
+}
+
+.request-review-grid label {
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.request-review-grid input,
+.request-review-grid select {
+  padding: 8px 10px;
 }
 
 .request-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 2px;
 }
 
 @media (max-width: 960px) {
@@ -1984,6 +2000,10 @@ thead th.today,
   }
 
   .request-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .request-review-grid {
     grid-template-columns: 1fr;
   }
 

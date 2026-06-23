@@ -188,8 +188,8 @@ let leaveRequestRecords = [];
 let overtimeRequestRecords = [];
 let requestOverlaySourceLoaded = false;
 let requestReviewFilters = {
-  leave: { memberCode: "", date: "" },
-  overtime: { memberCode: "", date: "" }
+  leave: { memberCode: "", date: "", status: "" },
+  overtime: { memberCode: "", date: "", status: "" }
 };
 let authErrorMessage = "";
 let authPromptMessage = "";
@@ -355,7 +355,7 @@ function syncScheduleColumnWidths() {
   const availableDayWidth = tableWrap
     ? Math.floor((tableWrap.clientWidth - deptWidth - personWidth - 2) / Math.max(days, 1))
     : 0;
-  const dayWidth = clamp(availableDayWidth || 36, 32, 48);
+  const dayWidth = clamp(availableDayWidth || 37, 33, 50);
   root.style.setProperty("--dept-col-width", `${deptWidth}px`);
   root.style.setProperty("--person-col-width", `${personWidth}px`);
   root.style.setProperty("--day-col-width", `${dayWidth}px`);
@@ -375,6 +375,12 @@ function weekdayOf(day) {
 
 function toDateString(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function resetVisibleMonthToToday() {
+  const today = new Date();
+  state.year = today.getFullYear();
+  state.month = today.getMonth();
 }
 
 function toDateObject(dateString) {
@@ -2868,6 +2874,24 @@ function renderRequestSummaryLines(record, kind) {
   return lines.filter(Boolean);
 }
 
+function getCompactManagerRequestMetaLines(record, kind) {
+  const lines = [
+    kind === "leave"
+      ? `${record.leaveCode || ""} ${record.leaveName || ""}｜${formatRequestDateText(record.startDate, record.endDate)}｜${formatRequestTimeText(record)}`
+      : `加班｜${record.workDate || ""}｜${formatOvertimeTimeText(record)}`
+  ];
+  if (kind === "overtime") {
+    lines.push(...formatOvertimeRestLines(record));
+  }
+  if (record.reason) {
+    lines.push(`原因：${record.reason}`);
+  }
+  if (record.managerNote) {
+    lines.push(`主管備註：${record.managerNote}`);
+  }
+  return lines.filter(Boolean);
+}
+
 function renderEmployeeRequestList(kind, records) {
   if (!records.length) {
     return '<div class="empty-state">目前還沒有申請資料</div>';
@@ -2884,13 +2908,14 @@ function renderEmployeeRequestList(kind, records) {
 }
 
 function renderManagerRequestList(kind, records) {
-  const filter = requestReviewFilters[kind] || { memberCode: "", date: "" };
+  const filter = requestReviewFilters[kind] || { memberCode: "", date: "", status: "" };
   const filteredRecords = records.filter((record) => {
     const memberKeyword = String(filter.memberCode || "").trim();
     const memberMatch = !memberKeyword || `${record.memberCode || ""} ${record.memberName || ""}`.includes(memberKeyword);
     const dateValue = kind === "leave" ? record.startDate : record.workDate;
     const dateMatch = !filter.date || dateValue === filter.date;
-    return memberMatch && dateMatch;
+    const statusMatch = !filter.status || record.status === filter.status;
+    return memberMatch && dateMatch && statusMatch;
   });
   if (!records.length) {
     return '<div class="empty-state">目前沒有可審核資料</div>';
@@ -2905,6 +2930,16 @@ function renderManagerRequestList(kind, records) {
         <label for="${kind}ReviewFilterDate">日期</label>
         <input id="${kind}ReviewFilterDate" type="date" value="${escapeHtml(filter.date)}" data-request-filter-kind="${kind}" data-request-filter-field="date">
       </div>
+      <div class="form-row">
+        <label for="${kind}ReviewFilterStatus">審核結果</label>
+        <select id="${kind}ReviewFilterStatus" data-request-filter-kind="${kind}" data-request-filter-field="status">
+          <option value="">全部</option>
+          <option value="pending" ${filter.status === "pending" ? "selected" : ""}>待審核</option>
+          <option value="approved" ${filter.status === "approved" ? "selected" : ""}>已核准</option>
+          <option value="rejected" ${filter.status === "rejected" ? "selected" : ""}>已退回</option>
+          <option value="cancelled" ${filter.status === "cancelled" ? "selected" : ""}>已取消</option>
+        </select>
+      </div>
       <div class="request-filter-actions">
         <button class="ghost-btn compact-btn" type="button" data-clear-request-filters="${kind}">清除</button>
       </div>
@@ -2916,7 +2951,7 @@ function renderManagerRequestList(kind, records) {
         <div class="request-title">${escapeHtml(record.memberCode || "-")} · ${escapeHtml(record.memberName || "-")}</div>
         <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
       </div>
-      ${renderRequestSummaryLines(record, kind).slice(1).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
+      ${getCompactManagerRequestMetaLines(record, kind).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
       <div class="request-review-grid">
         <div class="form-row">
           <label for="${kind}ReviewStatus_${record.id}">審核結果</label>
@@ -3279,7 +3314,8 @@ async function openRequestReviewFromTooltip(kind, requestId) {
   const record = records.find((item) => item.id === requestId);
   requestReviewFilters[kind] = {
     memberCode: record?.memberCode || "",
-    date: kind === "leave" ? (record?.startDate || "") : (record?.workDate || "")
+    date: kind === "leave" ? (record?.startDate || "") : (record?.workDate || ""),
+    status: record?.status || ""
   };
   if (kind === "leave") {
     await openLeaveApprovalModal();
@@ -3737,7 +3773,7 @@ function bindEvents() {
       return;
     }
     if (target.dataset.clearRequestFilters) {
-      requestReviewFilters[target.dataset.clearRequestFilters] = { memberCode: "", date: "" };
+      requestReviewFilters[target.dataset.clearRequestFilters] = { memberCode: "", date: "", status: "" };
       if (target.dataset.clearRequestFilters === "leave") {
         await openLeaveApprovalModal();
       } else {
@@ -3881,13 +3917,13 @@ function bindEvents() {
 
   document.body.addEventListener("change", async (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLElement) || !target.dataset.requestFilterKind) {
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement) || !target.dataset.requestFilterKind) {
       return;
     }
     const kind = target.dataset.requestFilterKind;
     const field = target.dataset.requestFilterField;
     requestReviewFilters[kind] = {
-      ...(requestReviewFilters[kind] || { memberCode: "", date: "" }),
+      ...(requestReviewFilters[kind] || { memberCode: "", date: "", status: "" }),
       [field]: target.value || ""
     };
     if (kind === "leave") {
@@ -3998,6 +4034,7 @@ async function loadApp() {
     appInfo = await window.schedulerApi.getAppInfo();
     const payload = await window.schedulerApi.loadState();
     state = normalizeState(payload);
+    resetVisibleMonthToToday();
     currentMember = resolveCurrentMember();
     if (isManager()) {
       await syncRequestCatalogs();
