@@ -78,6 +78,13 @@ button {
   min-width: 0;
 }
 
+.top-signout-slot {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
 .session-pill {
   display: inline-flex;
   align-items: center;
@@ -162,16 +169,23 @@ button {
 }
 
 .toolbar-floating-card.toolbar-floating-card-collapsed {
+  left: auto;
+  right: 20px;
+  width: auto;
   max-height: none;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  padding: 8px;
 }
 
 .toolbar-floating-card.toolbar-floating-card-collapsed .toolbar-top-row {
   margin-bottom: 0;
+  gap: 0;
 }
 
 .toolbar-floating-card.toolbar-floating-card-collapsed .toolbar-grid {
+  display: none !important;
+}
+
+.toolbar-floating-card.toolbar-floating-card-collapsed .toolbar-top-row > :not(.toolbar-collapse-toggle) {
   display: none !important;
 }
 
@@ -227,6 +241,27 @@ button {
   margin-bottom: 14px;
 }
 
+.toolbar-collapse-toggle {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.toolbar-collapse-toggle svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .toolbar-main-title {
   margin: 0;
   font-size: 22px;
@@ -258,10 +293,6 @@ button {
 
 .toolbar-floating-card.toolbar-floating-card-compact .auth-bar {
   flex: 0 1 auto;
-}
-
-.auth-signout-btn {
-  margin-left: auto;
 }
 
 .toolbar-floating-card.toolbar-floating-card-compact .toolbar-top-row .db-hint {
@@ -1645,6 +1676,7 @@ thead th.today,
   }
 
   .toolbar-floating-card.toolbar-floating-card-collapsed {
+    right: 12px;
     padding-top: 10px;
     padding-bottom: 10px;
   }
@@ -1667,6 +1699,17 @@ thead th.today,
 
   .toolbar-main-title {
     font-size: 18px;
+  }
+
+  .toolbar-collapse-toggle {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+  }
+
+  .toolbar-collapse-toggle svg {
+    width: 16px;
+    height: 16px;
   }
 
   .auth-bar {

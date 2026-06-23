@@ -4,17 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>班表</title>
-  <link rel="stylesheet" href="./styles.css?v=20260623f">
+  <link rel="stylesheet" href="./styles.css?v=20260623g">
 </head>
 <body>
   <div class="app-shell">
     <section class="toolbar-card toolbar-floating-card">
       <div class="toolbar-top-row">
+        <button class="ghost-btn toolbar-collapse-toggle" id="toolbarCollapseToggle" type="button" aria-expanded="true" aria-label="收合工具列" title="收合工具列">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 15l6-6 6 6"></path>
+          </svg>
+        </button>
         <h2 class="toolbar-main-title">班表</h2>
         <div id="authBar" class="auth-bar"></div>
         <p id="dbHint" class="db-hint"></p>
         <div class="core-actions-shell" id="coreActionsShell">
-          <button class="ghost-btn core-actions-toggle" id="toolbarCollapseToggle" type="button" aria-expanded="true">收合</button>
           <button class="ghost-btn core-actions-toggle" id="coreActionsToggle" type="button">功能</button>
           <div class="core-actions-menu" id="coreActionsMenu" aria-hidden="true">
             <button class="ghost-btn ops-btn" id="leaveApprovalButton" type="button">請假審核</button>
@@ -24,6 +28,7 @@
             <button class="primary-btn ops-btn" id="exportOvertimeButton" type="button">匯出加班</button>
           </div>
         </div>
+        <div id="signOutSlot" class="top-signout-slot"></div>
       </div>
 
       <div class="toolbar-grid" id="toolbarGrid" style="display:none">
@@ -88,9 +93,9 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260623f"></script>
-  <script src="./browser-exporter.js?v=20260623f"></script>
-  <script src="./web-api.js?v=20260623f"></script>
-  <script src="./renderer.js?v=20260623f"></script>
+  <script src="./app-config.js?v=20260623g"></script>
+  <script src="./browser-exporter.js?v=20260623g"></script>
+  <script src="./web-api.js?v=20260623g"></script>
+  <script src="./renderer.js?v=20260623g"></script>
 </body>
 </html>

@@ -883,8 +883,20 @@ function syncToolbarCollapseUi() {
     return;
   }
   toolbarCard.classList.toggle("toolbar-floating-card-collapsed", toolbarCollapsed);
-  toggle.textContent = toolbarCollapsed ? "展開" : "收合";
   toggle.setAttribute("aria-expanded", toolbarCollapsed ? "false" : "true");
+  toggle.setAttribute("aria-label", toolbarCollapsed ? "展開工具列" : "收合工具列");
+  toggle.setAttribute("title", toolbarCollapsed ? "展開工具列" : "收合工具列");
+  toggle.innerHTML = toolbarCollapsed
+    ? `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 9l6 6 6-6"></path>
+      </svg>
+    `
+    : `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6 15l6-6 6 6"></path>
+      </svg>
+    `;
 }
 
 function initializeToolbarCollapse() {
@@ -943,8 +955,12 @@ function syncRoleUi() {
 
 function renderAuthBar() {
   const container = document.getElementById("authBar");
+  const signOutSlot = document.getElementById("signOutSlot");
   if (!container) {
     return;
+  }
+  if (signOutSlot) {
+    signOutSlot.innerHTML = "";
   }
   if (!isLoggedIn()) {
     container.innerHTML = `
@@ -955,8 +971,10 @@ function renderAuthBar() {
   if (!currentProfile) {
     container.innerHTML = `
       <div class="session-pill">已登入，但尚未建立身份資料</div>
-      <button class="ghost-btn compact-btn auth-signout-btn" id="signOutButton" type="button">登出</button>
     `;
+    if (signOutSlot) {
+      signOutSlot.innerHTML = `<button class="ghost-btn compact-btn" id="signOutButton" type="button">登出</button>`;
+    }
     return;
   }
   const memberText = currentProfile.employee_code ? `${escapeHtml(currentProfile.employee_code)} · ` : "";
@@ -967,8 +985,10 @@ function renderAuthBar() {
   container.innerHTML = `
     <div class="session-pill">${memberText}${escapeHtml(getCurrentProfileName())}</div>
     ${requestButtons}
-    <button class="ghost-btn compact-btn auth-signout-btn" id="signOutButton" type="button">登出</button>
   `;
+  if (signOutSlot) {
+    signOutSlot.innerHTML = `<button class="ghost-btn compact-btn" id="signOutButton" type="button">登出</button>`;
+  }
 }
 
 function renderAuthGate() {
