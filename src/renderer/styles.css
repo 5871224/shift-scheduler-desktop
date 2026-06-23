@@ -74,7 +74,7 @@ button {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -169,8 +169,8 @@ button {
 }
 
 .toolbar-floating-card.toolbar-floating-card-collapsed {
-  left: auto;
-  right: 20px;
+  left: 20px;
+  right: auto;
   width: auto;
   max-height: none;
   padding: 8px;
@@ -1676,7 +1676,8 @@ thead th.today,
   }
 
   .toolbar-floating-card.toolbar-floating-card-collapsed {
-    right: 12px;
+    left: 12px;
+    right: auto;
     padding-top: 10px;
     padding-bottom: 10px;
   }
