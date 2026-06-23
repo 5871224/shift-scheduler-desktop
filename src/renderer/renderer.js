@@ -4451,14 +4451,6 @@ async function loadApp() {
     state = normalizeState(payload);
     resetVisibleMonthToToday();
     currentMember = resolveCurrentMember();
-    if (isManager()) {
-      await syncRequestCatalogs();
-    }
-    await refreshRequestData();
-    syncApprovedRequestsToSchedule();
-    if (isManager()) {
-      await forceSave();
-    }
   } catch (error) {
     setSaveStatus(`載入失敗：${error.message}`);
     authErrorMessage = error.message || "載入失敗";
@@ -4470,6 +4462,23 @@ async function loadApp() {
     overtimeRequestRecords = [];
     requestOverlaySourceLoaded = false;
     appInfo = null;
+    renderAll();
+    syncCoreActionsMenu();
+    return;
+  }
+
+  try {
+    if (isManager()) {
+      await syncRequestCatalogs();
+    }
+    await refreshRequestData();
+    syncApprovedRequestsToSchedule();
+    if (isManager()) {
+      await forceSave();
+    }
+  } catch (error) {
+    // ponytail: 後續同步失敗不該覆蓋已載入的正式班表；若要深查，再拆成各 API 獨立告警。
+    setSaveStatus(`部分同步失敗：${error.message}`);
   }
   renderAll();
   syncCoreActionsMenu();
