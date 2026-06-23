@@ -220,6 +220,32 @@ button {
   text-align: right;
 }
 
+.db-hint:empty {
+  display: none;
+}
+
+.toolbar-floating-card.toolbar-floating-card-compact {
+  max-height: none;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.toolbar-floating-card.toolbar-floating-card-compact .toolbar-top-row {
+  margin-bottom: 0;
+}
+
+.toolbar-floating-card.toolbar-floating-card-compact .toolbar-main-title {
+  font-size: 20px;
+}
+
+.toolbar-floating-card.toolbar-floating-card-compact .auth-bar {
+  flex: 0 1 auto;
+}
+
+.toolbar-floating-card.toolbar-floating-card-compact .toolbar-top-row .db-hint {
+  display: none;
+}
+
 .toolbar-title-row {
   margin-bottom: 10px;
 }

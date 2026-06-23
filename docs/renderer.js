@@ -871,9 +871,13 @@ function promptManagerAccess(message) {
 }
 
 function syncRoleUi() {
+  const toolbarCard = document.querySelector(".toolbar-floating-card");
   const toolbarGrid = document.getElementById("toolbarGrid");
   if (toolbarGrid) {
     toolbarGrid.style.display = isManager() ? "grid" : "none";
+  }
+  if (toolbarCard) {
+    toolbarCard.classList.toggle("toolbar-floating-card-compact", !isManager());
   }
   const coreActionsShell = document.getElementById("coreActionsShell");
   if (coreActionsShell) {
