@@ -880,7 +880,6 @@ function syncRoleUi() {
     coreActionsShell.style.display = isManager() ? "" : "none";
   }
   const managerOnlyIds = [
-    "memberSettingsButton",
     "deptSettingsButton",
     "shiftSettingsButton",
     "leaveSettingsButton",
@@ -3274,10 +3273,6 @@ function bindEvents() {
   bindClick("deptSettingsButton", openDepartmentSettings);
   bindClick("shiftSettingsButton", () => openListSettings("shift"));
   bindClick("leaveSettingsButton", () => openListSettings("leave"));
-  bindClick("memberSettingsButton", () => {
-    closeCoreActionsMenu();
-    openMemberSettings();
-  });
   bindClick("leaveApprovalButton", async () => {
     closeCoreActionsMenu();
     await openLeaveApprovalModal();
