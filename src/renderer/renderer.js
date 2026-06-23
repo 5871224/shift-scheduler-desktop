@@ -986,6 +986,7 @@ function syncRoleUi() {
     "deptSettingsButton",
     "shiftSettingsButton",
     "leaveSettingsButton",
+    "overtimeSettingsButton",
     "leaveApprovalButton",
     "overtimeApprovalButton"
   ];
@@ -998,7 +999,7 @@ function syncRoleUi() {
     element.disabled = !isManager();
   });
 
-  ["shiftChips", "leaveChips"].forEach((id) => {
+  ["shiftChips", "leaveChips", "overtimeChips"].forEach((id) => {
     const element = document.getElementById(id);
     if (!element) {
       return;
@@ -1250,15 +1251,13 @@ function renderChips(containerId, category, items) {
 }
 
 function renderToolbar() {
-  if (state.selected.type === "overtime" || state.selected.type === "cancel-overtime") {
-    state.selected = { type: null, id: null };
-  }
   renderDeptFilter();
   const visibleShifts = state.deptFilter === "all"
     ? state.shifts
     : state.shifts.filter((shift) => shiftAllowsDepartment(shift, state.deptFilter));
   renderChips("shiftChips", "shift", visibleShifts);
   renderChips("leaveChips", "leave", state.leaves);
+  renderChips("overtimeChips", "overtime", state.overtime);
   syncRoleUi();
 }
 
@@ -1424,11 +1423,6 @@ function applySelectionToCell(memberId, day) {
   }
   const slot = ensureScheduleSlot(memberId, day);
   const { type, id } = state.selected;
-  if (type === "overtime" || type === "cancel-overtime") {
-    state.selected = { type: null, id: null };
-    renderToolbar();
-    return;
-  }
   if (type === "leave") {
     const leave = getItem("leave", id);
     if (!leave) {
@@ -1449,13 +1443,30 @@ function applySelectionToCell(memberId, day) {
     return;
   }
   if (type === "shift") slot.shift = slot.shift === id ? null : id;
-  if (type === "overtime") slot.overtime = slot.overtime === id ? null : id;
+  if (type === "overtime") {
+    const nextOvertimeId = slot.overtime === id ? null : id;
+    slot.overtime = nextOvertimeId;
+    if (nextOvertimeId) {
+      slot.overtimeMeta = {
+        ...(slot.overtimeMeta || {}),
+        requestStatus: "approved"
+      };
+      slot.overtimeRequestId = null;
+    } else {
+      slot.overtimeMeta = null;
+      slot.overtimeRequestId = null;
+    }
+  }
   if (type === "cancel-shift") slot.shift = null;
   if (type === "cancel-leave") {
     slot.leave = null;
     slot.leaveMeta = null;
   }
-  if (type === "cancel-overtime") slot.overtime = null;
+  if (type === "cancel-overtime") {
+    slot.overtime = null;
+    slot.overtimeMeta = null;
+    slot.overtimeRequestId = null;
+  }
   pruneEmptySchedule();
   renderTable();
   queueSave();
@@ -1762,9 +1773,12 @@ async function saveOvertimeAssignmentFromModal() {
     useRest2,
     rest2StartTime: useRest2 ? rest2StartTime : "",
     rest2EndTime: useRest2 ? rest2EndTime : "",
-    requestStatus: slot.overtimeMeta?.requestStatus || "approved",
+    requestStatus: requestId ? (slot.overtimeMeta?.requestStatus || "approved") : "approved",
     reason: slot.overtimeMeta?.reason || ""
   };
+  if (!requestId) {
+    slot.overtimeRequestId = null;
+  }
   if (requestId) {
     // ponytail: 現在先讓班表修改直接回寫核準中的加班明細；若後續要加審核歷程，再拆成專用編修紀錄。
     await window.schedulerApi.updateOvertimeRequestDetails({
@@ -3388,6 +3402,7 @@ function bindEvents() {
   bindClick("deptSettingsButton", openDepartmentSettings);
   bindClick("shiftSettingsButton", () => openListSettings("shift"));
   bindClick("leaveSettingsButton", () => openListSettings("leave"));
+  bindClick("overtimeSettingsButton", () => openListSettings("overtime"));
   bindClick("leaveApprovalButton", async () => {
     closeCoreActionsMenu();
     await openLeaveApprovalModal();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>班表</title>
-  <link rel="stylesheet" href="./styles.css?v=20260623i">
+  <link rel="stylesheet" href="./styles.css?v=20260623j">
 </head>
 <body>
   <div class="app-shell">
@@ -59,6 +59,19 @@
           <div id="leaveChips" class="chips"></div>
         </div>
 
+        <div class="toolbar-section toolbar-section-overtime">
+          <div class="toolbar-title-row">
+            <span class="toolbar-title">加班</span>
+            <button class="settings-icon-btn toolbar-settings-btn" id="overtimeSettingsButton" type="button" aria-label="加班設定" title="加班設定">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16v4z"></path>
+                <path d="M13.5 6.5l4 4"></path>
+              </svg>
+            </button>
+          </div>
+          <div id="overtimeChips" class="chips"></div>
+        </div>
+
       </div>
     </section>
 
@@ -93,9 +106,9 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260623i"></script>
-  <script src="./browser-exporter.js?v=20260623i"></script>
-  <script src="./web-api.js?v=20260623i"></script>
-  <script src="./renderer.js?v=20260623i"></script>
+  <script src="./app-config.js?v=20260623j"></script>
+  <script src="./browser-exporter.js?v=20260623j"></script>
+  <script src="./web-api.js?v=20260623j"></script>
+  <script src="./renderer.js?v=20260623j"></script>
 </body>
 </html>

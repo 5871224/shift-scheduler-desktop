@@ -191,7 +191,7 @@ button {
 
 .toolbar-grid {
   display: grid;
-  grid-template-columns: 1.62fr 0.78fr;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.78fr) minmax(0, 0.78fr);
   gap: 14px;
 }
 
@@ -203,6 +203,10 @@ button {
 }
 
 .toolbar-section-leave {
+  padding: 10px;
+}
+
+.toolbar-section-overtime {
   padding: 10px;
 }
 
@@ -461,6 +465,11 @@ button {
   min-height: 36px;
 }
 
+.toolbar-section-overtime .chips {
+  gap: 6px;
+  min-height: 36px;
+}
+
 .chip {
   padding: 8px 12px;
   border: 1px solid currentColor;
@@ -469,6 +478,10 @@ button {
 }
 
 .toolbar-section-leave .chip {
+  padding: 7px 11px;
+}
+
+.toolbar-section-overtime .chip {
   padding: 7px 11px;
 }
 
@@ -1688,7 +1701,7 @@ thead th.today,
   }
 
   .toolbar-grid {
-    grid-template-columns: minmax(0, 1.2fr) minmax(120px, 0.8fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
@@ -1760,6 +1773,10 @@ thead th.today,
     padding: 8px;
   }
 
+  .toolbar-section-overtime {
+    padding: 8px;
+  }
+
   .toolbar-title {
     font-size: 13px;
   }
@@ -1786,6 +1803,7 @@ thead th.today,
   }
 
   .toolbar-section-leave .chip,
+  .toolbar-section-overtime .chip,
   .chips-shift .chip {
     padding: 5px 8px;
   }
