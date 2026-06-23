@@ -1,108 +1,115 @@
-# 班表系統
+# 排班系統
 
-這個專案是一個以瀏覽器為主的班表系統，前端直接呼叫 Supabase Auth、REST API、Edge Function 與資料匯出流程。
+這個專案是前端靜態網頁版排班系統，資料存放在 Supabase。
+本機開發主體在 `src/renderer/`，GitHub Pages 發佈內容在 `docs/`。
 
-目前倉庫同時包含：
+目前系統已包含：
 
-- 網頁前端原始碼：`src/renderer/`
-- GitHub Pages 靜態輸出：`docs/`
-- 本機預覽伺服器：`src/web-server.js`
-- 發佈腳本：`scripts/publish-static-web.js`
-- Supabase SQL / Function：`supabase/`
+- 月曆班表檢視與編輯
+- 單位 / 人員 / 班別 / 假別 / 加班設定
+- 請假申請、加班申請、主管審核
+- 手機版浮動工具列
+- GitHub Pages 靜態發佈
 
-## 專案目的
+## 專案結構
 
-系統主要處理以下工作：
+- `src/renderer/index.html`
+  前端頁面骨架。
+- `src/renderer/styles.css`
+  所有畫面樣式。
+- `src/renderer/renderer.js`
+  主要 UI、排班狀態、事件綁定、modal、審核流程。
+- `src/renderer/web-api.js`
+  瀏覽器端與 Supabase 溝通的 API 包裝。
+- `src/renderer/browser-exporter.js`
+  匯出 Excel / CSV、匯入人員資料。
+- `src/renderer/app-config.js`
+  Supabase 連線設定與 `documentId`。
+- `src/web-server.js`
+  本機預覽用靜態伺服器。
+- `scripts/publish-static-web.js`
+  將 `src/renderer/` 複製到 `docs/`。
+- `scripts/check-public-supabase.js`
+  檢查公開 Supabase 設定是否可用。
+- `supabase/`
+  SQL、RPC、Edge Function 相關檔案。
 
-- 班表排班
-- 人員、單位、班別、假別設定
-- 請假申請 / 加班申請 / 主管審核
-- 匯出休例假、請假、加班資料
-- 以 Supabase 帳號與 `profiles` 權限控制主管 / 員工功能
+## 執行方式
 
-## 執行環境
-
-### Node.js
-
-此專案用 Node 啟動本機靜態預覽與產出 `docs/`。
-
-常用指令：
+安裝相依後可用以下指令：
 
 ```powershell
 npm run web
-npm run web:publish
 npm run web:check
+npm run web:publish
 ```
 
-說明：
-
 - `npm run web`
-  啟動本機預覽站，預設網址為 `http://127.0.0.1:3010`
-- `npm run web:publish`
-  將 `src/renderer/` 複製到 `docs/`，作為 GitHub Pages 發佈內容
+  啟動本機預覽，預設網址為 `http://127.0.0.1:3010`
 - `npm run web:check`
-  檢查 `src/renderer/app-config.js` 內的公開 Supabase 設定是否可用
+  檢查 `src/renderer/app-config.js` 的 Supabase 公開設定
+- `npm run web:publish`
+  清空並重建 `docs/`，供 GitHub Pages 使用
 
-### 前端設定
+## 發佈規則
 
-公開前端設定放在：
+這個專案的 GitHub Pages 來源是 `docs/`，所以前端改動必須遵守：
 
-- `src/renderer/app-config.js`
+1. 先修改 `src/renderer/*`
+2. 若是網頁版要同步生效，再執行 `npm run web:publish`
+3. 確認 `docs/` 已更新
+4. commit / push 到 `main`
 
-目前包含：
+不要直接手改 `docs/` 當正式來源，除非只是臨時檢查。
 
-- `supabaseUrl`
-- `supabaseAnonKey`
-- `documentId`
+## 目前資料來源
 
-這些值會被前端直接讀取，因此只能放「可公開」設定，不要放 service role key。
+### 1. 排班主文件
 
-## 網頁結構
+班表主資料存放在 Supabase 的 `schedule_documents`。
 
-主要頁面檔案：
-
-- `src/renderer/index.html`
-  頁面骨架，包含工具列、班表區、modal root、auth root
-- `src/renderer/styles.css`
-  全站樣式
-- `src/renderer/renderer.js`
-  畫面渲染、互動、狀態管理、modal、拖曳排序、審核 UI
-- `src/renderer/web-api.js`
-  前端對 Supabase 的 API 封裝
-- `src/renderer/browser-exporter.js`
-  匯出檔案相關邏輯
-
-畫面大致分成兩區：
-
-1. 浮動工具列
-   包含登入資訊、功能選單、單位 / 班別、假別
-2. 班表區
-   包含月份切換、固定表頭、班表格子、主管快捷設定按鈕
-
-## 主要資料流
-
-### 1. 啟動流程
-
-入口在 `src/renderer/renderer.js`。
-
-初始化時會：
+`renderer.js` 載入流程：
 
 1. `bindEvents()`
 2. `window.schedulerApi.initializeAuth()`
 3. `window.schedulerApi.getAppInfo()`
 4. `window.schedulerApi.loadState()`
 5. `normalizeState(payload)`
-6. `renderAll()`
+6. `resetVisibleMonthToToday()`
+7. `renderAll()`
 
-也就是說，畫面並不是先用資料庫即時逐筆讀取來組頁，而是先載入一份完整 state，再由前端渲染。
+重點：
 
-### 2. 前端 state
+- 重新整理時，班表預設切回今天所在月份
+- 若後續同步請假 / 加班資料失敗，不應覆蓋已載入的正式班表
+- `createDefaultState()` 只應作為載入失敗 fallback，不是正式資料來源
 
-核心 state 在 `renderer.js` 的 `DEFAULT_STATE` 與 `state` 變數。
+### 2. Auth / 權限資料
 
-主要內容有：
+登入與角色資料來自 Supabase：
 
+- `profiles`：登入者資料、工號、姓名、角色
+- `schedule_documents`：班表 JSON 主文件
+- `leave_requests`：請假申請
+- `overtime_requests`：加班申請
+- `leave_types` / `overtime_types`：同步後的申請類型資料
+
+目前帳號權限分兩種：
+
+- `manager`：可編輯班表、設定資料、審核申請、重設員工密碼
+- `employee`：可看班表、送出自己的請假 / 加班申請、修改自己的密碼
+
+## 前端狀態邏輯
+
+`renderer.js` 採單一 `state` 物件驅動畫面。
+
+主要欄位包含：
+
+- `year` / `month`
+- `deptFilter`
+- `tableDeptScopeFilter`
 - `departments`
+- `positions`
 - `members`
 - `shifts`
 - `leaves`
@@ -110,266 +117,238 @@ npm run web:check
 - `holidays`
 - `rules`
 - `schedule`
-- `year`
-- `month`
-- `selected`
-- `deptFilter`
 
-這代表：
+其中：
 
-- 設定類資料與班表資料大多由單一 state 管理
-- UI 修改後通常要 `renderAll()`、`renderTable()` 或 `renderToolbar()`
-- 儲存時走 `queueSave()`，最後呼叫 `schedulerApi.saveState(state)`
+- `departments`、`members`、`shifts`、`leaves`、`overtime` 是設定資料
+- `schedule` 是真正的每日格子資料
+- 申請單不是直接存在 `schedule`，而是先從申請表讀出後，再覆蓋到畫面上的班表格
 
-### 3. 儲存邏輯
+## 班表顯示邏輯
 
-前端不是每點一下就立刻打 API，而是使用 `queueSave()` 做短延遲儲存。
+### 日期欄
 
-好處：
+- 每週起始為週日，結束為週六
+- 日期標題有隔週底紋與週界線
+- 今日欄位會額外標示
+- 日期欄寬會依當月天數與可用寬度自動調整
 
-- 避免大量連續請求
-- 排班拖曳或連續點格子時不會太卡
+### 單位與人員欄
 
-風險：
+- 左側單位 / 人員欄寬會依實際字數自動測量
+- 標題列與內容列共用同一組欄寬計算，避免錯位
+- 主管可由標題旁按鈕直接開啟單位設定與人員設定
 
-- 如果改到 state 但沒呼叫 `queueSave()`，資料只會停留在畫面
+### 單位與人員顯示條件
 
-### 4. 權限邏輯
+- 若單位整月都不在營業期間內，當月班表不顯示該單位
+- 若員工整月都不在職，當月班表不顯示該員工
+- 單位排序與單位內人員排序都會直接影響班表顯示順序
 
-主管判斷集中在：
+## 請假 / 加班覆蓋邏輯
 
-- `isManager()`
-- `canEditSchedule()`
-- `promptManagerAccess()`
-- `syncRoleUi()`
+`refreshRequestData()` 會依登入狀態載入申請資料：
 
-目前規則大致是：
+- 未登入：讀公開 RPC，讓班表仍可看到公開的請假 / 加班覆蓋
+- 已登入員工：只讀自己的申請
+- 已登入主管：讀全部申請
 
-- 員工可登入、送請假 / 加班申請
-- 主管可編輯排班、開設定頁、審核申請、匯出
+`syncApprovedRequestsToSchedule()` 會先清掉由申請覆蓋出的格子，再重新套用申請資料。
 
-如果改 UI，要注意「按鈕顯示」和「事件實際允許」是兩層：
+目前套用規則：
 
-- 顯示層：`syncRoleUi()`
-- 行為層：`managerOnlyAction` 判斷與 `promptManagerAccess()`
+- `approved` 與 `pending` 都會顯示在班表上
+- `rejected` 不會套到班表
+- 已核准請假會清掉該格原本班別
+- 加班會以加班區塊顯示在同一天格子中
 
-只藏按鈕不夠，事件限制也要一起看。
+## 審核流程
 
-## Supabase 結構
+### 功能入口
 
-### 前端接法
+- 功能選單可開 `請假申核`、`加班申核`
+- 從這裡進入時，會自動套用預設篩選：
+  - 申請人清空
+  - 日期清空
+  - 審核結果 = `待審核`
 
-`src/renderer/web-api.js` 直接用 `fetch` 呼叫：
+### 從班表提示卡進入
 
-- Supabase Auth
+若從班表格子的提示卡點審核：
+
+- 會自動帶入該筆申請人的姓名
+- 會自動帶入對應日期
+- 會帶入該筆申請目前狀態
+
+### 審核頁篩選規則
+
+審核頁目前支援：
+
+- 申請人
+- 日期
+- 審核結果
+
+重要行為：
+
+- 篩選變更時只重開列表，不應重設已選條件
+- 按「清除」時才清空目前篩選
+- 儲存審核後回列表，應保留目前篩選，不應跳回預設
+
+## 申請頁邏輯
+
+### 請假申請
+
+- 員工可送出請假申請
+- 下方「我的請假申請」採單行列表，日期新到舊排序
+- 待審核中的申請可由本人刪除
+
+### 加班申請
+
+- 員工可送出加班申請
+- 可輸入加班時段與休息 1 / 休息 2
+- 下方「我的加班申請」與請假申請使用相同列表邏輯
+- 待審核中的申請可由本人刪除
+
+### 主管直接在班表上標記加班
+
+- 這種加班不是員工申請單
+- 直接標記後固定視為已核准
+
+## 設定頁邏輯
+
+### 單位設定
+
+- 單位可拖曳排序
+- 單位有人員時不可刪除，必須先移轉人員
+- 可設定開始日期、結束日期、不顯示
+- 勾選不顯示時，單位與人員不出現在假表相關選單
+
+### 人員設定
+
+- 支援姓名、單位、權限、狀態、薪資方式篩選
+- 狀態預設為在職
+- 可匯出 / 匯入人員資料
+
+### 班別 / 假別 / 加班設定
+
+- 皆採列表式設定頁
+- 可設定 `不顯示`
+- 勾選 `不顯示` 後，不出現在浮動工具列對應區塊
+
+假別另外支援：
+
+- 預覽格
+- 底色
+- 字色
+- 自動字色
+- 顯示名稱
+
+班表格子與浮動工具列中的假別文字顏色，應以假別設定中的字色為準。
+
+## 浮動工具列
+
+目前浮動工具列包含：
+
+- 班表標題
+- 登入者名稱
+- 請假申請
+- 加班申請
+- 修改密碼
+- 功能
+- 登出
+
+手機版預設為收合狀態，收合後只保留單一收合按鈕。
+
+工具列內主要區塊：
+
+- 班別
+- 假別
+- 加班
+
+這些區塊的按鈕與下拉選單，會受設定頁中的顯示 / 不顯示設定影響。
+
+## Supabase API 重點
+
+`src/renderer/web-api.js` 目前是薄包裝，不使用額外 SDK，直接用 `fetch` 呼叫：
+
+- `/auth/v1/*`
 - `/rest/v1/*`
 - `/functions/v1/*`
+- `/rest/v1/rpc/*`
 
-目前沒有用官方 JS SDK，而是自己包：
+前端主要透過 `window.schedulerApi` 存取：
 
-- `requestJson()`
-- `restSelect()`
-- `restInsert()`
-- `restUpdate()`
-- `requestFunction()`
-
-這樣做的特性是簡單直接，但改表名、欄位名、RLS 時，前端很容易一起壞，修改資料庫前要先全文搜尋呼叫點。
-
-### 目前可見的重要 API 能力
-
-`window.schedulerApi` 主要提供：
-
-- `initializeAuth()`
-- `signIn()`
-- `signOut()`
-- `loadState()`
-- `saveState()`
-- `syncCatalogs()`
-- `syncMemberProfile()`
-- `resetMemberPassword()`
-- `createLeaveRequest()`
-- `createOvertimeRequest()`
-- `listLeaveRequests()`
-- `listOvertimeRequests()`
-- `updateLeaveRequest()`
-- `updateOvertimeRequest()`
-- `exportSapCsv()`
-- `exportLeave()`
-- `exportOvertime()`
-
-### SQL / Function 檔案
-
-Supabase 相關檔案位於：
-
-- `supabase/001_initial_schema.sql`
-- `supabase/002_data_api_grants.sql`
-- `supabase/003_schedule_documents.sql`
-- `supabase/004_schedule_documents_anon.sql`
-- `supabase/005_schedule_documents_authenticated.sql`
-- `supabase/006_login_by_employee_code.sql`
-- `supabase/007_schedule_documents_public_read.sql`
-- `supabase/008_overtime_request_details.sql`
-- `supabase/functions/member-auth-admin/index.ts`
-
-其中 `member-auth-admin` Edge Function 用於人員帳號同步與密碼重設，這是高權限區塊，修改前要特別小心。
-
-## 部署結構
-
-### 本機原始碼
-
-開發來源是：
-
-- `src/renderer/`
-
-### 發佈輸出
-
-GitHub Pages / 靜態站輸出是：
-
-- `docs/`
-
-`npm run web:publish` 會：
-
-1. 清空 `docs/`
-2. 複製必要前端檔案進去
-3. 重新寫入 `.nojekyll`
-4. 重新寫入 `docs/README.txt`
-
-所以：
-
-- 不要手改 `docs/` 裡的內容再期待它長久存在
-- 正確做法是改 `src/renderer/`，然後重新 publish
-
-### 本機預覽
-
-`src/web-server.js` 是很薄的靜態伺服器，只做：
-
-- 靜態檔案服務
-- `/api/health`
-
-它不是正式後端，也不處理商業邏輯。
-
-## 重要 UI 邏輯
-
-### 班表固定表頭
-
-固定表頭是另外一套 DOM，不是直接用 `thead` 顯示。
-
-相關函式：
-
-- `renderStickyTableHeader()`
-- `renderStickyHeaderTitleCells()`
-- `syncStickyHeaderLayout()`
-- `syncStickyHeaderScroll()`
-
-注意：
-
-- 改欄寬時，固定表頭和主表格要一起看
-- `thead` 本身是隱藏的，主要拿來量寬度
-
-### 設定頁列表
-
-班別設定 / 假別設定共用 `openListSettings(category)` 產生列表。
-
-因此如果只改其中一種顯示，要先確認條件分支是否只影響：
-
-- `category === "shift"`
-- `category === "leave"`
-
-最近「假別設定 > 需填時間」顯示反轉，就是只動這一層顯示，不動實際資料值。
-
-### 請假 / 加班待審核視覺
-
-班表格子內容由 `renderCellInner()` 組出來。
-
-待審核視覺由：
-
-- `segment.status === "pending"`
-- `.seg-pending`
-
-控制。
-
-如果要再改待審核效果，優先只改 CSS，不要先碰資料結構。
+- `initializeAuth`
+- `signIn`
+- `signOut`
+- `changePassword`
+- `loadState`
+- `saveState`
+- `syncCatalogs`
+- `syncMemberProfile`
+- `resetMemberPassword`
+- `createLeaveRequest`
+- `createOvertimeRequest`
+- `listLeaveRequests`
+- `listOvertimeRequests`
+- `listPublicScheduleRequests`
+- `updateLeaveRequest`
+- `updateOvertimeRequest`
+- `updateOvertimeRequestDetails`
+- `deleteLeaveRequest`
+- `deleteOvertimeRequest`
+- `exportSapCsv`
+- `exportOvertime`
+- `exportLeave`
+- `exportMembers`
+- `importMembers`
 
 ## 維護注意事項
 
-### 1. 改前端後，要同步 `docs/`
+### 1. 一律以 `src/renderer/` 為主
 
-這個專案的靜態發佈來源是 `docs/`，所以前端有改就要執行：
+正式修改請先改：
 
-```powershell
-npm run web:publish
-```
+- `src/renderer/index.html`
+- `src/renderer/styles.css`
+- `src/renderer/renderer.js`
+- `src/renderer/web-api.js`
 
-### 2. 設定與權限是兩層
+如需 GitHub Pages 生效，再同步 `docs/`。
 
-新增或移除主管功能時，要一起檢查：
+### 2. `docs/` 要和 `src/renderer/` 保持一致
 
-- `syncRoleUi()`
-- `bindEvents()` 裡的 `managerOnlyAction`
-- 相關 API 是否也有 `ensureManager()`
+若兩邊不一致，GitHub Pages 顯示可能和本機看到的不一樣。
 
-### 3. `schedule` 是核心資料
+### 3. 不要把測試 fallback 當正式資料
 
-很多互動都直接寫進 `state.schedule`。
+若載入錯誤看到像「王小美」這類預設資料，代表正式資料沒有載入成功，應先查：
 
-如果改：
+- Supabase 連線設定
+- `schedule_documents`
+- Auth / profile 同步
+- 後續 RPC 或 REST 是否報錯
 
-- 排班方式
-- 請假覆蓋規則
-- 加班寫回規則
+### 4. 修改審核相關功能時，優先注意這三件事
 
-記得一起檢查：
+1. 功能入口是否要套預設篩選
+2. 班表提示入口是否要保留帶入條件
+3. 審核後回列表是否應保留當前篩選
 
-- `ensureScheduleSlot()`
-- `pruneEmptySchedule()`
-- `applySelectionToCell()`
-- 審核通過後寫回班表的邏輯
+### 5. 修改班表欄寬時，注意 sticky header 一起同步
 
-### 4. 注意 `defaultAllDay` 的語意
+相關函式：
 
-`leave.defaultAllDay` 不是單純顯示字串，它會同時影響：
+- `syncScheduleColumnWidths()`
+- `renderStickyTableHeader()`
+- `syncStickyHeaderLayout()`
+- `syncStickyHeaderScroll()`
 
-- 假別設定表單 checkbox
-- 假單預設是否整天
-- 假別細節 modal 是否先隱藏時間欄
-- 列表上的「需填時間」顯示
+### 6. 根目錄舊檔不是目前發佈來源
 
-因此改文案或顯示時，要先區分：
-
-- 是改資料意義
-- 還是只改列表呈現
-
-### 5. 核心功能選單與浮動工具列
-
-目前工具列是 fixed 浮動卡片，核心功能選單靠絕對定位展開。
-
-如果再改這區：
-
-- 要注意 `overflow`
-- 要注意手機版 `max-height`
-- 要注意選單是否被工具列本身裁切
-
-### 6. 不要直接依賴 `docs/` 作為唯一真實來源
-
-真正應修改的是 `src/renderer/`。
-
-`docs/` 是部署產物，不是主要開發來源。
-
-## 建議修改流程
-
-每次改動這個專案，建議照下面順序：
-
-1. 先改 `src/renderer/*`
-2. 本機檢查必要 JS 語法
-3. 執行 `npm run web:publish`
-4. 確認 `docs/` 一起更新
-5. 再 commit / push
-
-## 目前倉庫中容易誤會的檔案
-
-倉庫根目錄目前可見：
+以下檔案目前不是 GitHub Pages 正式來源：
 
 - `renderer.js`
 - `shift_scheduler.html`
 
-這兩個不是目前 GitHub Pages 發佈主路徑，真正網頁來源仍以 `src/renderer/` 與 `docs/` 為主。處理時不要誤改到錯的檔案。
+除非特別要整理歷史檔，否則不要把它們當主檔修改。
