@@ -1707,7 +1707,7 @@ function openListSettings(category) {
                 <div class="settings-table-name">${escapeHtml(item.name)}</div>
                 <div class="settings-table-meta">${category === "shift"
                   ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
-                  : item.defaultAllDay ? "否" : "是"
+                  : item.defaultAllDay ? "是" : "否"
                 }</div>
                 ${category === "shift"
                   ? `<div class="settings-table-meta">${escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)}</div>`
