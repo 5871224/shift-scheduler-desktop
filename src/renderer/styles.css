@@ -632,8 +632,28 @@ button {
   background: var(--today);
 }
 
+.table-sticky-cell-day.today {
+  background: #e7c58c;
+  color: #5d3a12;
+  box-shadow: inset 0 0 0 2px #9c6b2f;
+  font-weight: 800;
+}
+
+.table-sticky-cell-day.today span {
+  color: #5d3a12;
+  font-weight: 700;
+}
+
 .table-sticky-cell-day.week-alt {
   background: var(--week-alt);
+}
+
+.table-sticky-cell-day.week-boundary-start {
+  border-left: 2px solid #8b7351;
+}
+
+.table-sticky-cell-day.week-boundary-end {
+  border-right: 2px solid #8b7351;
 }
 
 .table-sticky-cell-day span {
@@ -781,6 +801,14 @@ thead th.today,
 .dept-col.today,
 .person-col.today {
   background: var(--today);
+}
+
+.cell.week-boundary-start {
+  border-left: 2px solid #8b7351;
+}
+
+.cell.week-boundary-end {
+  border-right: 2px solid #8b7351;
 }
 
 .cell:hover {

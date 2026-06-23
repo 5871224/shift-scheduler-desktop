@@ -223,8 +223,9 @@ function renderStickyTableHeader(days) {
     const weekday = weekdayOf(day);
     const cls = weekday === 0 ? "sun" : weekday === 6 ? "sat" : "";
     const weekStripeClass = getWeekStripeClass(day);
+    const weekBoundaryClass = getWeekBoundaryClass(day, days);
     cells.push(
-      `<div class="table-sticky-cell table-sticky-cell-day ${cls} ${weekStripeClass} ${isToday(day) ? "today" : ""}">${day}<span>${WEEKDAY_LABELS[weekday]}</span></div>`
+      `<div class="table-sticky-cell table-sticky-cell-day ${cls} ${weekStripeClass} ${weekBoundaryClass} ${isToday(day) ? "today" : ""}">${day}<span>${WEEKDAY_LABELS[weekday]}</span></div>`
     );
   }
   container.innerHTML = cells.join("");
@@ -384,6 +385,18 @@ function getWeekIndexForDay(day) {
 
 function getWeekStripeClass(day) {
   return getWeekIndexForDay(day) % 2 === 1 ? "week-alt" : "";
+}
+
+function getWeekBoundaryClass(day, daysInCurrentMonth) {
+  const classes = [];
+  const weekday = weekdayOf(day);
+  if (day === 1 || weekday === 0) {
+    classes.push("week-boundary-start");
+  }
+  if (day === daysInCurrentMonth || weekday === 6) {
+    classes.push("week-boundary-end");
+  }
+  return classes.join(" ");
 }
 
 function toDateString(year, month, day) {
@@ -1505,12 +1518,13 @@ function renderTable() {
         html += `<td class="person-col"><div class="member-label">${memberLabel(member)}</div></td>`;
         for (let day = 1; day <= days; day += 1) {
           const active = isMemberActiveOnDate(member, state.year, state.month, day);
+          const weekBoundaryClass = getWeekBoundaryClass(day, days);
           if (!active) {
-            html += '<td class="cell inactive-cell" data-disabled="true"><div class="cell-inner"></div></td>';
+            html += `<td class="cell inactive-cell ${weekBoundaryClass}" data-disabled="true"><div class="cell-inner"></div></td>`;
             continue;
           }
           const key = scheduleKey(member.id, state.year, state.month, day);
-          html += `<td class="cell ${isToday(day) ? "today" : ""}" data-member-id="${member.id}" data-day="${day}">${renderCellInner(key, member.id, day)}</td>`;
+          html += `<td class="cell ${weekBoundaryClass} ${isToday(day) ? "today" : ""}" data-member-id="${member.id}" data-day="${day}">${renderCellInner(key, member.id, day)}</td>`;
         }
         html += "</tr>";
       });
