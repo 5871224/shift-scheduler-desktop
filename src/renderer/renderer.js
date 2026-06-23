@@ -2714,18 +2714,23 @@ async function refreshRequestData() {
 }
 
 function syncApprovedRequestsToSchedule() {
-  if (!isManager()) {
+  if (!isLoggedIn() || !currentProfile) {
     return;
   }
+  Object.values(state.schedule).forEach((slot) => {
+    if (slot?.leaveRequestId) {
+      slot.leave = null;
+      slot.leaveMeta = null;
+      slot.leaveRequestId = null;
+    }
+    if (slot?.overtimeRequestId) {
+      slot.overtime = null;
+      slot.overtimeRequestId = null;
+      slot.overtimeMeta = null;
+    }
+  });
   leaveRequestRecords.forEach((record) => {
     applyApprovedLeaveRequestToSchedule(record);
-  });
-  Object.keys(state.schedule).forEach((key) => {
-    if (state.schedule[key]?.overtime) {
-      state.schedule[key].overtime = null;
-      state.schedule[key].overtimeRequestId = null;
-      state.schedule[key].overtimeMeta = null;
-    }
   });
   overtimeRequestRecords.forEach((record) => {
     applyApprovedOvertimeRequestToSchedule(record);
