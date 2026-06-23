@@ -13,6 +13,21 @@
 
 ## 專案結構
 
+可先用這張對照圖理解：
+
+```text
+src/renderer/     前端原始碼，平常主要修改這裡
+docs/             GitHub Pages 發佈檔，由 src/renderer 複製過去
+scripts/          輔助腳本，例如發佈、檢查、自檢
+src/web-server.js 本機預覽用靜態伺服器
+supabase/         Supabase SQL、RPC、Edge Function
+```
+
+如果只想知道「哪裡是主檔」，答案是：
+
+- 前端功能主檔在 `src/renderer/`
+- `docs/` 只是發佈結果，不是另一套系統
+- `scripts/` 與 `supabase/` 是支援工具與後端資料層
 - `src/renderer/index.html`
   前端頁面骨架。
 - `src/renderer/styles.css`
