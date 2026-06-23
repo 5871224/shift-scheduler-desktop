@@ -912,16 +912,6 @@ function getItem(category, id) {
   return getItemList(category).find((item) => item.id === id);
 }
 
-function getItemTextColor(item, fallback = "#000000") {
-  if (!item) {
-    return fallback;
-  }
-  if (item.textColor) {
-    return item.textColor;
-  }
-  return textColor(item.color || fallback);
-}
-
 function getSlot(memberId, day) {
   return state.schedule[scheduleKey(memberId, state.year, state.month, day)] || null;
 }
@@ -1457,10 +1447,9 @@ function renderChips(containerId, category, items) {
   const container = document.getElementById(containerId);
   const chips = items.map((item) => {
     const active = state.selected.type === category && state.selected.id === item.id;
-    const foreground = category === "leave" ? getItemTextColor(item, item.color) : item.color;
     const style = active
-      ? `color:${foreground};background:${item.color}20;border-color:${item.color};`
-      : `color:${foreground};border-color:${item.color}55;`;
+      ? `color:${item.color};background:${item.color}20;border-color:${item.color};`
+      : `color:${item.color};border-color:${item.color}55;`;
     return `<button class="chip ${active ? "active" : ""}" style="${style}" type="button" data-chip-type="${category}" data-chip-id="${item.id}">${escapeHtml(item.name)}</button>`;
   });
   const cancelType = `cancel-${category}`;
@@ -1538,7 +1527,6 @@ function renderCellInner(key, memberId = "", day = 0) {
         category: "leave",
         name: leave.name,
         color: leave.color,
-        textColor: getItemTextColor(leave, leave.color),
         status: cellState.leaveMeta?.requestStatus || "approved"
       });
     }
@@ -1557,7 +1545,7 @@ function renderCellInner(key, memberId = "", day = 0) {
     return '<div class="cell-inner"></div>';
   }
   return `<div class="cell-inner">${segments.map((segment) => (
-    `<div class="seg ${segment.status === "pending" ? "seg-pending" : ""}" style="background-color:${segment.color};color:${segment.textColor || textColor(segment.color)}" ${
+    `<div class="seg ${segment.status === "pending" ? "seg-pending" : ""}" style="background-color:${segment.color};color:${textColor(segment.color)}" ${
       segment.category === "leave" && shouldPromptLeaveDetail(segment, cellState.leaveMeta)
         ? `data-hover-schedule-detail="${memberId}:${day}:leave"`
         : segment.category === "overtime" && cellState.overtimeMeta
