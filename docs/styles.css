@@ -1554,7 +1554,7 @@ thead th.today,
 
 .member-settings-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px 132px 160px;
+  grid-template-columns: minmax(0, 2fr) 160px 132px 132px 132px;
   gap: 12px;
 }
 

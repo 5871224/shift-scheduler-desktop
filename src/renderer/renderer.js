@@ -193,9 +193,10 @@ let requestReviewFilters = {
 };
 let memberSettingsFilters = {
   name: "",
-  employment: "active",
+  department: "all",
   role: "all",
-  department: "all"
+  employment: "active",
+  salaryType: "all"
 };
 let authErrorMessage = "";
 let authPromptMessage = "";
@@ -2699,21 +2700,26 @@ function openMemberSettings() {
   const sourceMembers = state.members;
   const filteredMembers = sourceMembers.filter((member) => {
     const matchesName = !normalizedName || member.name.toLowerCase().includes(normalizedName);
+    const matchesDepartment = memberSettingsFilters.department === "all"
+      ? true
+      : memberSettingsFilters.department === "__none__"
+        ? !member.deptId
+        : member.deptId === memberSettingsFilters.department;
+    const matchesRole = memberSettingsFilters.role === "all"
+      ? true
+      : member.role === memberSettingsFilters.role;
     const active = isMemberCurrentlyActive(member);
     const matchesEmployment = memberSettingsFilters.employment === "all"
       ? true
       : memberSettingsFilters.employment === "inactive"
         ? !active
         : active;
-    const matchesRole = memberSettingsFilters.role === "all"
+    const matchesSalaryType = memberSettingsFilters.salaryType === "all"
       ? true
-      : member.role === memberSettingsFilters.role;
-    const matchesDepartment = memberSettingsFilters.department === "all"
-      ? true
-      : memberSettingsFilters.department === "__none__"
-        ? !member.deptId
-        : member.deptId === memberSettingsFilters.department;
-    return matchesName && matchesEmployment && matchesRole && matchesDepartment;
+      : memberSettingsFilters.salaryType === "daily"
+        ? Boolean(member.payByDay)
+        : !member.payByDay;
+    return matchesName && matchesDepartment && matchesRole && matchesEmployment && matchesSalaryType;
   });
   const body = `
       <div class="member-settings-filters">
@@ -2722,11 +2728,11 @@ function openMemberSettings() {
           <input id="memberSettingsNameFilter" type="text" value="${escapeHtml(memberSettingsFilters.name)}" placeholder="輸入姓名" data-member-settings-filter-field="name">
         </div>
         <div class="form-row">
-          <label for="memberSettingsEmploymentFilter">狀態</label>
-          <select id="memberSettingsEmploymentFilter" data-member-settings-filter-field="employment">
-            <option value="active" ${memberSettingsFilters.employment === "active" ? "selected" : ""}>在職</option>
-            <option value="inactive" ${memberSettingsFilters.employment === "inactive" ? "selected" : ""}>離職</option>
-            <option value="all" ${memberSettingsFilters.employment === "all" ? "selected" : ""}>全部</option>
+          <label for="memberSettingsDepartmentFilter">單位</label>
+          <select id="memberSettingsDepartmentFilter" data-member-settings-filter-field="department">
+            <option value="all" ${memberSettingsFilters.department === "all" ? "selected" : ""}>全部</option>
+            ${state.departments.map((department) => `<option value="${escapeHtml(department.id)}" ${memberSettingsFilters.department === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("")}
+            <option value="__none__" ${memberSettingsFilters.department === "__none__" ? "selected" : ""}>未指定</option>
           </select>
         </div>
         <div class="form-row">
@@ -2738,11 +2744,19 @@ function openMemberSettings() {
           </select>
         </div>
         <div class="form-row">
-          <label for="memberSettingsDepartmentFilter">單位</label>
-          <select id="memberSettingsDepartmentFilter" data-member-settings-filter-field="department">
-            <option value="all" ${memberSettingsFilters.department === "all" ? "selected" : ""}>全部</option>
-            ${state.departments.map((department) => `<option value="${escapeHtml(department.id)}" ${memberSettingsFilters.department === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("")}
-            <option value="__none__" ${memberSettingsFilters.department === "__none__" ? "selected" : ""}>未指定</option>
+          <label for="memberSettingsEmploymentFilter">狀態</label>
+          <select id="memberSettingsEmploymentFilter" data-member-settings-filter-field="employment">
+            <option value="active" ${memberSettingsFilters.employment === "active" ? "selected" : ""}>在職</option>
+            <option value="inactive" ${memberSettingsFilters.employment === "inactive" ? "selected" : ""}>離職</option>
+            <option value="all" ${memberSettingsFilters.employment === "all" ? "selected" : ""}>全部</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="memberSettingsSalaryTypeFilter">薪資方式</label>
+          <select id="memberSettingsSalaryTypeFilter" data-member-settings-filter-field="salaryType">
+            <option value="all" ${memberSettingsFilters.salaryType === "all" ? "selected" : ""}>全部</option>
+            <option value="monthly" ${memberSettingsFilters.salaryType === "monthly" ? "selected" : ""}>月薪</option>
+            <option value="daily" ${memberSettingsFilters.salaryType === "daily" ? "selected" : ""}>按日計薪</option>
           </select>
         </div>
       </div>
