@@ -379,11 +379,11 @@ npm run web:publish
 - `syncStickyHeaderLayout()`
 - `syncStickyHeaderScroll()`
 
-### 6. 根目錄舊檔不是目前發佈來源
+### 6. 發佈來源只有 `src/renderer/` 與 `docs/`
 
-以下檔案目前不是 GitHub Pages 正式來源：
+目前正式網頁只以這兩處為準：
 
-- `renderer.js`
-- `shift_scheduler.html`
+- `src/renderer/`
+- `docs/`
 
-除非特別要整理歷史檔，否則不要把它們當主檔修改。
+若根目錄再出現單檔 HTML、單檔 JS、portable build 或暫存 log，通常都屬於舊流程殘留，不應作為正式維護對象。
