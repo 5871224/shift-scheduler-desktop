@@ -1027,6 +1027,11 @@ thead th.today,
   flex: 0 0 auto;
 }
 
+.catalog-visibility-toggle {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .modal-body {
   overflow: auto;
   display: flex;
@@ -1591,7 +1596,7 @@ thead th.today,
 }
 
 .settings-table-row-overtime {
-  grid-template-columns: 48px minmax(120px, 1fr) 132px 74px 92px;
+  grid-template-columns: 48px minmax(96px, 1fr) 118px 118px 118px 74px 92px;
 }
 
 .settings-table-head {
@@ -2113,7 +2118,7 @@ thead th.today,
   }
 
   .settings-table-row-overtime {
-    grid-template-columns: 40px minmax(82px, 1fr) 108px 64px 88px;
+    grid-template-columns: 40px minmax(74px, 1fr) 92px 92px 92px 64px 88px;
   }
 
   .settings-table-name {

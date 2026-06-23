@@ -2015,6 +2015,7 @@ function openListSettings(category) {
               ${category === "leave" ? "<div>假別代碼</div>" : ""}
               <div>${category === "shift" ? "班別" : category === "leave" ? "假別" : "加班"}</div>
               <div>${category === "shift" ? "適用單位" : category === "leave" ? "需填時間" : "時段"}</div>
+              ${category === "overtime" ? "<div>休息1</div><div>休息2</div>" : ""}
               ${category === "shift" ? "<div>時段</div>" : ""}
               ${category === "leave" ? "<div>需填原因</div>" : ""}
               <div>不顯示</div>
@@ -2031,6 +2032,10 @@ function openListSettings(category) {
                     ? (item.defaultAllDay ? "是" : "否")
                     : escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)
                 }</div>
+                ${category === "overtime"
+                  ? `<div class="settings-table-meta">${item.useRest1 ? escapeHtml(`${item.rest1StartTime || "--:--"} - ${item.rest1EndTime || "--:--"}`) : "-"}</div>
+                     <div class="settings-table-meta">${item.useRest2 ? escapeHtml(`${item.rest2StartTime || "--:--"} - ${item.rest2EndTime || "--:--"}`) : "-"}</div>`
+                  : ""}
                 ${category === "shift"
                   ? `<div class="settings-table-meta">${escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)}</div>`
                   : ""}
@@ -2158,7 +2163,7 @@ function openShiftFormModal(mode, shiftId = "") {
       </div>
       </div>
       <div class="form-row checkbox-row checkbox-row-left">
-        <label>
+        <label class="catalog-visibility-toggle">
           <input id="shiftHiddenFromToolbar" type="checkbox" ${shift.hiddenFromToolbar ? "checked" : ""}>
           不顯示
         </label>
@@ -2318,7 +2323,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         </div>
       ` : ""}
       <div class="form-row checkbox-row checkbox-row-left">
-        <label>
+        <label class="catalog-visibility-toggle">
           <input id="${category}HiddenFromToolbar" type="checkbox" ${item.hiddenFromToolbar ? "checked" : ""}>
           不顯示
         </label>
