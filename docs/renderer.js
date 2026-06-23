@@ -3310,7 +3310,6 @@ function renderManagerRequestList(kind, records) {
           <option value="pending" ${filter.status === "pending" ? "selected" : ""}>待審核</option>
           <option value="approved" ${filter.status === "approved" ? "selected" : ""}>已核准</option>
           <option value="rejected" ${filter.status === "rejected" ? "selected" : ""}>已退回</option>
-          <option value="cancelled" ${filter.status === "cancelled" ? "selected" : ""}>已取消</option>
         </select>
       </div>
       <div class="request-filter-actions">
