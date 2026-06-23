@@ -186,6 +186,10 @@ let currentMember = null;
 let leaveRequestRecords = [];
 let overtimeRequestRecords = [];
 let requestOverlaySourceLoaded = false;
+let requestReviewFilters = {
+  leave: { memberCode: "", date: "" },
+  overtime: { memberCode: "", date: "" }
+};
 let authErrorMessage = "";
 let authPromptMessage = "";
 let authModalOpen = false;
@@ -1190,15 +1194,41 @@ function scheduleHideLeaveTooltip() {
   }, 120);
 }
 
-function showLeaveTooltip(memberId, day, anchorRect) {
+function formatOvertimeDetailSummary(overtimeMeta) {
+  const lines = [];
+  if (overtimeMeta?.requestStatus) {
+    lines.push(`狀態：${getRequestStatusLabel(overtimeMeta.requestStatus)}`);
+  }
+  lines.push(`時間：${overtimeMeta?.startTime || "--:--"} - ${overtimeMeta?.endTime || "--:--"}`);
+  if (overtimeMeta?.useRest1) {
+    lines.push(`休息1：${overtimeMeta.rest1StartTime || "--:--"} - ${overtimeMeta.rest1EndTime || "--:--"}`);
+  }
+  if (overtimeMeta?.useRest2) {
+    lines.push(`休息2：${overtimeMeta.rest2StartTime || "--:--"} - ${overtimeMeta.rest2EndTime || "--:--"}`);
+  }
+  if (overtimeMeta?.reason) {
+    lines.push(`原因：${overtimeMeta.reason}`);
+  }
+  return lines;
+}
+
+function showScheduleTooltip(memberId, day, category, anchorRect) {
   const slot = getSlot(memberId, day);
-  const leave = getItem("leave", slot?.leave);
-  if (!leave || !shouldPromptLeaveDetail(leave, slot?.leaveMeta)) {
+  const isLeave = category === "leave";
+  const item = getItem(category, slot?.[category]);
+  const meta = isLeave ? slot?.leaveMeta : slot?.overtimeMeta;
+  const requestId = isLeave ? slot?.leaveRequestId : slot?.overtimeRequestId;
+  const shouldShow = isLeave
+    ? item && shouldPromptLeaveDetail(item, meta)
+    : item && meta;
+  if (!shouldShow) {
     hideLeaveTooltip();
     return;
   }
 
-  const lines = formatLeaveDetailSummary(leave, slot?.leaveMeta);
+  const lines = isLeave
+    ? formatLeaveDetailSummary(item, meta)
+    : formatOvertimeDetailSummary(meta);
   if (!lines.length) {
     hideLeaveTooltip();
     return;
@@ -1212,10 +1242,15 @@ function showLeaveTooltip(memberId, day, anchorRect) {
   root.style.top = `${anchorRect.bottom + window.scrollY + 8}px`;
   root.innerHTML = `
     <div class="leave-tooltip-head">
-      <div class="leave-tooltip-title">${escapeHtml(getLeaveLabel(leave))}</div>
-      ${isManager() ? renderActionIconButton("edit", `data-edit-leave-assignment="${memberId}:${day}"`, "leave-tooltip-btn") : ""}
+      <div class="leave-tooltip-title">${escapeHtml(isLeave ? getLeaveLabel(item) : (item?.name || "加班"))}</div>
+      ${isManager()
+        ? (isLeave
+          ? renderActionIconButton("edit", `data-edit-leave-assignment="${memberId}:${day}"`, "leave-tooltip-btn")
+          : renderActionIconButton("edit", `data-edit-overtime-assignment="${memberId}:${day}"`, "leave-tooltip-btn"))
+        : ""}
     </div>
     ${lines.map((line) => `<div class="leave-tooltip-line">${escapeHtml(line)}</div>`).join("")}
+    ${isManager() && requestId ? `<div class="leave-tooltip-actions"><button class="btn-primary tooltip-review-btn" type="button" data-open-request-review="${category}:${requestId}">審核</button></div>` : ""}
   `;
   root.addEventListener("mouseenter", () => {
     if (leaveTooltipTimer) {
@@ -1316,8 +1351,10 @@ function renderCellInner(key, memberId = "", day = 0) {
   return `<div class="cell-inner">${segments.map((segment) => (
     `<div class="seg ${segment.status === "pending" ? "seg-pending" : ""}" style="background-color:${segment.color};color:${textColor(segment.color)}" ${
       segment.category === "leave" && shouldPromptLeaveDetail(segment, cellState.leaveMeta)
-        ? `data-hover-leave-detail="${memberId}:${day}"`
-        : ""
+        ? `data-hover-schedule-detail="${memberId}:${day}:leave"`
+        : segment.category === "overtime" && cellState.overtimeMeta
+          ? `data-hover-schedule-detail="${memberId}:${day}:overtime"`
+          : ""
     }>${escapeHtml(segment.name)}</div>`
   )).join("")}</div>`;
 }
@@ -2796,10 +2833,33 @@ function renderEmployeeRequestList(kind, records) {
 }
 
 function renderManagerRequestList(kind, records) {
+  const filter = requestReviewFilters[kind] || { memberCode: "", date: "" };
+  const filteredRecords = records.filter((record) => {
+    const memberKeyword = String(filter.memberCode || "").trim();
+    const memberMatch = !memberKeyword || `${record.memberCode || ""} ${record.memberName || ""}`.includes(memberKeyword);
+    const dateValue = kind === "leave" ? record.startDate : record.workDate;
+    const dateMatch = !filter.date || dateValue === filter.date;
+    return memberMatch && dateMatch;
+  });
   if (!records.length) {
     return '<div class="empty-state">目前沒有可審核資料</div>';
   }
-  return records.map((record) => `
+  return `
+    <div class="request-filter-bar">
+      <div class="form-row">
+        <label for="${kind}ReviewFilterMember">申請人</label>
+        <input id="${kind}ReviewFilterMember" type="text" value="${escapeHtml(filter.memberCode)}" placeholder="輸入工號或姓名" data-request-filter-kind="${kind}" data-request-filter-field="memberCode">
+      </div>
+      <div class="form-row">
+        <label for="${kind}ReviewFilterDate">日期</label>
+        <input id="${kind}ReviewFilterDate" type="date" value="${escapeHtml(filter.date)}" data-request-filter-kind="${kind}" data-request-filter-field="date">
+      </div>
+      <div class="request-filter-actions">
+        <button class="ghost-btn compact-btn" type="button" data-clear-request-filters="${kind}">清除</button>
+      </div>
+    </div>
+    <div class="request-list-wrap">
+      ${filteredRecords.length ? filteredRecords.map((record) => `
     <div class="request-item">
       <div class="request-head">
         <div class="request-title">${escapeHtml(record.memberCode || "-")} · ${escapeHtml(record.memberName || "-")}</div>
@@ -2820,7 +2880,9 @@ function renderManagerRequestList(kind, records) {
         <button class="btn-primary" type="button" data-save-request-review="${kind}:${record.id}">儲存審核</button>
       </div>
     </div>
-  `).join("");
+  `).join("") : '<div class="empty-state">沒有符合篩選條件的資料</div>'}
+    </div>
+  `;
 }
 
 function syncLeaveRequestFormUi() {
@@ -3155,6 +3217,24 @@ async function openOvertimeApprovalModal() {
     modalClass: "modal modal-wide",
     body: renderManagerRequestList("overtime", overtimeRequestRecords)
   });
+}
+
+async function openRequestReviewFromTooltip(kind, requestId) {
+  if (!promptManagerAccess("審核申請前請先登入主管帳號")) {
+    return;
+  }
+  await refreshRequestData();
+  const records = kind === "leave" ? leaveRequestRecords : overtimeRequestRecords;
+  const record = records.find((item) => item.id === requestId);
+  requestReviewFilters[kind] = {
+    memberCode: record?.memberCode || "",
+    date: kind === "leave" ? (record?.startDate || "") : (record?.workDate || "")
+  };
+  if (kind === "leave") {
+    await openLeaveApprovalModal();
+  } else {
+    await openOvertimeApprovalModal();
+  }
 }
 
 function clearScheduleLeaveByRequestId(requestId) {
@@ -3583,6 +3663,27 @@ function bindEvents() {
       }
       return;
     }
+    if (target.dataset.editOvertimeAssignment) {
+      const [memberId, day] = target.dataset.editOvertimeAssignment.split(":");
+      hideLeaveTooltip();
+      openOvertimeAssignmentModal(memberId, Number(day));
+      return;
+    }
+    if (target.dataset.openRequestReview) {
+      const [kind, requestId] = target.dataset.openRequestReview.split(":");
+      hideLeaveTooltip();
+      await openRequestReviewFromTooltip(kind, requestId);
+      return;
+    }
+    if (target.dataset.clearRequestFilters) {
+      requestReviewFilters[target.dataset.clearRequestFilters] = { memberCode: "", date: "" };
+      if (target.dataset.clearRequestFilters === "leave") {
+        await openLeaveApprovalModal();
+      } else {
+        await openOvertimeApprovalModal();
+      }
+      return;
+    }
     if (target.dataset.openAdd === "shift") openShiftFormModal("add");
     if (target.dataset.openAdd === "leave") openNamedColorFormModal("leave", "add");
     if (target.dataset.openAdd === "overtime") openNamedColorFormModal("overtime", "add");
@@ -3693,28 +3794,46 @@ function bindEvents() {
   });
 
   document.body.addEventListener("mouseover", (event) => {
-    const target = event.target.closest("[data-hover-leave-detail]");
+    const target = event.target.closest("[data-hover-schedule-detail]");
     if (!target) {
       return;
     }
-    const [memberId, day] = target.dataset.hoverLeaveDetail.split(":");
+    const [memberId, day, category] = target.dataset.hoverScheduleDetail.split(":");
     if (leaveTooltipTimer) {
       clearTimeout(leaveTooltipTimer);
       leaveTooltipTimer = null;
     }
-    showLeaveTooltip(memberId, Number(day), target.getBoundingClientRect());
+    showScheduleTooltip(memberId, Number(day), category, target.getBoundingClientRect());
   });
 
   document.body.addEventListener("mouseout", (event) => {
-    const target = event.target.closest("[data-hover-leave-detail]");
+    const target = event.target.closest("[data-hover-schedule-detail]");
     if (!target) {
       return;
     }
     const related = event.relatedTarget;
-    if (related instanceof HTMLElement && (related.closest("[data-hover-leave-detail]") || related.closest("#leaveTooltipRoot"))) {
+    if (related instanceof HTMLElement && (related.closest("[data-hover-schedule-detail]") || related.closest("#leaveTooltipRoot"))) {
       return;
     }
     scheduleHideLeaveTooltip();
+  });
+
+  document.body.addEventListener("change", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.dataset.requestFilterKind) {
+      return;
+    }
+    const kind = target.dataset.requestFilterKind;
+    const field = target.dataset.requestFilterField;
+    requestReviewFilters[kind] = {
+      ...(requestReviewFilters[kind] || { memberCode: "", date: "" }),
+      [field]: target.value || ""
+    };
+    if (kind === "leave") {
+      await openLeaveApprovalModal();
+    } else {
+      await openOvertimeApprovalModal();
+    }
   });
 
   document.body.addEventListener("dragstart", (event) => {

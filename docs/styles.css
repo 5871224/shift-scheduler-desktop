@@ -1320,6 +1320,41 @@ thead th.today,
   height: 28px;
 }
 
+.leave-tooltip-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tooltip-review-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.request-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 180px) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.request-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 2px;
+}
+
+.request-list-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(60vh, 620px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .dept-block {
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -1918,6 +1953,15 @@ thead th.today,
 @media (max-width: 640px) {
   .toolbar-grid {
     grid-template-columns: 1fr;
+  }
+
+  .request-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .request-filter-actions {
+    justify-content: flex-start;
+    padding-bottom: 0;
   }
 
   .app-shell {
