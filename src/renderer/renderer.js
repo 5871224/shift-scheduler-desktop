@@ -173,6 +173,8 @@ const REQUEST_STATUS_LABELS = {
 
 let state = createDefaultState();
 let modalColor = COLORS[0].hex;
+let modalTextColor = "#ffffff";
+let modalTextColorAuto = true;
 let modalContext = {};
 let saveTimer = null;
 let isSaving = false;
@@ -626,6 +628,13 @@ function textColor(hex) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#2b241c" : "#ffffff";
 }
 
+function autoLeaveTextColor(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#000000" : "#ffffff";
+}
+
 function sanitizeDepartment(department, fallbackIndex) {
   return {
     id: department?.id || uid(`d${fallbackIndex}`),
@@ -709,11 +718,15 @@ function resolveLeaveCatalogEntry(item, fallbackIndex) {
 
 function sanitizeLeaveItem(item, fallbackIndex) {
   const catalogEntry = resolveLeaveCatalogEntry(item, fallbackIndex);
+  const color = item?.color || COLORS[fallbackIndex % COLORS.length].hex;
+  const autoText = item?.autoTextColor ?? !item?.textColor;
   return {
     id: item?.id || uid(`l${fallbackIndex}`),
     code: catalogEntry.code,
-    name: catalogEntry.name,
-    color: item?.color || COLORS[fallbackIndex % COLORS.length].hex,
+    name: item?.name || catalogEntry.name,
+    color,
+    textColor: item?.textColor || autoLeaveTextColor(color),
+    autoTextColor: Boolean(autoText),
     hiddenFromToolbar: Boolean(item?.hiddenFromToolbar),
     defaultAllDay: Boolean(item?.defaultAllDay),
     requireReason: Boolean(item?.requireReason)
@@ -2166,6 +2179,30 @@ function syncColorPickerUi() {
   });
 }
 
+function syncLeaveColorUi() {
+  const preview = document.querySelector("[data-leave-preview]");
+  const previewText = document.querySelector("[data-leave-preview-text]");
+  const bgInput = document.querySelector('[data-leave-color-input="bg"]');
+  const textInput = document.querySelector('[data-leave-color-input="text"]');
+  if (modalTextColorAuto) {
+    modalTextColor = autoLeaveTextColor(modalColor);
+  }
+  const displayName = document.getElementById("leaveCatalogName")?.value.trim() || "名稱";
+  if (preview) {
+    preview.style.background = modalColor;
+    preview.style.color = modalTextColor;
+  }
+  if (previewText) {
+    previewText.textContent = displayName;
+  }
+  if (bgInput) {
+    bgInput.value = modalColor;
+  }
+  if (textInput) {
+    textInput.value = modalTextColor;
+  }
+}
+
 function openShiftFormModal(mode, shiftId = "") {
   const shift = mode === "edit"
     ? state.shifts.find((item) => item.id === shiftId)
@@ -2285,6 +2322,10 @@ function openNamedColorFormModal(category, mode, targetId = "") {
     return;
   }
   modalColor = item.color;
+  modalTextColorAuto = category === "leave" ? (item.autoTextColor ?? !item.textColor) : true;
+  modalTextColor = category === "leave"
+    ? (item.textColor || autoLeaveTextColor(item.color))
+    : "#ffffff";
   modalContext = { category, mode, targetId };
   const titleMap = {
     shift: "班別",
@@ -2297,10 +2338,28 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         ? "modal modal-wide modal-form-compact"
         : "modal modal-wide",
       body: `
-      <div class="form-row form-row-compact">
-        ${category === "leave" ? "<label>顏色</label>" : ""}
-        ${renderCompactColorPicker(item.color)}
-      </div>
+      ${category === "leave" ? `
+        <div class="form-row form-row-compact leave-preview-row">
+          <label>預覽</label>
+          <div class="leave-preview-wrap">
+            <div class="leave-preview" data-leave-preview style="background:${escapeHtml(modalColor)};color:${escapeHtml(modalTextColor)}">
+              <span data-leave-preview-text>${escapeHtml(item.name || "名稱")}</span>
+            </div>
+            <div class="leave-color-actions">
+              <button class="ghost-btn leave-color-btn" type="button" data-open-leave-color="bg">底色</button>
+              <input class="hidden-color-input leave-color-input" type="color" value="${escapeHtml(modalColor)}" data-leave-color-input="bg">
+              <button class="ghost-btn leave-color-btn" type="button" data-open-leave-color="text">字色</button>
+              <input class="hidden-color-input leave-color-input" type="color" value="${escapeHtml(modalTextColor)}" data-leave-color-input="text">
+              <button class="ghost-btn leave-color-btn" type="button" data-set-auto-leave-text="true">自動</button>
+            </div>
+          </div>
+        </div>
+      ` : `
+        <div class="form-row form-row-compact">
+          ${category === "leave" ? "<label>顏色</label>" : ""}
+          ${renderCompactColorPicker(item.color)}
+        </div>
+      `}
       <div class="form-row">
         <label for="${category === "leave" ? "leaveCatalogCode" : "namedItemName"}">${category === "leave" ? "假別" : "名稱"}</label>
         ${category === "leave"
@@ -2309,6 +2368,10 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         }
       </div>
       ${category === "leave" ? `
+        <div class="form-row">
+          <label for="leaveCatalogName">名稱</label>
+          <input id="leaveCatalogName" type="text" maxlength="20" placeholder="請輸入名稱" value="${escapeHtml(item.name || LEAVE_CATALOG.find((entry) => entry.code === item.code)?.name || "")}">
+        </div>
         <div class="form-section">
           <div class="form-row checkbox-row checkbox-row-left">
             <label class="leave-toggle-label">
@@ -2387,6 +2450,9 @@ function openNamedColorFormModal(category, mode, targetId = "") {
   if (category === "overtime") {
     syncOvertimeFormUi();
   }
+  if (category === "leave") {
+    syncLeaveColorUi();
+  }
 }
 
 function saveNamedColorItem(category, mode) {
@@ -2398,10 +2464,10 @@ function saveNamedColorItem(category, mode) {
     ? LEAVE_CATALOG.find((entry) => entry.code === (document.getElementById("leaveCatalogCode")?.value || ""))
     : null;
   const name = category === "leave"
-    ? (selectedLeave?.name || "")
+    ? (document.getElementById("leaveCatalogName")?.value.trim() || "")
     : (document.getElementById("namedItemName")?.value.trim() || "");
   if (!name) {
-    document.getElementById(category === "leave" ? "leaveCatalogCode" : "namedItemName")?.focus();
+    document.getElementById(category === "leave" ? "leaveCatalogName" : "namedItemName")?.focus();
     return;
   }
   if (category === "overtime") {
@@ -2435,6 +2501,8 @@ function saveNamedColorItem(category, mode) {
     code: category === "leave" ? selectedLeave?.code : undefined,
     name,
     color: modalColor,
+    textColor: category === "leave" ? modalTextColor : undefined,
+    autoTextColor: category === "leave" ? modalTextColorAuto : undefined,
     defaultAllDay: category === "leave" ? document.getElementById("leaveDefaultAllDay")?.checked : undefined,
     requireReason: category === "leave" ? document.getElementById("leaveRequireReason")?.checked : undefined,
     hiddenFromToolbar: Boolean(document.getElementById(`${category}HiddenFromToolbar`)?.checked),
@@ -4031,6 +4099,16 @@ function bindEvents() {
       selectChip(target.dataset.chipType, target.dataset.chipId || null);
       return;
     }
+    if (target.dataset.openLeaveColor) {
+      target.parentElement?.querySelector(`[data-leave-color-input="${target.dataset.openLeaveColor}"]`)?.click();
+      return;
+    }
+    if (target.dataset.setAutoLeaveText !== undefined) {
+      modalTextColorAuto = true;
+      modalTextColor = autoLeaveTextColor(modalColor);
+      syncLeaveColorUi();
+      return;
+    }
     if (target.dataset.openNativeColor) {
       target.parentElement?.querySelector(".native-color-input")?.click();
       return;
@@ -4149,6 +4227,24 @@ function bindEvents() {
     if (target.dataset.memberSettingsFilterField === "name") {
       memberSettingsFilters.name = target.value || "";
       openMemberSettings();
+      return;
+    }
+    if (target.id === "leaveCatalogName") {
+      syncLeaveColorUi();
+      return;
+    }
+    if (target.dataset.leaveColorInput === "bg") {
+      modalColor = target.value;
+      if (modalTextColorAuto) {
+        modalTextColor = autoLeaveTextColor(modalColor);
+      }
+      syncLeaveColorUi();
+      return;
+    }
+    if (target.dataset.leaveColorInput === "text") {
+      modalTextColor = target.value;
+      modalTextColorAuto = false;
+      syncLeaveColorUi();
       return;
     }
     if (target.dataset.nativeColor) {
