@@ -672,6 +672,7 @@ function sanitizeShift(shift, fallbackIndex, merged) {
       color: shift?.color || COLORS[fallbackIndex % COLORS.length].hex,
       startTime: shift?.startTime || "",
       endTime: shift?.endTime || "",
+      hiddenFromToolbar: Boolean(shift?.hiddenFromToolbar),
       applicableDeptIds: applicableDeptId ? [applicableDeptId] : [],
       positionRequirements: Array.isArray(shift?.positionRequirements)
         ? shift.positionRequirements
@@ -709,6 +710,7 @@ function sanitizeLeaveItem(item, fallbackIndex) {
     code: catalogEntry.code,
     name: catalogEntry.name,
     color: item?.color || COLORS[fallbackIndex % COLORS.length].hex,
+    hiddenFromToolbar: Boolean(item?.hiddenFromToolbar),
     defaultAllDay: Boolean(item?.defaultAllDay),
     requireReason: Boolean(item?.requireReason)
   };
@@ -719,6 +721,7 @@ function sanitizeOvertimeItem(item, fallbackIndex) {
       id: item?.id || uid(`o${fallbackIndex}`),
       name: "加班",
       color: item?.color || COLORS[fallbackIndex % COLORS.length].hex,
+      hiddenFromToolbar: Boolean(item?.hiddenFromToolbar),
       startTime: item?.startTime || "",
       endTime: item?.endTime || "",
       useRest1: Boolean(item?.useRest1),
@@ -1396,9 +1399,9 @@ function renderToolbar() {
   const visibleShifts = state.deptFilter === "all"
     ? state.shifts
     : state.shifts.filter((shift) => shiftAllowsDepartment(shift, state.deptFilter));
-  renderChips("shiftChips", "shift", visibleShifts);
-  renderChips("leaveChips", "leave", state.leaves);
-  renderChips("overtimeChips", "overtime", state.overtime);
+  renderChips("shiftChips", "shift", visibleShifts.filter((item) => !item.hiddenFromToolbar));
+  renderChips("leaveChips", "leave", state.leaves.filter((item) => !item.hiddenFromToolbar));
+  renderChips("overtimeChips", "overtime", state.overtime.filter((item) => !item.hiddenFromToolbar));
   syncRoleUi();
 }
 
@@ -2003,18 +2006,18 @@ function openListSettings(category) {
     overtime: "加班設定"
   };
   const list = getItemList(category);
-  const body = (category === "shift" || category === "leave")
-    ? (list.length
+  const body = list.length
       ? `
         <div class="settings-table-wrap">
           <div class="settings-table">
             <div class="settings-table-row settings-table-head settings-table-row-${category}">
               <div>顏色</div>
               ${category === "leave" ? "<div>假別代碼</div>" : ""}
-              <div>${category === "shift" ? "班別" : "假別"}</div>
-              <div>${category === "shift" ? "適用單位" : "需填時間"}</div>
+              <div>${category === "shift" ? "班別" : category === "leave" ? "假別" : "加班"}</div>
+              <div>${category === "shift" ? "適用單位" : category === "leave" ? "需填時間" : "時段"}</div>
               ${category === "shift" ? "<div>時段</div>" : ""}
               ${category === "leave" ? "<div>需填原因</div>" : ""}
+              <div>不顯示</div>
               <div class="settings-table-actions-head">操作</div>
             </div>
             ${list.map((item) => `
@@ -2024,7 +2027,9 @@ function openListSettings(category) {
                 <div class="settings-table-name">${escapeHtml(item.name)}</div>
                 <div class="settings-table-meta">${category === "shift"
                   ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
-                  : item.defaultAllDay ? "是" : "否"
+                  : category === "leave"
+                    ? (item.defaultAllDay ? "是" : "否")
+                    : escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)
                 }</div>
                 ${category === "shift"
                   ? `<div class="settings-table-meta">${escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)}</div>`
@@ -2032,6 +2037,7 @@ function openListSettings(category) {
                 ${category === "leave"
                   ? `<div class="settings-table-meta">${item.requireReason ? "是" : "否"}</div>`
                   : ""}
+                <div class="settings-table-meta">${item.hiddenFromToolbar ? "是" : "否"}</div>
                 <div class="settings-table-actions">
                   ${renderActionIconButton("edit", `data-edit-item="${category}" data-edit-id="${item.id}"`)}
                   ${renderActionIconButton("delete", `data-delete-category="${category}" data-delete-id="${item.id}"`)}
@@ -2041,28 +2047,11 @@ function openListSettings(category) {
           </div>
         </div>
       `
-      : '<div class="empty-state">目前還沒有資料</div>')
-    : (list.length
-      ? list.map((item) => `
-        <div class="settings-item list-item-wide">
-          <div class="list-item-main">
-            <div class="dot" style="background:${item.color}"></div>
-            <div class="settings-text-row">
-              <span class="list-item-title">${escapeHtml(item.name)}</span>
-              <span class="list-item-subtitle">時段 ${escapeHtml(item.startTime || "--:--")} - ${escapeHtml(item.endTime || "--:--")}</span>
-            </div>
-          </div>
-          <div class="list-item-actions">
-            ${renderActionIconButton("edit", `data-edit-item="${category}" data-edit-id="${item.id}"`)}
-            ${renderActionIconButton("delete", `data-delete-category="${category}" data-delete-id="${item.id}"`)}
-          </div>
-        </div>
-      `).join("")
-      : '<div class="empty-state">目前還沒有資料</div>');
+      : '<div class="empty-state">目前還沒有資料</div>';
 
   openEntityListModal({
     title: titleMap[category],
-    modalClass: category === "shift" || category === "leave"
+    modalClass: category === "shift" || category === "leave" || category === "overtime"
       ? "modal modal-wide catalog-settings-modal"
       : undefined,
     body,
@@ -2129,6 +2118,7 @@ function openShiftFormModal(mode, shiftId = "") {
       color: COLORS[0].hex,
       startTime: "",
       endTime: "",
+      hiddenFromToolbar: false,
       applicableDeptIds: [state.deptFilter !== "all" ? state.deptFilter : (state.departments[0]?.id || "")].filter(Boolean),
       positionRequirements: []
     };
@@ -2167,6 +2157,12 @@ function openShiftFormModal(mode, shiftId = "") {
         </div>
       </div>
       </div>
+      <div class="form-row checkbox-row checkbox-row-left">
+        <label>
+          <input id="shiftHiddenFromToolbar" type="checkbox" ${shift.hiddenFromToolbar ? "checked" : ""}>
+          不顯示
+        </label>
+      </div>
     `,
     headerButtons: `<button class="btn-primary" type="button" data-save-shift="${mode}">${mode === "edit" ? "儲存修改" : "新增班別"}</button>`,
     hideFooterClose: true
@@ -2191,6 +2187,7 @@ function saveShiftFromModal(mode) {
     color: modalColor,
     startTime,
     endTime,
+    hiddenFromToolbar: Boolean(document.getElementById("shiftHiddenFromToolbar")?.checked),
     applicableDeptIds: readApplicableDepartmentInput(),
     positionRequirements: []
   };
@@ -2217,6 +2214,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
       color: COLORS[0].hex,
       defaultAllDay: false,
       requireReason: false,
+      hiddenFromToolbar: false,
       startTime: "",
       endTime: "",
       useRest1: false,
@@ -2319,6 +2317,12 @@ function openNamedColorFormModal(category, mode, targetId = "") {
           </div>
         </div>
       ` : ""}
+      <div class="form-row checkbox-row checkbox-row-left">
+        <label>
+          <input id="${category}HiddenFromToolbar" type="checkbox" ${item.hiddenFromToolbar ? "checked" : ""}>
+          不顯示
+        </label>
+      </div>
     `,
     headerButtons: `<button class="btn-primary" type="button" data-save-named-item="${category}:${mode}">${mode === "edit" ? "儲存修改" : "新增"}</button>`,
     hideFooterClose: true
@@ -2376,6 +2380,7 @@ function saveNamedColorItem(category, mode) {
     color: modalColor,
     defaultAllDay: category === "leave" ? document.getElementById("leaveDefaultAllDay")?.checked : undefined,
     requireReason: category === "leave" ? document.getElementById("leaveRequireReason")?.checked : undefined,
+    hiddenFromToolbar: Boolean(document.getElementById(`${category}HiddenFromToolbar`)?.checked),
     startTime: category === "overtime" ? readTimeInputValue("overtimeStartTime") : undefined,
     endTime: category === "overtime" ? readTimeInputValue("overtimeEndTime") : undefined,
     useRest1: category === "overtime" ? Boolean(document.getElementById("overtimeUseRest1")?.checked) : undefined,
