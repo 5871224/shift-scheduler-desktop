@@ -2694,30 +2694,9 @@ function buildSelectOptions(items, valueField, labelBuilder, selectedValue, incl
   return entries.join("");
 }
 
-function getMemberSettingsSourceMembers() {
-  const members = [...state.members];
-  const profileCode = String(currentProfile?.employee_code || "").trim();
-  if (profileCode && !members.some((member) => member.code === profileCode)) {
-    members.unshift({
-      id: `profile:${profileCode}`,
-      code: profileCode,
-      name: currentProfile?.full_name || getCurrentProfileName() || profileCode,
-      deptId: "",
-      positionId: "",
-      proxyMemberId: "",
-      hireDate: "",
-      leaveDate: "",
-      payByDay: false,
-      role: currentProfile?.role === "manager" ? "manager" : "employee",
-      readonlyProfile: true
-    });
-  }
-  return members;
-}
-
 function openMemberSettings() {
   const normalizedName = memberSettingsFilters.name.trim().toLowerCase();
-  const sourceMembers = getMemberSettingsSourceMembers();
+  const sourceMembers = state.members;
   const filteredMembers = sourceMembers.filter((member) => {
     const matchesName = !normalizedName || member.name.toLowerCase().includes(normalizedName);
     const active = isMemberCurrentlyActive(member);
@@ -2789,13 +2768,10 @@ function openMemberSettings() {
               <div>${member.role === "manager" ? "主管" : "員工"}</div>
               <div>${escapeHtml(member.hireDate || "-")}</div>
               <div>${escapeHtml(member.leaveDate || "-")}</div>
-              <div>${member.readonlyProfile ? "-" : getSalaryTypeLabel(member)}</div>
+              <div>${getSalaryTypeLabel(member)}</div>
               <div class="member-table-actions">
-                ${member.readonlyProfile
-                  ? ""
-                  : `${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
-                ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}`
-                }
+                ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
+                ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
               </div>
             </div>
           `).join("")}
