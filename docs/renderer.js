@@ -463,6 +463,17 @@ function showInfoMessage(message) {
   window.alert(message);
 }
 
+function formatSchedulerError(error, fallback = "操作失敗") {
+  const message = String(error?.message || error || "").trim();
+  if (
+    message.includes("Could not find the 'end_time' column of 'overtime_requests'") ||
+    message.includes("Could not find the 'start_time' column of 'overtime_requests'")
+  ) {
+    return "加班資料庫尚未套用新版欄位，請先執行 supabase/008_overtime_request_details.sql。";
+  }
+  return message || fallback;
+}
+
 async function confirmAction(message) {
   if (window.schedulerApi?.confirmAction) {
     return window.schedulerApi.confirmAction("確認", message);
@@ -3089,7 +3100,7 @@ async function saveOvertimeRequestFromModal() {
       reason: document.getElementById("overtimeRequestReason")?.value.trim() || ""
     });
   } catch (error) {
-    showInfoMessage(`加班申請送出失敗：${error.message}`);
+    showInfoMessage(`加班申請送出失敗：${formatSchedulerError(error, "送出失敗")}`);
     return;
   }
   await refreshRequestData();
