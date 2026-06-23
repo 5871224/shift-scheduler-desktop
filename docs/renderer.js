@@ -86,8 +86,8 @@ const DEFAULT_STATE = {
   deptFilter: "all",
   tableDeptScopeFilter: "all",
   departments: [
-    { id: "d1", name: "門市" },
-    { id: "d2", name: "行政" }
+    { id: "d1", name: "門市", startDate: "", endDate: "" },
+    { id: "d2", name: "行政", startDate: "", endDate: "" }
   ],
   positions: [
     { id: "p1", code: "MGR", name: "主管" },
@@ -574,6 +574,26 @@ function isMemberActiveOnDate(member, year, month, day) {
   return true;
 }
 
+function doesDateRangeOverlapMonth(startDate, endDate, year, month) {
+  const monthStart = toDateString(year, month, 1);
+  const monthEnd = toDateString(year, month, daysInMonth(year, month));
+  if (startDate && startDate > monthEnd) {
+    return false;
+  }
+  if (endDate && endDate < monthStart) {
+    return false;
+  }
+  return true;
+}
+
+function isDepartmentActiveInMonth(department, year, month) {
+  return doesDateRangeOverlapMonth(department?.startDate || "", department?.endDate || "", year, month);
+}
+
+function isMemberActiveInMonth(member, year, month) {
+  return doesDateRangeOverlapMonth(member?.hireDate || "", member?.leaveDate || "", year, month);
+}
+
 function textColor(hex) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -584,7 +604,9 @@ function textColor(hex) {
 function sanitizeDepartment(department, fallbackIndex) {
   return {
     id: department?.id || uid(`d${fallbackIndex}`),
-    name: department?.name || `單位 ${fallbackIndex + 1}`
+    name: department?.name || `單位 ${fallbackIndex + 1}`,
+    startDate: department?.startDate || "",
+    endDate: department?.endDate || ""
   };
 }
 
@@ -1302,9 +1324,13 @@ function setModal(content) {
 
 function renderDeptFilter() {
   const select = document.getElementById("deptFilter");
+  const departments = state.departments.filter((department) => isDepartmentActiveInMonth(department, state.year, state.month));
+  if (state.deptFilter !== "all" && !departments.some((department) => department.id === state.deptFilter)) {
+    state.deptFilter = "all";
+  }
   select.innerHTML = `
     <option value="all">全部單位</option>
-    ${state.departments.map((department) => (
+    ${departments.map((department) => (
       `<option value="${department.id}" ${state.deptFilter === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`
     )).join("")}
   `;
@@ -1315,9 +1341,13 @@ function renderTableDeptScopeFilter() {
   if (!select) {
     return;
   }
+  const departments = state.departments.filter((department) => isDepartmentActiveInMonth(department, state.year, state.month));
+  if (state.tableDeptScopeFilter !== "all" && !departments.some((department) => department.id === state.tableDeptScopeFilter)) {
+    state.tableDeptScopeFilter = "all";
+  }
   select.innerHTML = `
     <option value="all">全部顯示</option>
-    ${state.departments.map((department) => (
+    ${departments.map((department) => (
       `<option value="${department.id}" ${state.tableDeptScopeFilter === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`
     )).join("")}
   `;
@@ -1369,10 +1399,14 @@ function memberHasScheduledShiftInDepartment(member, departmentId) {
 
 function getVisibleTableGroups() {
   return state.departments
+    .filter((department) => isDepartmentActiveInMonth(department, state.year, state.month))
     .map((department) => ({
       department,
       members: state.members.filter((member) => {
         if (member.deptId !== department.id) {
+          return false;
+        }
+        if (!isMemberActiveInMonth(member, state.year, state.month)) {
           return false;
         }
         if (state.tableDeptScopeFilter === "all") {
@@ -1614,13 +1648,18 @@ function removeAssignmentsByItem(category, id) {
 
 function openEntityListModal(config) {
   const headerButtons = config.headerButtons || "";
+  const headerActionBlock = headerButtons
+    ? `<div class="modal-header-actions">${headerButtons}</div>`
+    : '<div class="modal-header-actions"></div>';
   const closeButton = `
-    <button class="settings-icon-btn modal-close-btn" type="button" data-close-button="true" aria-label="關閉" title="關閉">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 6l12 12"></path>
-        <path d="M18 6l-12 12"></path>
-      </svg>
-    </button>
+    <div class="modal-header-close">
+      <button class="settings-icon-btn modal-close-btn" type="button" data-close-button="true" aria-label="關閉" title="關閉">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6l12 12"></path>
+          <path d="M18 6l-12 12"></path>
+        </svg>
+      </button>
+    </div>
   `;
   const showFooter = !config.hideFooterClose || config.footerButtons;
   setModal(`
@@ -1628,8 +1667,8 @@ function openEntityListModal(config) {
       <div class="${config.modalClass || "modal modal-wide"}">
         <div class="modal-header">
           <h3>${escapeHtml(config.title)}</h3>
-          <div class="modal-header-actions">
-            ${headerButtons}
+          <div class="modal-header-tools">
+            ${headerActionBlock}
             ${closeButton}
           </div>
         </div>
@@ -2106,7 +2145,8 @@ function openShiftFormModal(mode, shiftId = "") {
       </div>
       </div>
     `,
-    footerButtons: `<button class="btn-primary" type="button" data-save-shift="${mode}">${mode === "edit" ? "儲存修改" : "新增班別"}</button>`
+    headerButtons: `<button class="btn-primary" type="button" data-save-shift="${mode}">${mode === "edit" ? "儲存修改" : "新增班別"}</button>`,
+    hideFooterClose: true
   });
 }
 
@@ -2257,7 +2297,8 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         </div>
       ` : ""}
     `,
-    footerButtons: `<button class="btn-primary" type="button" data-save-named-item="${category}:${mode}">${mode === "edit" ? "儲存修改" : "新增"}</button>`
+    headerButtons: `<button class="btn-primary" type="button" data-save-named-item="${category}:${mode}">${mode === "edit" ? "儲存修改" : "新增"}</button>`,
+    hideFooterClose: true
   });
   if (category === "overtime") {
     syncOvertimeFormUi();
@@ -2405,7 +2446,7 @@ function openDepartmentSettings() {
 function openDepartmentForm(mode, departmentId = "") {
   const department = mode === "edit"
     ? state.departments.find((item) => item.id === departmentId)
-    : { id: "", name: "" };
+    : { id: "", name: "", startDate: "", endDate: "" };
   if (!department) {
     return;
   }
@@ -2418,21 +2459,39 @@ function openDepartmentForm(mode, departmentId = "") {
         <label for="departmentName">單位名稱</label>
         <input id="departmentName" type="text" maxlength="12" value="${escapeHtml(department.name)}" placeholder="請輸入單位名稱">
       </div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="departmentStartDate">開始日期</label>
+          <input id="departmentStartDate" type="date" value="${escapeHtml(department.startDate || "")}">
+        </div>
+        <div class="form-row">
+          <label for="departmentEndDate">結束日期</label>
+          <input id="departmentEndDate" type="date" value="${escapeHtml(department.endDate || "")}">
+        </div>
+      </div>
     `,
-    footerButtons: `<button class="btn-primary" type="button" data-save-department="${mode}">${mode === "edit" ? "儲存修改" : "新增單位"}</button>`
+    headerButtons: `<button class="btn-primary" type="button" data-save-department="${mode}">${mode === "edit" ? "儲存修改" : "新增單位"}</button>`,
+    hideFooterClose: true
   });
 }
 
 function saveDepartment(mode) {
   const name = document.getElementById("departmentName")?.value.trim();
+  const startDate = document.getElementById("departmentStartDate")?.value || "";
+  const endDate = document.getElementById("departmentEndDate")?.value || "";
   if (!name) {
     document.getElementById("departmentName")?.focus();
     return;
   }
+  if (startDate && endDate && !isValidDateRange(startDate, endDate)) {
+    reportValidationError("開始日期必須早於結束日期");
+    return;
+  }
+  const payload = { id: mode === "edit" ? modalContext.targetId : uid("d"), name, startDate, endDate };
   if (mode === "edit") {
-    state.departments = state.departments.map((department) => department.id === modalContext.targetId ? { ...department, name } : department);
+    state.departments = state.departments.map((department) => department.id === modalContext.targetId ? payload : department);
   } else {
-    state.departments.push({ id: uid("d"), name });
+    state.departments.push(payload);
   }
   closeModal();
   renderAll();
@@ -2685,7 +2744,8 @@ function openMemberForm(mode, memberId = "") {
         ` : ""}
       </div>
     `,
-    footerButtons: `<button class="btn-primary" type="button" data-save-member="${mode}">${mode === "edit" ? "儲存修改" : "新增人員"}</button>`
+    headerButtons: `<button class="btn-primary" type="button" data-save-member="${mode}">${mode === "edit" ? "儲存修改" : "新增人員"}</button>`,
+    hideFooterClose: true
   });
 }
 
