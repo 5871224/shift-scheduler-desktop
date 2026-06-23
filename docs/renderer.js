@@ -2953,18 +2953,56 @@ function getCompactManagerRequestMetaLines(record, kind) {
 }
 
 function renderEmployeeRequestList(kind, records) {
+  const sortedRecords = [...records].sort((left, right) => {
+    const leftDate = kind === "leave"
+      ? `${left.endDate || left.startDate || ""}|${left.startDate || ""}|${left.createdAt || ""}`
+      : `${left.workDate || ""}|${left.createdAt || ""}`;
+    const rightDate = kind === "leave"
+      ? `${right.endDate || right.startDate || ""}|${right.startDate || ""}|${right.createdAt || ""}`
+      : `${right.workDate || ""}|${right.createdAt || ""}`;
+    return rightDate.localeCompare(leftDate);
+  });
   if (!records.length) {
     return '<div class="empty-state">目前還沒有申請資料</div>';
   }
-  return records.map((record) => `
-    <div class="request-item">
-      <div class="request-head">
-        <div class="request-title">${escapeHtml(kind === "leave" ? `${record.leaveCode} ${record.leaveName}`.trim() : "加班")}</div>
+  return sortedRecords.map((record) => `
+    <div class="request-item request-item-compact">
+      <div class="request-head request-head-compact">
+        <div class="request-title request-title-compact">${escapeHtml(kind === "leave" ? `${record.leaveName || ""}`.trim() : "加班")}</div>
+        <div class="request-head-actions">
         <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
+          ${record.status === "pending"
+            ? `<button class="ghost-btn compact-btn request-delete-btn" type="button" data-delete-request="${kind}:${record.id}">刪除</button>`
+            : ""}
+        </div>
       </div>
-      ${renderRequestSummaryLines(record, kind).slice(1).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
+      <div class="request-inline-meta">
+        <span class="request-meta">${escapeHtml(kind === "leave" ? formatRequestDateText(record.startDate, record.endDate) : record.workDate || "-")}</span>
+        <span class="request-inline-divider">｜</span>
+        <span class="request-meta">${escapeHtml(kind === "leave" ? formatRequestTimeText(record) : formatOvertimeTimeText(record))}</span>
+        ${record.reason ? `<span class="request-inline-divider">｜</span><span class="request-meta">${escapeHtml(`原因：${record.reason}`)}</span>` : ""}
+      </div>
     </div>
   `).join("");
+}
+
+async function deleteEmployeeRequest(kind, requestId) {
+  const label = kind === "leave" ? "請假申請" : "加班申請";
+  const confirmed = await confirmAction(`確定要刪除這筆${label}嗎？`);
+  if (!confirmed) {
+    return;
+  }
+  if (kind === "leave") {
+    await window.schedulerApi.deleteLeaveRequest(requestId);
+    await refreshRequestData();
+    renderTable();
+    await openLeaveRequestModal();
+    return;
+  }
+  await window.schedulerApi.deleteOvertimeRequest(requestId);
+  await refreshRequestData();
+  renderTable();
+  await openOvertimeRequestModal();
 }
 
 function renderManagerRequestList(kind, records) {
@@ -3832,6 +3870,11 @@ function bindEvents() {
       const [kind, requestId] = target.dataset.openRequestReview.split(":");
       hideLeaveTooltip();
       await openRequestReviewFromTooltip(kind, requestId);
+      return;
+    }
+    if (target.dataset.deleteRequest) {
+      const [kind, requestId] = target.dataset.deleteRequest.split(":");
+      await deleteEmployeeRequest(kind, requestId);
       return;
     }
     if (target.dataset.clearRequestFilters) {

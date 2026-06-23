@@ -1691,11 +1691,27 @@ thead th.today,
   gap: 8px;
 }
 
+.request-item-compact {
+  padding: 8px 12px;
+  gap: 4px;
+}
+
 .request-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.request-head-compact {
+  align-items: center;
+}
+
+.request-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .request-status {
@@ -1735,10 +1751,30 @@ thead th.today,
   font-weight: 700;
 }
 
+.request-title-compact {
+  font-size: 14px;
+}
+
 .request-meta {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.request-inline-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.request-inline-divider {
+  color: var(--line-strong);
+  font-size: 11px;
+}
+
+.request-delete-btn {
+  padding: 5px 10px;
 }
 
 .request-review-grid {
@@ -2080,6 +2116,16 @@ thead th.today,
 
   .request-review-row {
     grid-template-columns: 1fr;
+  }
+
+  .request-head-compact {
+    align-items: flex-start;
+  }
+
+  .request-head-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .request-review-controls {

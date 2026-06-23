@@ -221,6 +221,20 @@
     );
   }
 
+  async function restDelete(table, filters, options = {}) {
+    const { auth = false, prefer = "return=minimal" } = options;
+    return requestJson(
+      `/rest/v1/${table}${buildQuery(filters)}`,
+      {
+        method: "DELETE",
+        auth,
+        headers: {
+          Prefer: prefer
+        }
+      }
+    );
+  }
+
   async function restRpc(functionName, payload = {}, options = {}) {
     const { auth = false, prefer = "return=representation" } = options;
     return requestJson(
@@ -775,6 +789,30 @@
     });
     return { ok: true };
   }
+
+  async function deleteLeaveRequest(requestId) {
+    ensureSignedIn();
+    await restDelete("leave_requests", {
+      id: `eq.${requestId}`,
+      member_id: `eq.${currentSession.user.id}`,
+      status: "eq.pending"
+    }, {
+      auth: true
+    });
+    return { ok: true };
+  }
+
+  async function deleteOvertimeRequest(requestId) {
+    ensureSignedIn();
+    await restDelete("overtime_requests", {
+      id: `eq.${requestId}`,
+      member_id: `eq.${currentSession.user.id}`,
+      status: "eq.pending"
+    }, {
+      auth: true
+    });
+    return { ok: true };
+  }
   async function exportSapCsv(payload) {
     const blob = new Blob(
       [exporter.buildSapLeaveCsvContent(payload)],
@@ -835,6 +873,8 @@
     updateLeaveRequest,
     updateOvertimeRequest,
     updateOvertimeRequestDetails,
+    deleteLeaveRequest,
+    deleteOvertimeRequest,
     exportSapCsv,
     exportOvertime,
     exportLeave,
