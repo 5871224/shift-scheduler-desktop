@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>排班工具</title>
-  <link rel="stylesheet" href="./styles.css?v=20260623b">
+  <title>班表</title>
+  <link rel="stylesheet" href="./styles.css?v=20260623c">
 </head>
 <body>
   <div class="app-shell">
     <section class="toolbar-card toolbar-floating-card">
       <div class="toolbar-top-row">
-        <h2 class="toolbar-main-title">排班工具</h2>
+        <h2 class="toolbar-main-title">班表</h2>
         <div id="authBar" class="auth-bar"></div>
         <p id="dbHint" class="db-hint"></p>
         <div class="core-actions-shell" id="coreActionsShell">
-          <button class="ghost-btn core-actions-toggle" id="coreActionsToggle" type="button">核心功能</button>
+          <button class="ghost-btn core-actions-toggle" id="coreActionsToggle" type="button">功能</button>
           <div class="core-actions-menu" id="coreActionsMenu" aria-hidden="true">
             <button class="ghost-btn ops-btn" id="leaveApprovalButton" type="button">請假審核</button>
             <button class="ghost-btn ops-btn" id="overtimeApprovalButton" type="button">加班審核</button>
@@ -30,7 +30,12 @@
           <div class="toolbar-title-row toolbar-title-row-combined">
             <span class="toolbar-title">單位 / 班別</span>
             <select id="deptFilter"></select>
-            <button class="text-btn toolbar-inline-link" id="shiftSettingsButton" type="button">班別設定</button>
+            <button class="settings-icon-btn toolbar-settings-btn" id="shiftSettingsButton" type="button" aria-label="班別設定" title="班別設定">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16v4z"></path>
+                <path d="M13.5 6.5l4 4"></path>
+              </svg>
+            </button>
           </div>
           <div id="shiftChips" class="chips chips-shift"></div>
         </div>
@@ -38,7 +43,12 @@
         <div class="toolbar-section toolbar-section-leave">
           <div class="toolbar-title-row">
             <span class="toolbar-title">假別</span>
-            <button class="text-btn" id="leaveSettingsButton" type="button">設定</button>
+            <button class="settings-icon-btn toolbar-settings-btn" id="leaveSettingsButton" type="button" aria-label="假別設定" title="假別設定">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 20h4l10-10a2 2 0 0 0-4-4L4 16v4z"></path>
+                <path d="M13.5 6.5l4 4"></path>
+              </svg>
+            </button>
           </div>
           <div id="leaveChips" class="chips"></div>
         </div>
@@ -77,9 +87,9 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260623b"></script>
-  <script src="./browser-exporter.js?v=20260623b"></script>
-  <script src="./web-api.js?v=20260623b"></script>
-  <script src="./renderer.js?v=20260623b"></script>
+  <script src="./app-config.js?v=20260623c"></script>
+  <script src="./browser-exporter.js?v=20260623c"></script>
+  <script src="./web-api.js?v=20260623c"></script>
+  <script src="./renderer.js?v=20260623c"></script>
 </body>
 </html>

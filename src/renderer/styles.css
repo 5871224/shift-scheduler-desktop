@@ -152,7 +152,7 @@ button {
   bottom: 20px;
   z-index: 35;
   max-height: min(42vh, 320px);
-  overflow: auto;
+  overflow: visible;
   backdrop-filter: blur(10px);
   background: rgba(255, 253, 248, 0.96);
 }
@@ -235,13 +235,6 @@ button {
   flex: 0 0 auto;
 }
 
-.toolbar-inline-link {
-  padding: 0;
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
 .ops-title-row {
   align-items: flex-start;
   gap: 12px;
@@ -314,6 +307,17 @@ button {
   font-size: 12px;
 }
 
+.toolbar-settings-btn {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+.toolbar-settings-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
 .dept-filter-row {
   gap: 10px;
 }
@@ -352,11 +356,6 @@ button {
   max-width: 132px;
   flex: 0 0 132px;
   padding: 8px 32px 8px 12px;
-}
-
-.toolbar-title-row-combined .text-btn {
-  flex: 0 0 auto;
-  white-space: nowrap;
 }
 
 .chips-shift {
@@ -528,14 +527,14 @@ button {
 }
 
 .table-header-settings-btn {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
 }
 
 .table-header-settings-btn svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
 }
 
 .table-wrap {
