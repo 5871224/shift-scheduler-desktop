@@ -3660,6 +3660,11 @@ async function openLeaveApprovalModal() {
   if (!promptManagerAccess("審核請假前請先登入主管帳號")) {
     return;
   }
+  requestReviewFilters.leave = {
+    memberCode: "",
+    date: "",
+    status: "pending"
+  };
   await refreshRequestData();
   openEntityListModal({
     title: "請假審核",
@@ -3672,6 +3677,11 @@ async function openOvertimeApprovalModal() {
   if (!promptManagerAccess("審核加班前請先登入主管帳號")) {
     return;
   }
+  requestReviewFilters.overtime = {
+    memberCode: "",
+    date: "",
+    status: "pending"
+  };
   await refreshRequestData();
   openEntityListModal({
     title: "加班審核",
