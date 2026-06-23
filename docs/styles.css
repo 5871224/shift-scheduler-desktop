@@ -783,10 +783,6 @@ thead th.today,
   background: var(--today);
 }
 
-.cell.week-alt {
-  background: var(--week-alt);
-}
-
 .cell:hover {
   background: #faf4ea;
 }
@@ -794,10 +790,6 @@ thead th.today,
 .cell.inactive-cell {
   background: #9b9b9b;
   cursor: not-allowed;
-}
-
-.cell.inactive-cell.week-alt {
-  background: #868686;
 }
 
 .cell.inactive-cell:hover {

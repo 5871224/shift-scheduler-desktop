@@ -1505,13 +1505,12 @@ function renderTable() {
         html += `<td class="person-col"><div class="member-label">${memberLabel(member)}</div></td>`;
         for (let day = 1; day <= days; day += 1) {
           const active = isMemberActiveOnDate(member, state.year, state.month, day);
-          const weekStripeClass = getWeekStripeClass(day);
           if (!active) {
-            html += `<td class="cell inactive-cell ${weekStripeClass}" data-disabled="true"><div class="cell-inner"></div></td>`;
+            html += '<td class="cell inactive-cell" data-disabled="true"><div class="cell-inner"></div></td>';
             continue;
           }
           const key = scheduleKey(member.id, state.year, state.month, day);
-          html += `<td class="cell ${weekStripeClass} ${isToday(day) ? "today" : ""}" data-member-id="${member.id}" data-day="${day}">${renderCellInner(key, member.id, day)}</td>`;
+          html += `<td class="cell ${isToday(day) ? "today" : ""}" data-member-id="${member.id}" data-day="${day}">${renderCellInner(key, member.id, day)}</td>`;
         }
         html += "</tr>";
       });
