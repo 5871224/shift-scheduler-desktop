@@ -185,6 +185,9 @@ let state = createEmptyState();
 let modalColor = COLORS[0].hex;
 let modalTextColor = "#ffffff";
 let modalTextColorAuto = true;
+let modalRequestColor = COLORS[0].hex;
+let modalRequestTextColor = "#ffffff";
+let modalRequestTextColorAuto = true;
 let modalContext = {};
 let saveTimer = null;
 let isSaving = false;
@@ -770,6 +773,8 @@ function sanitizeLeaveItem(item, fallbackIndex) {
   const catalogEntry = resolveLeaveCatalogEntry(item, fallbackIndex);
   const color = item?.color || COLORS[fallbackIndex % COLORS.length].hex;
   const autoText = item?.autoTextColor ?? !item?.textColor;
+  const requestColor = item?.requestColor || color;
+  const requestAutoText = item?.requestAutoTextColor ?? !item?.requestTextColor;
   return {
     id: item?.id || uid(`l${fallbackIndex}`),
     code: catalogEntry.code,
@@ -777,6 +782,9 @@ function sanitizeLeaveItem(item, fallbackIndex) {
     color,
     textColor: item?.textColor || autoLeaveTextColor(color),
     autoTextColor: Boolean(autoText),
+    requestColor,
+    requestTextColor: item?.requestTextColor || autoLeaveTextColor(requestColor),
+    requestAutoTextColor: Boolean(requestAutoText),
     hiddenFromToolbar: Boolean(item?.hiddenFromToolbar),
     defaultAllDay: Boolean(item?.defaultAllDay),
     requireReason: Boolean(item?.requireReason)
@@ -786,12 +794,17 @@ function sanitizeLeaveItem(item, fallbackIndex) {
 function sanitizeOvertimeItem(item, fallbackIndex) {
     const color = item?.color || COLORS[fallbackIndex % COLORS.length].hex;
     const autoText = item?.autoTextColor ?? !item?.textColor;
+    const requestColor = item?.requestColor || color;
+    const requestAutoText = item?.requestAutoTextColor ?? !item?.requestTextColor;
     return {
       id: item?.id || uid(`o${fallbackIndex}`),
-      name: "加班",
+      name: item?.name || "加班",
       color,
       textColor: item?.textColor || autoLeaveTextColor(color),
       autoTextColor: Boolean(autoText),
+      requestColor,
+      requestTextColor: item?.requestTextColor || autoLeaveTextColor(requestColor),
+      requestAutoTextColor: Boolean(requestAutoText),
       hiddenFromToolbar: Boolean(item?.hiddenFromToolbar),
       startTime: item?.startTime || "",
       endTime: item?.endTime || "",
@@ -1064,7 +1077,62 @@ function formatOvertimeRestLines(record) {
 }
 
 function getAllowedLeaveRequestItems() {
-  return state.leaves.filter((item) => !["0036", "0047"].includes(item.code));
+  return LEAVE_CATALOG.filter((entry) => !["0036", "0047"].includes(entry.code)).map((entry) => {
+    const configured = state.leaves.find((item) => item.code === entry.code);
+    return {
+      code: entry.code,
+      name: configured?.name || entry.name,
+      defaultAllDay: configured?.defaultAllDay ?? false,
+      requireReason: configured?.requireReason ?? false
+    };
+  });
+}
+
+function getLeaveStyleByCode(leaveCode) {
+  const configured = state.leaves.find((item) => item.code === leaveCode);
+  if (configured) {
+    return configured;
+  }
+  const catalogEntry = LEAVE_CATALOG.find((entry) => entry.code === leaveCode);
+  if (!catalogEntry) {
+    return null;
+  }
+  const catalogIndex = Math.max(0, LEAVE_CATALOG.findIndex((entry) => entry.code === leaveCode));
+  const fallbackColor = COLORS[catalogIndex % COLORS.length].hex;
+  return {
+    id: `request-leave-${catalogEntry.code}`,
+    code: catalogEntry.code,
+    name: catalogEntry.name,
+    color: fallbackColor,
+    textColor: autoLeaveTextColor(fallbackColor),
+    autoTextColor: true,
+    requestColor: fallbackColor,
+    requestTextColor: autoLeaveTextColor(fallbackColor),
+    requestAutoTextColor: true,
+    defaultAllDay: false,
+    requireReason: false
+  };
+}
+
+function getRequestPalette(item, fallbackColor) {
+  const color = item?.requestColor || fallbackColor;
+  return {
+    color,
+    textColor: item?.requestTextColor || autoLeaveTextColor(color)
+  };
+}
+
+function slotHasBlockingRequest(slot, category) {
+  if (!slot) {
+    return false;
+  }
+  if (category === "leave") {
+    return Boolean(slot.leaveRequestId);
+  }
+  if (category === "overtime") {
+    return Boolean(slot.overtimeRequestId);
+  }
+  return Boolean(slot.leaveRequestId || slot.overtimeRequestId);
 }
 
 function getRequestStatusOptions(selectedValue) {
@@ -1421,7 +1489,9 @@ function formatOvertimeDetailSummary(overtimeMeta) {
 function showScheduleTooltip(memberId, day, category, anchorRect) {
   const slot = getSlot(memberId, day);
   const isLeave = category === "leave";
-  const item = getItem(category, slot?.[category]);
+  const item = isLeave
+    ? (slot?.leaveRequestId ? getLeaveStyleByCode(slot?.leaveMeta?.leaveCode || "") : getItem(category, slot?.[category]))
+    : getItem(category, slot?.[category]);
   const meta = isLeave ? slot?.leaveMeta : slot?.overtimeMeta;
   const requestId = isLeave ? slot?.leaveRequestId : slot?.overtimeRequestId;
   const shouldShow = isLeave
@@ -1448,7 +1518,7 @@ function showScheduleTooltip(memberId, day, category, anchorRect) {
   root.style.top = `${anchorRect.bottom + window.scrollY + 8}px`;
   root.innerHTML = `
     <div class="leave-tooltip-head">
-      <div class="leave-tooltip-title">${escapeHtml(isLeave ? getLeaveLabel(item) : (item?.name || "加班"))}</div>
+      <div class="leave-tooltip-title">${escapeHtml(isLeave ? `${item?.code || ""} ${item?.name || ""}`.trim() : (item?.name || "加班"))}</div>
       ${isManager()
         ? (isLeave
           ? renderActionIconButton("edit", `data-edit-leave-assignment="${memberId}:${day}"`, "leave-tooltip-btn")
@@ -1592,13 +1662,21 @@ function renderCellInner(key, memberId = "", day = 0) {
     }
   }
   if (cellState.leave) {
-    const leave = getItem("leave", cellState.leave);
+    const leave = cellState.leaveRequestId
+      ? getLeaveStyleByCode(cellState.leaveMeta?.leaveCode || "")
+      : getItem("leave", cellState.leave);
     if (leave) {
+      const leavePalette = cellState.leaveRequestId
+        ? {
+          color: cellState.leaveMeta?.displayColor || getRequestPalette(leave, leave.requestColor || leave.color).color,
+          textColor: cellState.leaveMeta?.displayTextColor || getRequestPalette(leave, leave.requestColor || leave.color).textColor
+        }
+        : { color: leave.color, textColor: getItemTextColor(leave, leave.color) };
       segments.push({
         category: "leave",
-        name: leave.name,
-        color: leave.color,
-        textColor: getItemTextColor(leave, leave.color),
+        name: cellState.leaveMeta?.displayName || leave.name,
+        color: leavePalette.color,
+        textColor: leavePalette.textColor,
         status: cellState.leaveMeta?.requestStatus || "approved"
       });
     }
@@ -1606,11 +1684,17 @@ function renderCellInner(key, memberId = "", day = 0) {
   if (cellState.overtime) {
     const overtime = getItem("overtime", cellState.overtime);
     const color = overtime?.color || DEFAULT_STATE.overtime[0].color;
+    const overtimePalette = cellState.overtimeRequestId
+      ? {
+        color: cellState.overtimeMeta?.displayColor || getRequestPalette(overtime, overtime?.requestColor || color).color,
+        textColor: cellState.overtimeMeta?.displayTextColor || getRequestPalette(overtime, overtime?.requestColor || color).textColor
+      }
+      : { color, textColor: getItemTextColor(overtime, color) };
     segments.push({
       category: "overtime",
-      name: "加班",
-      color,
-      textColor: getItemTextColor(overtime, color),
+      name: overtime?.name || cellState.overtimeMeta?.displayName || "加班",
+      color: overtimePalette.color,
+      textColor: overtimePalette.textColor,
       status: cellState.overtimeMeta?.requestStatus || "approved"
     });
   }
@@ -1738,6 +1822,10 @@ function applySelectionToCell(memberId, day) {
   const slot = ensureScheduleSlot(memberId, day);
   const { type, id } = state.selected;
   if (type === "leave") {
+    if (slotHasBlockingRequest(slot, "leave")) {
+      showInfoMessage("這格已有請假申請，請先將申請設為已退回後再修改假別");
+      return;
+    }
     const leave = getItem("leave", id);
     if (!leave) {
       return;
@@ -1758,6 +1846,10 @@ function applySelectionToCell(memberId, day) {
   }
   if (type === "shift") slot.shift = slot.shift === id ? null : id;
   if (type === "overtime") {
+    if (slotHasBlockingRequest(slot, "overtime")) {
+      showInfoMessage("這格已有加班申請，請先將申請設為已退回後再修改加班");
+      return;
+    }
     const nextOvertimeId = slot.overtime === id ? null : id;
     slot.overtime = nextOvertimeId;
     if (nextOvertimeId) {
@@ -1773,10 +1865,18 @@ function applySelectionToCell(memberId, day) {
   }
   if (type === "cancel-shift") slot.shift = null;
   if (type === "cancel-leave") {
+    if (slotHasBlockingRequest(slot, "leave")) {
+      showInfoMessage("這格已有請假申請，請先將申請設為已退回後再清除假別");
+      return;
+    }
     slot.leave = null;
     slot.leaveMeta = null;
   }
   if (type === "cancel-overtime") {
+    if (slotHasBlockingRequest(slot, "overtime")) {
+      showInfoMessage("這格已有加班申請，請先將申請設為已退回後再清除加班");
+      return;
+    }
     slot.overtime = null;
     slot.overtimeMeta = null;
     slot.overtimeRequestId = null;
@@ -2230,6 +2330,26 @@ function renderColorPreviewFields(category, previewText) {
   `;
 }
 
+function renderRequestColorPreviewFields(category, previewText) {
+  return `
+    <div class="form-row form-row-compact leave-preview-row">
+      <label>申請預覽</label>
+      <div class="leave-preview-wrap">
+        <div class="leave-preview" data-request-color-preview="${category}" style="background:${escapeHtml(modalRequestColor)};color:${escapeHtml(modalRequestTextColor)}">
+          <span data-request-color-preview-text="${category}">${escapeHtml(previewText)}</span>
+        </div>
+        <div class="leave-color-actions">
+          <button class="ghost-btn leave-color-btn" type="button" data-open-item-color="request-bg">底色</button>
+          <input class="hidden-color-input leave-color-input" type="color" value="${escapeHtml(modalRequestColor)}" data-item-color-input="request-bg">
+          <button class="ghost-btn leave-color-btn" type="button" data-open-item-color="request-text">字色</button>
+          <input class="hidden-color-input leave-color-input" type="color" value="${escapeHtml(modalRequestTextColor)}" data-item-color-input="request-text">
+          <button class="ghost-btn leave-color-btn" type="button" data-set-auto-item-text="request">自動字色</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderActionIconButton(kind, attrs, extraClass = "") {
   const title = kind === "delete" ? "刪除" : "修改";
   const dangerClass = kind === "delete" ? " settings-icon-btn-danger" : "";
@@ -2257,10 +2377,17 @@ function renderActionIconButton(kind, attrs, extraClass = "") {
 function syncNamedColorUi() {
   const preview = document.querySelector("[data-color-preview]");
   const previewText = document.querySelector("[data-color-preview-text]");
+  const requestPreview = document.querySelector("[data-request-color-preview]");
+  const requestPreviewText = document.querySelector("[data-request-color-preview-text]");
   const bgInput = document.querySelector('[data-item-color-input="bg"]');
   const textInput = document.querySelector('[data-item-color-input="text"]');
+  const requestBgInput = document.querySelector('[data-item-color-input="request-bg"]');
+  const requestTextInput = document.querySelector('[data-item-color-input="request-text"]');
   if (modalTextColorAuto) {
     modalTextColor = autoLeaveTextColor(modalColor);
+  }
+  if (modalRequestTextColorAuto) {
+    modalRequestTextColor = autoLeaveTextColor(modalRequestColor);
   }
   const fallbackName = modalContext.category === "shift"
     ? "班別"
@@ -2279,11 +2406,24 @@ function syncNamedColorUi() {
   if (previewText) {
     previewText.textContent = displayName;
   }
+  if (requestPreview) {
+    requestPreview.style.background = modalRequestColor;
+    requestPreview.style.color = modalRequestTextColor;
+  }
+  if (requestPreviewText) {
+    requestPreviewText.textContent = displayName;
+  }
   if (bgInput) {
     bgInput.value = modalColor;
   }
   if (textInput) {
     textInput.value = modalTextColor;
+  }
+  if (requestBgInput) {
+    requestBgInput.value = modalRequestColor;
+  }
+  if (requestTextInput) {
+    requestTextInput.value = modalRequestTextColor;
   }
 }
 
@@ -2306,6 +2446,9 @@ function openShiftFormModal(mode, shiftId = "") {
   modalColor = shift.color;
   modalTextColorAuto = shift.autoTextColor ?? !shift.textColor;
   modalTextColor = shift.textColor || autoLeaveTextColor(shift.color);
+  modalRequestColor = shift.color;
+  modalRequestTextColorAuto = true;
+  modalRequestTextColor = autoLeaveTextColor(shift.color);
   modalContext = { mode, category: "shift", targetId: shiftId };
 
   openEntityListModal({
@@ -2411,6 +2554,9 @@ function openNamedColorFormModal(category, mode, targetId = "") {
   modalColor = item.color;
   modalTextColorAuto = item.autoTextColor ?? !item.textColor;
   modalTextColor = item.textColor || autoLeaveTextColor(item.color);
+  modalRequestColor = item.requestColor || item.color;
+  modalRequestTextColorAuto = item.requestAutoTextColor ?? !item.requestTextColor;
+  modalRequestTextColor = item.requestTextColor || autoLeaveTextColor(modalRequestColor);
   modalContext = { category, mode, targetId };
   const titleMap = {
     shift: "班別",
@@ -2424,6 +2570,9 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         : "modal modal-wide",
       body: `
       ${renderColorPreviewFields(category, item.name || (category === "overtime" ? "加班" : "名稱"))}
+      ${(category === "leave" || category === "overtime")
+        ? renderRequestColorPreviewFields(category, item.name || (category === "overtime" ? "加班" : "名稱"))
+        : ""}
       <div class="form-row">
         <label for="${category === "leave" ? "leaveCatalogCode" : "namedItemName"}">${category === "leave" ? "假別" : "名稱"}</label>
         ${category === "leave"
@@ -2565,6 +2714,9 @@ function saveNamedColorItem(category, mode) {
     color: modalColor,
     textColor: modalTextColor,
     autoTextColor: modalTextColorAuto,
+    requestColor: category === "leave" || category === "overtime" ? modalRequestColor : undefined,
+    requestTextColor: category === "leave" || category === "overtime" ? modalRequestTextColor : undefined,
+    requestAutoTextColor: category === "leave" || category === "overtime" ? modalRequestTextColorAuto : undefined,
     defaultAllDay: category === "leave" ? document.getElementById("leaveDefaultAllDay")?.checked : undefined,
     requireReason: category === "leave" ? document.getElementById("leaveRequireReason")?.checked : undefined,
     hiddenFromToolbar: Boolean(document.getElementById(`${category}HiddenFromToolbar`)?.checked),
@@ -3683,7 +3835,7 @@ async function openLeaveRequestModal() {
         </div>
         <div class="form-row">
           <label for="leaveRequestType">假別</label>
-          <select id="leaveRequestType">${leaveItems.map((item) => `<option value="${item.id}">${escapeHtml(getLeaveLabel(item))}</option>`).join("")}</select>
+          <select id="leaveRequestType">${leaveItems.map((item) => `<option value="${item.code}">${escapeHtml(`${item.code} ${item.name}`)}</option>`).join("")}</select>
         </div>
         <div class="form-row">
           <label for="leaveRequestStartDate">開始日期</label>
@@ -3725,8 +3877,8 @@ async function openLeaveRequestModal() {
 }
 
 async function saveLeaveRequestFromModal() {
-  const leaveId = document.getElementById("leaveRequestType")?.value || "";
-  const leave = getItem("leave", leaveId);
+  const leaveCode = document.getElementById("leaveRequestType")?.value || "";
+  const leave = getAllowedLeaveRequestItems().find((item) => item.code === leaveCode);
   const startDate = document.getElementById("leaveRequestStartDate")?.value || "";
   const endDate = document.getElementById("leaveRequestEndDate")?.value || "";
   const isAllDay = document.getElementById("leaveRequestAllDay")?.checked !== false;
@@ -3978,10 +4130,11 @@ function applyApprovedLeaveRequestToSchedule(record) {
     return;
   }
   const member = state.members.find((item) => item.code === record.memberCode);
-  const leave = state.leaves.find((item) => item.code === record.leaveCode);
+  const leave = getLeaveStyleByCode(record.leaveCode);
   if (!member || !leave) {
     return;
   }
+  const requestPalette = getRequestPalette(leave, leave.requestColor || leave.color);
   enumerateDateRange(record.startDate, record.endDate).forEach((dateString) => {
     const [year, month, day] = dateString.split("-").map(Number);
     const slotKey = scheduleKey(member.id, year, month - 1, day);
@@ -3991,6 +4144,10 @@ function applyApprovedLeaveRequestToSchedule(record) {
     }
     slot.leave = leave.id;
     slot.leaveMeta = {
+      leaveCode: record.leaveCode,
+      displayName: record.leaveName || leave.name,
+      displayColor: requestPalette.color,
+      displayTextColor: requestPalette.textColor,
       allDay: record.isAllDay !== false,
       startTime: record.isAllDay !== false ? "" : record.startTime || "",
       endTime: record.isAllDay !== false ? "" : record.endTime || "",
@@ -4019,7 +4176,11 @@ function applyApprovedOvertimeRequestToSchedule(record) {
   const slotKey = scheduleKey(member.id, year, month - 1, day);
   const slot = state.schedule[slotKey] || { shift: null, leave: null, overtime: null };
   slot.overtime = overtime.id;
+  const requestPalette = getRequestPalette(overtime, overtime?.requestColor || overtime?.color || DEFAULT_STATE.overtime[0].color);
   slot.overtimeMeta = {
+    displayName: overtime.name || "加班",
+    displayColor: requestPalette.color,
+    displayTextColor: requestPalette.textColor,
     startTime: record.startTime || "",
     endTime: record.endTime || "",
     useRest1: Boolean(record.useRest1),
@@ -4391,8 +4552,13 @@ function bindEvents() {
       return;
     }
     if (target.dataset.setAutoItemText !== undefined) {
-      modalTextColorAuto = true;
-      modalTextColor = autoLeaveTextColor(modalColor);
+      if (target.dataset.setAutoItemText === "request") {
+        modalRequestTextColorAuto = true;
+        modalRequestTextColor = autoLeaveTextColor(modalRequestColor);
+      } else {
+        modalTextColorAuto = true;
+        modalTextColor = autoLeaveTextColor(modalColor);
+      }
       syncNamedColorUi();
       return;
     }
@@ -4538,6 +4704,20 @@ function bindEvents() {
     if (target.dataset.itemColorInput === "text") {
       modalTextColor = target.value;
       modalTextColorAuto = false;
+      syncNamedColorUi();
+      return;
+    }
+    if (target.dataset.itemColorInput === "request-bg") {
+      modalRequestColor = target.value;
+      if (modalRequestTextColorAuto) {
+        modalRequestTextColor = autoLeaveTextColor(modalRequestColor);
+      }
+      syncNamedColorUi();
+      return;
+    }
+    if (target.dataset.itemColorInput === "request-text") {
+      modalRequestTextColor = target.value;
+      modalRequestTextColorAuto = false;
       syncNamedColorUi();
     }
   });
