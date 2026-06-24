@@ -3270,7 +3270,7 @@ function formatDateTextFromIso(dateString) {
   if (!date) {
     return dateString || "";
   }
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function formatWeekRangeText(startDate, endDate) {
@@ -3410,7 +3410,7 @@ function openRestComplianceModal() {
       <div class="result-detail compliance-check-note">
         <div>目前依設定的每週起算日，以 ${escapeHtml(formatWeekStartLabel(getConfiguredWeekStart()))} 開始切 7 日週期。</div>
         <div>到職日或離職日落在該週時，每週例假／休息日檢查會略過，改檢查「未在職日＋例假＋休息日」是否至少 2 天。</div>
-        <div>這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援彈性工時例外，下一步再加例外規則。</div>
+        <div>這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休。</div>
       </div>
     </div>
   `;
@@ -3419,10 +3419,12 @@ function openRestComplianceModal() {
       <div class="compliance-check-list">
         ${Array.from(groupedIssues.values()).map((group) => `
           <div class="result-item ${group.issues.some((issue) => issue.severity === "error") ? "error" : "warning"} compliance-member-group">
-            <div class="result-title">${escapeHtml(`${group.memberCode ? `${group.memberCode} ` : ""}${group.memberName}`.trim() || group.memberId)}</div>
-            <div class="result-detail compliance-member-summary">
-              <span>缺漏：${group.issues.filter((issue) => issue.severity === "error").length} 筆</span>
-              <span>待確認：${group.issues.filter((issue) => issue.severity === "warning").length} 筆</span>
+            <div class="compliance-member-head">
+              <div class="result-title compliance-member-name">${escapeHtml(group.memberName || group.memberId)}</div>
+              <div class="result-detail compliance-member-summary">
+                <span>缺漏：${group.issues.filter((issue) => issue.severity === "error").length} 筆</span>
+                <span>待確認：${group.issues.filter((issue) => issue.severity === "warning").length} 筆</span>
+              </div>
             </div>
             <div class="result-detail">
               ${group.issues.map((issue) => `

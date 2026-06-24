@@ -1592,6 +1592,17 @@ thead th.today,
   gap: 8px;
 }
 
+.compliance-member-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.compliance-member-name {
+  margin-bottom: 0;
+}
+
 .compliance-member-summary {
   display: flex;
   flex-wrap: wrap;
