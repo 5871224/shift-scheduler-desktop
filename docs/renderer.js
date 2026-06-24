@@ -1552,7 +1552,7 @@ function hasLeaveRows() {
 
 function shouldPromptLeaveDetail(leave, leaveMeta = null) {
   return Boolean(
-    leave?.defaultAllDay ||
+    leave?.defaultAllDay === false ||
     leave?.requireReason ||
     leaveMeta?.reason ||
     leaveMeta?.startTime ||
@@ -2008,9 +2008,13 @@ async function upsertManagerLeaveEntry(payload) {
   if (!member || !leave) {
     throw new Error("找不到請假資料");
   }
+  if (!payload.isAllDay && !isValidTimeRange(payload.startTime, payload.endTime)) {
+    throw new Error("請確認開始時間與結束時間");
+  }
   const requestPayload = {
     id: payload.requestId || "",
     memberId: member.id,
+    memberCode: member.code,
     leaveCode: leave.code,
     startDate: toDateString(state.year, state.month, payload.day),
     endDate: toDateString(state.year, state.month, payload.day),
@@ -2035,6 +2039,7 @@ async function upsertManagerOvertimeEntry(payload) {
   const requestPayload = {
     id: payload.requestId || "",
     memberId: member.id,
+    memberCode: member.code,
     overtimeName: overtime.name,
     workDate: toDateString(state.year, state.month, payload.day),
     startTime: payload.startTime || "",
@@ -3752,6 +3757,7 @@ async function migrateLegacyScheduleRequests() {
     try {
       await window.schedulerApi.createManagerLeaveRequest({
         memberId: entry.member.id,
+        memberCode: entry.member.code,
         leaveCode: entry.leave.code,
         startDate: entry.dateString,
         endDate: entry.dateString,
@@ -3777,6 +3783,7 @@ async function migrateLegacyScheduleRequests() {
     try {
       await window.schedulerApi.createManagerOvertimeRequest({
         memberId: entry.member.id,
+        memberCode: entry.member.code,
         overtimeName: entry.overtime.name,
         workDate: entry.dateString,
         startTime: entry.slot.overtimeMeta?.startTime || entry.overtime.startTime || "",

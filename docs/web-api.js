@@ -172,6 +172,10 @@
     return `in.(${values.map((value) => quoteFilterValue(value)).join(",")})`;
   }
 
+  function isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+  }
+
   async function restSelect(table, options = {}) {
     const { select = "*", filters = {}, order = "", limit = "", auth = false } = options;
     return requestJson(
@@ -531,6 +535,28 @@
     return rows[0];
   }
 
+  async function resolveManagerMemberProfileId(memberId, memberCode) {
+    const normalizedMemberId = String(memberId || "").trim();
+    if (isUuid(normalizedMemberId)) {
+      return normalizedMemberId;
+    }
+    const normalizedMemberCode = String(memberCode || "").trim();
+    if (!normalizedMemberCode) {
+      throw new Error("找不到人員工號");
+    }
+    const rows = await restSelect("profiles", {
+      select: "id,employee_code",
+      filters: {
+        employee_code: `eq.${normalizedMemberCode}`
+      },
+      auth: true
+    });
+    if (!rows?.length || !rows[0]?.id) {
+      throw new Error(`找不到對應的人員資料：${normalizedMemberCode}`);
+    }
+    return rows[0].id;
+  }
+
   async function createLeaveRequest(payload) {
     ensureSignedIn();
     const leaveType = await getLeaveTypeByCode(payload.leaveCode);
@@ -580,9 +606,10 @@
   async function createManagerLeaveRequest(payload) {
     ensureManager();
     const leaveType = await getLeaveTypeByCode(payload.leaveCode);
+    const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     const now = new Date().toISOString();
     await restInsert("leave_requests", [{
-      member_id: payload.memberId,
+      member_id: profileMemberId,
       leave_type_id: leaveType.id,
       start_date: payload.startDate,
       end_date: payload.endDate,
@@ -604,10 +631,11 @@
   async function updateManagerLeaveRequest(payload) {
     ensureManager();
     const leaveType = await getLeaveTypeByCode(payload.leaveCode);
+    const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     await restUpdate("leave_requests", {
       id: `eq.${payload.id}`
     }, {
-      member_id: payload.memberId,
+      member_id: profileMemberId,
       leave_type_id: leaveType.id,
       start_date: payload.startDate,
       end_date: payload.endDate,
@@ -642,9 +670,10 @@
     const overtimeType = payload.overtimeName
       ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
       : await getDefaultOvertimeType();
+    const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     const now = new Date().toISOString();
     await restInsert("overtime_requests", [{
-      member_id: payload.memberId,
+      member_id: profileMemberId,
       overtime_type_id: overtimeType.id,
       work_date: payload.workDate,
       start_time: payload.startTime || null,
@@ -672,10 +701,11 @@
     const overtimeType = payload.overtimeName
       ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
       : await getDefaultOvertimeType();
+    const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     await restUpdate("overtime_requests", {
       id: `eq.${payload.id}`
     }, {
-      member_id: payload.memberId,
+      member_id: profileMemberId,
       overtime_type_id: overtimeType.id,
       work_date: payload.workDate,
       start_time: payload.startTime || null,
