@@ -438,7 +438,7 @@
       }
       leaveMap.set(item.code, {
         code: item.code,
-        name: leaveMap.get(item.code)?.name || item.name,
+        name: item.name,
         color: item.color || leaveMap.get(item.code)?.color || null,
         requires_time: Boolean(item.defaultAllDay),
         requires_reason: Boolean(item.requireReason)
