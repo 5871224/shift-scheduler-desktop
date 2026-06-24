@@ -216,6 +216,8 @@ let currentProfile = null;
 let currentMember = null;
 let leaveRequestRecords = [];
 let overtimeRequestRecords = [];
+let leaveOverlayRecords = [];
+let overtimeOverlayRecords = [];
 let requestOverlaySourceLoaded = false;
 let requestReviewFilters = {
   leave: { memberCode: "", date: "", status: "" },
@@ -3655,11 +3657,15 @@ async function refreshRequestData() {
       const publicRequests = await window.schedulerApi.listPublicScheduleRequests();
       leaveRequestRecords = publicRequests.leaveRequests;
       overtimeRequestRecords = publicRequests.overtimeRequests;
+      leaveOverlayRecords = publicRequests.leaveRequests;
+      overtimeOverlayRecords = publicRequests.overtimeRequests;
       requestOverlaySourceLoaded = true;
     } catch {
       requestOverlaySourceLoaded = false;
       leaveRequestRecords = [];
       overtimeRequestRecords = [];
+      leaveOverlayRecords = [];
+      overtimeOverlayRecords = [];
     }
     return;
   }
@@ -3667,6 +3673,8 @@ async function refreshRequestData() {
   overtimeRequestRecords = await window.schedulerApi.listOvertimeRequests({ manager: isManager() });
   try {
     const publicRequests = await window.schedulerApi.listPublicScheduleRequests();
+    leaveOverlayRecords = publicRequests.leaveRequests || [];
+    overtimeOverlayRecords = publicRequests.overtimeRequests || [];
     const publicLeaveMap = new Map((publicRequests.leaveRequests || []).map((record) => [record.id, record]));
     const publicOvertimeMap = new Map((publicRequests.overtimeRequests || []).map((record) => [record.id, record]));
     leaveRequestRecords = leaveRequestRecords.map((record) => ({
@@ -3684,6 +3692,8 @@ async function refreshRequestData() {
     }));
   } catch {
     // ponytail: 主管審核資料仍以正式 API 為主；公開 overlay 補資料失敗時不擋主流程。
+    leaveOverlayRecords = leaveRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
+    overtimeOverlayRecords = overtimeRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
   }
   requestOverlaySourceLoaded = true;
 }
@@ -4073,10 +4083,10 @@ function syncApprovedRequestsToSchedule() {
       slot.overtimeMeta = null;
     }
   });
-  leaveRequestRecords.forEach((record) => {
+  leaveOverlayRecords.forEach((record) => {
     applyApprovedLeaveRequestToSchedule(record);
   });
-  overtimeRequestRecords.forEach((record) => {
+  overtimeOverlayRecords.forEach((record) => {
     applyApprovedOvertimeRequestToSchedule(record);
   });
   pruneEmptySchedule();
@@ -5049,6 +5059,8 @@ async function handleSignOut() {
   currentMember = null;
   leaveRequestRecords = [];
   overtimeRequestRecords = [];
+  leaveOverlayRecords = [];
+  overtimeOverlayRecords = [];
   appInfo = null;
   closeModal();
   closeCoreActionsMenu();
@@ -5725,6 +5737,8 @@ async function loadApp() {
     currentMember = null;
     leaveRequestRecords = [];
     overtimeRequestRecords = [];
+    leaveOverlayRecords = [];
+    overtimeOverlayRecords = [];
     requestOverlaySourceLoaded = false;
     appInfo = null;
     renderAll();
