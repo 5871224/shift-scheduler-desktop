@@ -4403,17 +4403,21 @@ async function deleteEmployeeRequest(kind, requestId) {
   if (!confirmed) {
     return;
   }
-  if (kind === "leave") {
-    await window.schedulerApi.deleteLeaveRequest(requestId);
+  try {
+    if (kind === "leave") {
+      await window.schedulerApi.deleteLeaveRequest(requestId);
+      await refreshRequestData();
+      renderTable();
+      await openLeaveRequestModal();
+      return;
+    }
+    await window.schedulerApi.deleteOvertimeRequest(requestId);
     await refreshRequestData();
     renderTable();
-    await openLeaveRequestModal();
-    return;
+    await openOvertimeRequestModal();
+  } catch (error) {
+    showInfoMessage(`刪除${label}失敗：${formatSchedulerError(error, "刪除失敗")}`);
   }
-  await window.schedulerApi.deleteOvertimeRequest(requestId);
-  await refreshRequestData();
-  renderTable();
-  await openOvertimeRequestModal();
 }
 
 function renderManagerRequestList(kind, records) {

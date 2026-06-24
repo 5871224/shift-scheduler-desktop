@@ -978,6 +978,18 @@
 
   async function deleteLeaveRequest(requestId) {
     ensureSignedIn();
+    const rows = await restSelect("leave_requests", {
+      select: "id",
+      filters: {
+        id: `eq.${requestId}`,
+        member_id: `eq.${currentSession.user.id}`,
+        status: "eq.pending"
+      },
+      auth: true
+    });
+    if (!rows?.length) {
+      throw new Error("找不到可刪除的請假申請，可能已被審核、退回，或不屬於目前登入者");
+    }
     await restDelete("leave_requests", {
       id: `eq.${requestId}`,
       member_id: `eq.${currentSession.user.id}`,
@@ -990,6 +1002,18 @@
 
   async function deleteOvertimeRequest(requestId) {
     ensureSignedIn();
+    const rows = await restSelect("overtime_requests", {
+      select: "id",
+      filters: {
+        id: `eq.${requestId}`,
+        member_id: `eq.${currentSession.user.id}`,
+        status: "eq.pending"
+      },
+      auth: true
+    });
+    if (!rows?.length) {
+      throw new Error("找不到可刪除的加班申請，可能已被審核、退回，或不屬於目前登入者");
+    }
     await restDelete("overtime_requests", {
       id: `eq.${requestId}`,
       member_id: `eq.${currentSession.user.id}`,
