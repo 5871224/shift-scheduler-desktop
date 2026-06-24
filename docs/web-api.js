@@ -866,6 +866,78 @@
     };
   }
 
+  async function exportDepartments(payload) {
+    const blob = await exporter.workbookToBlob(await exporter.createDepartmentWorkbook(payload));
+    const fileName = "單位設定.xlsx";
+    downloadBlob(blob, fileName);
+    return { canceled: false, filePath: fileName };
+  }
+
+  async function importDepartments() {
+    const file = await pickFile(".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (!file) {
+      return { canceled: true, rows: [] };
+    }
+    return {
+      canceled: false,
+      rows: await exporter.parseDepartmentWorkbook(await file.arrayBuffer())
+    };
+  }
+
+  async function exportShifts(payload) {
+    const blob = await exporter.workbookToBlob(await exporter.createShiftWorkbook(payload));
+    const fileName = "班別設定.xlsx";
+    downloadBlob(blob, fileName);
+    return { canceled: false, filePath: fileName };
+  }
+
+  async function importShifts() {
+    const file = await pickFile(".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (!file) {
+      return { canceled: true, rows: [] };
+    }
+    return {
+      canceled: false,
+      rows: await exporter.parseShiftWorkbook(await file.arrayBuffer())
+    };
+  }
+
+  async function exportLeaveSettings(payload) {
+    const blob = await exporter.workbookToBlob(await exporter.createLeaveSettingsWorkbook(payload));
+    const fileName = "假別設定.xlsx";
+    downloadBlob(blob, fileName);
+    return { canceled: false, filePath: fileName };
+  }
+
+  async function importLeaveSettings() {
+    const file = await pickFile(".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (!file) {
+      return { canceled: true, result: null };
+    }
+    return {
+      canceled: false,
+      result: await exporter.parseLeaveSettingsWorkbook(await file.arrayBuffer())
+    };
+  }
+
+  async function exportOvertimeSettings(payload) {
+    const blob = await exporter.workbookToBlob(await exporter.createOvertimeSettingsWorkbook(payload));
+    const fileName = "加班設定.xlsx";
+    downloadBlob(blob, fileName);
+    return { canceled: false, filePath: fileName };
+  }
+
+  async function importOvertimeSettings() {
+    const file = await pickFile(".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (!file) {
+      return { canceled: true, result: null };
+    }
+    return {
+      canceled: false,
+      result: await exporter.parseOvertimeSettingsWorkbook(await file.arrayBuffer())
+    };
+  }
+
   window.schedulerApi = {
     initializeAuth,
     getAuthContext: () => ({ session: currentSession, profile: currentProfile }),
@@ -892,6 +964,14 @@
     exportLeave,
     exportMembers,
     importMembers,
+    exportDepartments,
+    importDepartments,
+    exportShifts,
+    importShifts,
+    exportLeaveSettings,
+    importLeaveSettings,
+    exportOvertimeSettings,
+    importOvertimeSettings,
     getAppInfo: async () => ({
       databasePath: `Supabase / schedule_documents / ${documentId}`,
       backend: "supabase-static",

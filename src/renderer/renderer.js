@@ -2389,7 +2389,11 @@ function openListSettings(category) {
       ? "modal modal-wide catalog-settings-modal"
       : undefined,
     body,
-    headerButtons: `<button class="btn-primary" type="button" data-open-add="${category}">新增${escapeHtml(titleMap[category].replace("設定", ""))}</button>`,
+    headerButtons: `
+      <button class="ghost-btn compact-btn" type="button" data-export-settings="${category}">匯出</button>
+      <button class="ghost-btn compact-btn" type="button" data-import-settings="${category}">匯入</button>
+      <button class="btn-primary" type="button" data-open-add="${category}">新增${escapeHtml(titleMap[category].replace("設定", ""))}</button>
+    `,
     hideFooterClose: true
   });
 }
@@ -2846,7 +2850,11 @@ function openDepartmentSettings() {
     title: "單位設定",
     modalClass: "modal modal-wide department-settings-modal",
     body,
-    headerButtons: `<button class="btn-primary" type="button" data-open-add-department="true">新增單位</button>`,
+    headerButtons: `
+      <button class="ghost-btn compact-btn" type="button" data-export-departments="true">匯出</button>
+      <button class="ghost-btn compact-btn" type="button" data-import-departments="true">匯入</button>
+      <button class="btn-primary" type="button" data-open-add-department="true">新增單位</button>
+    `,
     hideFooterClose: true
   });
 }
@@ -3408,6 +3416,251 @@ async function refreshRequestData() {
     // ponytail: 主管審核資料仍以正式 API 為主；公開 overlay 補資料失敗時不擋主流程。
   }
   requestOverlaySourceLoaded = true;
+}
+
+async function exportDepartmentsFromSettings() {
+  try {
+    await window.schedulerApi.exportDepartments({ state });
+  } catch (error) {
+    setSaveStatus(`匯出失敗：${error.message}`);
+  }
+}
+
+async function importDepartmentsFromSettings() {
+  try {
+    const result = await window.schedulerApi.importDepartments();
+    if (result.canceled) {
+      return;
+    }
+    const existingNames = new Set(state.departments.map((item) => item.name.trim()));
+    const importedNames = new Set();
+    let imported = 0;
+    let skipped = 0;
+
+    for (const row of result.rows || []) {
+      const name = String(row.name || "").trim();
+      if (!name || existingNames.has(name) || importedNames.has(name)) {
+        skipped += 1;
+        continue;
+      }
+      if (row.startDate && row.endDate && !isValidDateRange(row.startDate, row.endDate)) {
+        skipped += 1;
+        continue;
+      }
+      state.departments.push({
+        id: uid("d"),
+        name,
+        startDate: row.startDate || "",
+        endDate: row.endDate || "",
+        hiddenFromLeave: Boolean(row.hiddenFromLeave)
+      });
+      importedNames.add(name);
+      imported += 1;
+    }
+
+    renderAll();
+    openDepartmentSettings();
+    queueSave();
+    showInfoMessage(`匯入完成：新增 ${imported} 筆，略過 ${skipped} 筆`);
+  } catch (error) {
+    setSaveStatus(`匯入失敗：${error.message}`);
+  }
+}
+
+async function exportListSettings(category) {
+  try {
+    if (category === "shift") {
+      await window.schedulerApi.exportShifts({ state });
+      return;
+    }
+    if (category === "leave") {
+      await window.schedulerApi.exportLeaveSettings({ state });
+      return;
+    }
+    await window.schedulerApi.exportOvertimeSettings({ state });
+  } catch (error) {
+    setSaveStatus(`匯出失敗：${error.message}`);
+  }
+}
+
+async function importShiftSettings() {
+  try {
+    const result = await window.schedulerApi.importShifts();
+    if (result.canceled) {
+      return;
+    }
+    const departmentMap = new Map(state.departments.map((item) => [item.name.trim(), item.id]));
+    const existingKeys = new Set(state.shifts.map((item) => `${item.name.trim()}|${getDepartmentSummary(item.applicableDeptIds).trim()}`));
+    const importedKeys = new Set();
+    let imported = 0;
+    let skipped = 0;
+
+    for (const row of result.rows || []) {
+      const name = String(row.name || "").trim();
+      const departmentName = String(row.departmentName || "").trim();
+      const deptId = departmentMap.get(departmentName);
+      const key = `${name}|${departmentName}`;
+      if (!name || !deptId || existingKeys.has(key) || importedKeys.has(key) || !isValidTimeRange(row.startTime, row.endTime)) {
+        skipped += 1;
+        continue;
+      }
+      state.shifts.push({
+        id: uid("s"),
+        name,
+        color: row.color || COLORS[state.shifts.length % COLORS.length].hex,
+        textColor: row.textColor || autoLeaveTextColor(row.color || COLORS[state.shifts.length % COLORS.length].hex),
+        autoTextColor: row.autoTextColor !== false,
+        startTime: row.startTime || "",
+        endTime: row.endTime || "",
+        hiddenFromToolbar: Boolean(row.hiddenFromToolbar),
+        applicableDeptIds: [deptId],
+        positionRequirements: []
+      });
+      importedKeys.add(key);
+      imported += 1;
+    }
+
+    renderAll();
+    openListSettings("shift");
+    queueSave();
+    showInfoMessage(`匯入完成：新增 ${imported} 筆，略過 ${skipped} 筆`);
+  } catch (error) {
+    setSaveStatus(`匯入失敗：${error.message}`);
+  }
+}
+
+async function importLeaveSettings() {
+  try {
+    const payload = await window.schedulerApi.importLeaveSettings();
+    if (payload.canceled) {
+      return;
+    }
+    const result = payload.result || { requestStyle: null, items: [] };
+    const existingCodes = new Set(state.leaves.map((item) => item.code));
+    const importedCodes = new Set();
+    let imported = 0;
+    let skipped = 0;
+
+    for (const row of result.items || []) {
+      const code = String(row.code || "").trim();
+      if (!code || existingCodes.has(code) || importedCodes.has(code)) {
+        skipped += 1;
+        continue;
+      }
+      const catalogEntry = LEAVE_CATALOG.find((entry) => entry.code === code);
+      if (!catalogEntry) {
+        skipped += 1;
+        continue;
+      }
+      const color = row.color || COLORS[state.leaves.length % COLORS.length].hex;
+      state.leaves.push({
+        id: uid("l"),
+        code,
+        name: String(row.name || "").trim() || catalogEntry.name,
+        color,
+        textColor: row.textColor || autoLeaveTextColor(color),
+        autoTextColor: row.autoTextColor !== false,
+        hiddenFromToolbar: Boolean(row.hiddenFromToolbar),
+        defaultAllDay: Boolean(row.defaultAllDay),
+        requireReason: Boolean(row.requireReason)
+      });
+      importedCodes.add(code);
+      imported += 1;
+    }
+
+    if (result.requestStyle?.color) {
+      state.requestStyles.leave = {
+        color: result.requestStyle.color,
+        textColor: result.requestStyle.textColor || autoLeaveTextColor(result.requestStyle.color),
+        autoTextColor: result.requestStyle.autoTextColor !== false
+      };
+    }
+
+    renderAll();
+    openListSettings("leave");
+    queueSave();
+    await syncRequestCatalogs();
+    showInfoMessage(`匯入完成：新增 ${imported} 筆，略過 ${skipped} 筆`);
+  } catch (error) {
+    setSaveStatus(`匯入失敗：${error.message}`);
+  }
+}
+
+async function importOvertimeSettings() {
+  try {
+    const payload = await window.schedulerApi.importOvertimeSettings();
+    if (payload.canceled) {
+      return;
+    }
+    const result = payload.result || { requestStyle: null, items: [] };
+    const existingNames = new Set(state.overtime.map((item) => item.name.trim()));
+    const importedNames = new Set();
+    let imported = 0;
+    let skipped = 0;
+
+    for (const row of result.items || []) {
+      const name = String(row.name || "").trim();
+      if (!name || existingNames.has(name) || importedNames.has(name) || !isValidTimeRange(row.startTime, row.endTime)) {
+        skipped += 1;
+        continue;
+      }
+      if (row.useRest1 && !isValidTimeRange(row.rest1StartTime, row.rest1EndTime)) {
+        skipped += 1;
+        continue;
+      }
+      if (row.useRest2 && !isValidTimeRange(row.rest2StartTime, row.rest2EndTime)) {
+        skipped += 1;
+        continue;
+      }
+      const color = row.color || COLORS[state.overtime.length % COLORS.length].hex;
+      state.overtime.push({
+        id: uid("o"),
+        name,
+        color,
+        textColor: row.textColor || autoLeaveTextColor(color),
+        autoTextColor: row.autoTextColor !== false,
+        hiddenFromToolbar: Boolean(row.hiddenFromToolbar),
+        startTime: row.startTime || "",
+        endTime: row.endTime || "",
+        useRest1: Boolean(row.useRest1),
+        rest1StartTime: row.useRest1 ? row.rest1StartTime || "" : "",
+        rest1EndTime: row.useRest1 ? row.rest1EndTime || "" : "",
+        useRest2: Boolean(row.useRest2),
+        rest2StartTime: row.useRest2 ? row.rest2StartTime || "" : "",
+        rest2EndTime: row.useRest2 ? row.rest2EndTime || "" : ""
+      });
+      importedNames.add(name);
+      imported += 1;
+    }
+
+    if (result.requestStyle?.color) {
+      state.requestStyles.overtime = {
+        color: result.requestStyle.color,
+        textColor: result.requestStyle.textColor || autoLeaveTextColor(result.requestStyle.color),
+        autoTextColor: result.requestStyle.autoTextColor !== false
+      };
+    }
+
+    renderAll();
+    openListSettings("overtime");
+    queueSave();
+    await syncRequestCatalogs();
+    showInfoMessage(`匯入完成：新增 ${imported} 筆，略過 ${skipped} 筆`);
+  } catch (error) {
+    setSaveStatus(`匯入失敗：${error.message}`);
+  }
+}
+
+async function importListSettings(category) {
+  if (category === "shift") {
+    await importShiftSettings();
+    return;
+  }
+  if (category === "leave") {
+    await importLeaveSettings();
+    return;
+  }
+  await importOvertimeSettings();
 }
 
 function syncApprovedRequestsToSchedule() {
@@ -4575,6 +4828,10 @@ function bindEvents() {
       target.dataset.openAddMember ||
       target.dataset.exportMembers ||
       target.dataset.importMembers ||
+      target.dataset.exportSettings ||
+      target.dataset.importSettings ||
+      target.dataset.exportDepartments ||
+      target.dataset.importDepartments ||
       target.dataset.editMember ||
       target.dataset.saveMember ||
       target.dataset.deleteMember ||
@@ -4718,12 +4975,28 @@ function bindEvents() {
     }
 
     if (target.dataset.openAddMember) openMemberForm("add");
+    if (target.dataset.exportDepartments) {
+      await exportDepartmentsFromSettings();
+      return;
+    }
+    if (target.dataset.importDepartments) {
+      await importDepartmentsFromSettings();
+      return;
+    }
     if (target.dataset.exportMembers) {
       await exportMembersFromSettings();
       return;
     }
     if (target.dataset.importMembers) {
       await importMembersFromSettings();
+      return;
+    }
+    if (target.dataset.exportSettings) {
+      await exportListSettings(target.dataset.exportSettings);
+      return;
+    }
+    if (target.dataset.importSettings) {
+      await importListSettings(target.dataset.importSettings);
       return;
     }
     if (target.dataset.editMember) openMemberForm("edit", target.dataset.editMember);

@@ -63,6 +63,29 @@
     return `${match[1]}-${String(Number(match[2])).padStart(2, "0")}-${String(Number(match[3])).padStart(2, "0")}`;
   }
 
+  function normalizeImportedTime(value) {
+    if (!value) {
+      return "";
+    }
+    const text = String(value).trim();
+    if (!text) {
+      return "";
+    }
+    const match = text.match(/^(\d{1,2}):(\d{2})$/) || text.match(/^(\d{2})(\d{2})$/);
+    if (!match) {
+      return "";
+    }
+    return `${String(Number(match[1])).padStart(2, "0")}:${String(Number(match[2])).padStart(2, "0")}`;
+  }
+
+  function normalizeImportedBoolean(value) {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    const text = String(value ?? "").trim().toLowerCase();
+    return ["1", "true", "yes", "y", "是"].includes(text);
+  }
+
   function getCellDisplayValue(cell) {
     return String(cell?.text ?? cell?.value ?? "").trim();
   }
@@ -429,6 +452,143 @@
     return workbook;
   }
 
+  async function createDepartmentWorkbook(payload) {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("單位設定");
+    const headers = ["單位", "開始日期", "結束日期", "請假匯出排除"];
+
+    sheet.addRow(headers);
+    (payload.state?.departments || []).forEach((department) => {
+      sheet.addRow([
+        department.name || "",
+        formatDisplayDate(department.startDate || ""),
+        formatDisplayDate(department.endDate || ""),
+        department.hiddenFromLeave ? "是" : "否"
+      ]);
+    });
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
+    sheet.columns = [
+      { width: 18 },
+      { width: 14 },
+      { width: 14 },
+      { width: 16 }
+    ];
+    applySheetBorder(sheet);
+    return workbook;
+  }
+
+  async function createShiftWorkbook(payload) {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("班別設定");
+    const headers = ["班別", "適用單位", "上班時間", "下班時間", "底色", "字色", "自動字色", "不顯示"];
+    const departmentMap = new Map((payload.state?.departments || []).map((item) => [item.id, item.name]));
+
+    sheet.addRow(headers);
+    (payload.state?.shifts || []).forEach((shift) => {
+      sheet.addRow([
+        shift.name || "",
+        departmentMap.get(shift.applicableDeptIds?.[0] || "") || "",
+        shift.startTime || "",
+        shift.endTime || "",
+        shift.color || "",
+        shift.textColor || "",
+        shift.autoTextColor ? "是" : "否",
+        shift.hiddenFromToolbar ? "是" : "否"
+      ]);
+    });
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
+    sheet.columns = headers.map((_, index) => ({ width: index === 0 ? 18 : 14 }));
+    applySheetBorder(sheet);
+    return workbook;
+  }
+
+  async function createLeaveSettingsWorkbook(payload) {
+    const workbook = new ExcelJS.Workbook();
+    const requestSheet = workbook.addWorksheet("請假申請預覽");
+    requestSheet.addRow(["底色", "字色", "自動字色"]);
+    requestSheet.addRow([
+      payload.state?.requestStyles?.leave?.color || "",
+      payload.state?.requestStyles?.leave?.textColor || "",
+      payload.state?.requestStyles?.leave?.autoTextColor ? "是" : "否"
+    ]);
+    requestSheet.getRow(1).font = { bold: true };
+    requestSheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    requestSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
+    requestSheet.columns = [{ width: 14 }, { width: 14 }, { width: 12 }];
+    applySheetBorder(requestSheet);
+
+    const sheet = workbook.addWorksheet("假別設定");
+    const headers = ["假別代碼", "名稱", "需填時間", "需填原因", "底色", "字色", "自動字色", "不顯示"];
+    sheet.addRow(headers);
+    (payload.state?.leaves || []).forEach((item) => {
+      sheet.addRow([
+        item.code || "",
+        item.name || "",
+        item.defaultAllDay ? "是" : "否",
+        item.requireReason ? "是" : "否",
+        item.color || "",
+        item.textColor || "",
+        item.autoTextColor ? "是" : "否",
+        item.hiddenFromToolbar ? "是" : "否"
+      ]);
+    });
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
+    sheet.columns = headers.map((_, index) => ({ width: index < 2 ? 18 : 14 }));
+    applySheetBorder(sheet);
+    return workbook;
+  }
+
+  async function createOvertimeSettingsWorkbook(payload) {
+    const workbook = new ExcelJS.Workbook();
+    const requestSheet = workbook.addWorksheet("加班申請預覽");
+    requestSheet.addRow(["底色", "字色", "自動字色"]);
+    requestSheet.addRow([
+      payload.state?.requestStyles?.overtime?.color || "",
+      payload.state?.requestStyles?.overtime?.textColor || "",
+      payload.state?.requestStyles?.overtime?.autoTextColor ? "是" : "否"
+    ]);
+    requestSheet.getRow(1).font = { bold: true };
+    requestSheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    requestSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
+    requestSheet.columns = [{ width: 14 }, { width: 14 }, { width: 12 }];
+    applySheetBorder(requestSheet);
+
+    const sheet = workbook.addWorksheet("加班設定");
+    const headers = ["名稱", "上班時間", "下班時間", "使用休息1", "休息1開始", "休息1結束", "使用休息2", "休息2開始", "休息2結束", "底色", "字色", "自動字色", "不顯示"];
+    sheet.addRow(headers);
+    (payload.state?.overtime || []).forEach((item) => {
+      sheet.addRow([
+        item.name || "",
+        item.startTime || "",
+        item.endTime || "",
+        item.useRest1 ? "是" : "否",
+        item.rest1StartTime || "",
+        item.rest1EndTime || "",
+        item.useRest2 ? "是" : "否",
+        item.rest2StartTime || "",
+        item.rest2EndTime || "",
+        item.color || "",
+        item.textColor || "",
+        item.autoTextColor ? "是" : "否",
+        item.hiddenFromToolbar ? "是" : "否"
+      ]);
+    });
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
+    sheet.columns = headers.map((_, index) => ({ width: index === 0 ? 18 : 14 }));
+    applySheetBorder(sheet);
+    return workbook;
+  }
+
   async function parseMemberWorkbook(arrayBuffer) {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);
@@ -462,6 +622,133 @@
       });
     });
     return rows;
+  }
+
+  async function parseDepartmentWorkbook(arrayBuffer) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) {
+      return [];
+    }
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        return;
+      }
+      const name = getCellDisplayValue(row.getCell(1));
+      const startDate = normalizeImportedDate(row.getCell(2).value);
+      const endDate = normalizeImportedDate(row.getCell(3).value);
+      const hiddenFromLeave = normalizeImportedBoolean(getCellDisplayValue(row.getCell(4)));
+      if (![name, startDate, endDate, hiddenFromLeave].some(Boolean)) {
+        return;
+      }
+      rows.push({ name, startDate, endDate, hiddenFromLeave });
+    });
+    return rows;
+  }
+
+  async function parseShiftWorkbook(arrayBuffer) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) {
+      return [];
+    }
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) {
+        return;
+      }
+      const name = getCellDisplayValue(row.getCell(1));
+      const departmentName = getCellDisplayValue(row.getCell(2));
+      const startTime = normalizeImportedTime(row.getCell(3).value);
+      const endTime = normalizeImportedTime(row.getCell(4).value);
+      const color = getCellDisplayValue(row.getCell(5));
+      const textColor = getCellDisplayValue(row.getCell(6));
+      const autoTextColor = normalizeImportedBoolean(getCellDisplayValue(row.getCell(7)));
+      const hiddenFromToolbar = normalizeImportedBoolean(getCellDisplayValue(row.getCell(8)));
+      if (![name, departmentName, startTime, endTime, color, textColor, autoTextColor, hiddenFromToolbar].some(Boolean)) {
+        return;
+      }
+      rows.push({ name, departmentName, startTime, endTime, color, textColor, autoTextColor, hiddenFromToolbar });
+    });
+    return rows;
+  }
+
+  async function parseLeaveSettingsWorkbook(arrayBuffer) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
+    const requestSheet = workbook.getWorksheet("請假申請預覽");
+    const sheet = workbook.getWorksheet("假別設定") || workbook.worksheets[0];
+    const requestStyle = requestSheet?.rowCount >= 2
+      ? {
+        color: getCellDisplayValue(requestSheet.getRow(2).getCell(1)),
+        textColor: getCellDisplayValue(requestSheet.getRow(2).getCell(2)),
+        autoTextColor: normalizeImportedBoolean(getCellDisplayValue(requestSheet.getRow(2).getCell(3)))
+      }
+      : null;
+    const items = [];
+    if (sheet) {
+      sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) {
+          return;
+        }
+        const code = getCellDisplayValue(row.getCell(1));
+        const name = getCellDisplayValue(row.getCell(2));
+        const defaultAllDay = normalizeImportedBoolean(getCellDisplayValue(row.getCell(3)));
+        const requireReason = normalizeImportedBoolean(getCellDisplayValue(row.getCell(4)));
+        const color = getCellDisplayValue(row.getCell(5));
+        const textColor = getCellDisplayValue(row.getCell(6));
+        const autoTextColor = normalizeImportedBoolean(getCellDisplayValue(row.getCell(7)));
+        const hiddenFromToolbar = normalizeImportedBoolean(getCellDisplayValue(row.getCell(8)));
+        if (![code, name, defaultAllDay, requireReason, color, textColor, autoTextColor, hiddenFromToolbar].some(Boolean)) {
+          return;
+        }
+        items.push({ code, name, defaultAllDay, requireReason, color, textColor, autoTextColor, hiddenFromToolbar });
+      });
+    }
+    return { requestStyle, items };
+  }
+
+  async function parseOvertimeSettingsWorkbook(arrayBuffer) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
+    const requestSheet = workbook.getWorksheet("加班申請預覽");
+    const sheet = workbook.getWorksheet("加班設定") || workbook.worksheets[0];
+    const requestStyle = requestSheet?.rowCount >= 2
+      ? {
+        color: getCellDisplayValue(requestSheet.getRow(2).getCell(1)),
+        textColor: getCellDisplayValue(requestSheet.getRow(2).getCell(2)),
+        autoTextColor: normalizeImportedBoolean(getCellDisplayValue(requestSheet.getRow(2).getCell(3)))
+      }
+      : null;
+    const items = [];
+    if (sheet) {
+      sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) {
+          return;
+        }
+        const name = getCellDisplayValue(row.getCell(1));
+        const startTime = normalizeImportedTime(row.getCell(2).value);
+        const endTime = normalizeImportedTime(row.getCell(3).value);
+        const useRest1 = normalizeImportedBoolean(getCellDisplayValue(row.getCell(4)));
+        const rest1StartTime = normalizeImportedTime(row.getCell(5).value);
+        const rest1EndTime = normalizeImportedTime(row.getCell(6).value);
+        const useRest2 = normalizeImportedBoolean(getCellDisplayValue(row.getCell(7)));
+        const rest2StartTime = normalizeImportedTime(row.getCell(8).value);
+        const rest2EndTime = normalizeImportedTime(row.getCell(9).value);
+        const color = getCellDisplayValue(row.getCell(10));
+        const textColor = getCellDisplayValue(row.getCell(11));
+        const autoTextColor = normalizeImportedBoolean(getCellDisplayValue(row.getCell(12)));
+        const hiddenFromToolbar = normalizeImportedBoolean(getCellDisplayValue(row.getCell(13)));
+        if (![name, startTime, endTime, useRest1, rest1StartTime, rest1EndTime, useRest2, rest2StartTime, rest2EndTime, color, textColor, autoTextColor, hiddenFromToolbar].some(Boolean)) {
+          return;
+        }
+        items.push({ name, startTime, endTime, useRest1, rest1StartTime, rest1EndTime, useRest2, rest2StartTime, rest2EndTime, color, textColor, autoTextColor, hiddenFromToolbar });
+      });
+    }
+    return { requestStyle, items };
   }
 
   async function workbookToBlob(workbook) {
@@ -501,7 +788,15 @@
     createOvertimeWorkbook,
     createLeaveWorkbook,
     createMemberWorkbook,
+    createDepartmentWorkbook,
+    createShiftWorkbook,
+    createLeaveSettingsWorkbook,
+    createOvertimeSettingsWorkbook,
     parseMemberWorkbook,
+    parseDepartmentWorkbook,
+    parseShiftWorkbook,
+    parseLeaveSettingsWorkbook,
+    parseOvertimeSettingsWorkbook,
     workbookToBlob
   };
 })();
