@@ -995,8 +995,19 @@
       member_id: `eq.${currentSession.user.id}`,
       status: "eq.pending"
     }, {
+      auth: true,
+      prefer: "return=representation"
+    });
+    const remaining = await restSelect("leave_requests", {
+      select: "id",
+      filters: {
+        id: `eq.${requestId}`
+      },
       auth: true
     });
+    if (remaining?.length) {
+      throw new Error("資料庫未刪除這筆請假申請，請先確認已套用員工刪除 pending 申請的 RLS 規則");
+    }
     return { ok: true };
   }
 
@@ -1019,8 +1030,19 @@
       member_id: `eq.${currentSession.user.id}`,
       status: "eq.pending"
     }, {
+      auth: true,
+      prefer: "return=representation"
+    });
+    const remaining = await restSelect("overtime_requests", {
+      select: "id",
+      filters: {
+        id: `eq.${requestId}`
+      },
       auth: true
     });
+    if (remaining?.length) {
+      throw new Error("資料庫未刪除這筆加班申請，請先確認已套用員工刪除 pending 申請的 RLS 規則");
+    }
     return { ok: true };
   }
   async function exportSapCsv(payload) {
