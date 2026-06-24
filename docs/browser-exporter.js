@@ -127,9 +127,7 @@
   }
 
   function getLeaveCatalog(payload) {
-    const items = Array.isArray(payload?.state?.leaveCatalog) && payload.state.leaveCatalog.length
-      ? payload.state.leaveCatalog
-      : (Array.isArray(payload?.state?.leaves) ? payload.state.leaves : []);
+    const items = Array.isArray(payload?.state?.leaveCatalog) ? payload.state.leaveCatalog : [];
     return items
       .map((item) => ({
         code: String(item?.code || "").trim(),
