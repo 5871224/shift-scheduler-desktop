@@ -882,9 +882,6 @@ function normalizeState(payload) {
   merged.role = "manager";
   merged.year = Number.isInteger(payload.year) ? payload.year : merged.year;
   merged.month = Number.isInteger(payload.month) ? payload.month : merged.month;
-  merged.selected = payload.selected && typeof payload.selected === "object"
-    ? { type: payload.selected.type ?? null, id: payload.selected.id ?? null }
-    : merged.selected;
   merged.departments = Array.isArray(payload.departments)
     ? payload.departments.map((department, index) => sanitizeDepartment(department, index))
     : merged.departments;
