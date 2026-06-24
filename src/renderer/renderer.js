@@ -78,6 +78,21 @@ const LEGACY_LEAVE_NAME_MAP = {
   "休假": "0047"
 };
 
+function createDefaultRequestStyles() {
+  return {
+    leave: {
+      color: "#d4537e",
+      textColor: autoLeaveTextColor("#d4537e"),
+      autoTextColor: true
+    },
+    overtime: {
+      color: "#34d6c2",
+      textColor: autoLeaveTextColor("#34d6c2"),
+      autoTextColor: true
+    }
+  };
+}
+
 const DEFAULT_STATE = {
   role: "manager",
   year: new Date().getFullYear(),
@@ -160,6 +175,7 @@ const DEFAULT_STATE = {
     forbidProxyLeaveConflict: true,
     requireEmploymentWindow: true
   },
+  requestStyles: createDefaultRequestStyles(),
   schedule: {}
 };
 
@@ -171,6 +187,7 @@ const REQUEST_STATUS_LABELS = {
   rejected: "已退回",
   cancelled: "已取消"
 };
+const DEFAULT_REQUEST_STYLES = createDefaultRequestStyles();
 const WEEK_START_OPTIONS = [
   { value: 0, label: "星期日" },
   { value: 1, label: "星期一" },
@@ -185,9 +202,6 @@ let state = createEmptyState();
 let modalColor = COLORS[0].hex;
 let modalTextColor = "#ffffff";
 let modalTextColorAuto = true;
-let modalRequestColor = COLORS[0].hex;
-let modalRequestTextColor = "#ffffff";
-let modalRequestTextColorAuto = true;
 let modalContext = {};
 let saveTimer = null;
 let isSaving = false;
@@ -927,6 +941,10 @@ function normalizeState(payload) {
     forbidProxyLeaveConflict: payload.rules?.forbidProxyLeaveConflict !== false,
     requireEmploymentWindow: payload.rules?.requireEmploymentWindow !== false
   };
+  merged.requestStyles = {
+    leave: sanitizeRequestStyle(payload.requestStyles?.leave, DEFAULT_REQUEST_STYLES.leave),
+    overtime: sanitizeRequestStyle(payload.requestStyles?.overtime, DEFAULT_REQUEST_STYLES.overtime)
+  };
   merged.deptFilter = typeof payload.deptFilter === "string" ? payload.deptFilter : merged.deptFilter;
   merged.tableDeptScopeFilter = typeof payload.tableDeptScopeFilter === "string" ? payload.tableDeptScopeFilter : merged.tableDeptScopeFilter;
   merged.schedule = cleanupScheduleEntries(payload.schedule && typeof payload.schedule === "object" ? payload.schedule : merged.schedule, merged);
@@ -1114,12 +1132,19 @@ function getLeaveStyleByCode(leaveCode) {
   };
 }
 
-function getRequestPalette(item, fallbackColor) {
-  const color = item?.requestColor || fallbackColor;
+function sanitizeRequestStyle(style, fallback) {
+  const color = style?.color || fallback.color;
+  const autoTextColor = style?.autoTextColor ?? !style?.textColor;
   return {
     color,
-    textColor: item?.requestTextColor || autoLeaveTextColor(color)
+    textColor: style?.textColor || autoLeaveTextColor(color),
+    autoTextColor: Boolean(autoTextColor)
   };
+}
+
+function getRequestDisplayStyle(kind) {
+  const fallback = DEFAULT_REQUEST_STYLES[kind] || DEFAULT_REQUEST_STYLES.leave;
+  return sanitizeRequestStyle(state.requestStyles?.[kind], fallback);
 }
 
 function slotHasBlockingRequest(slot, category) {
@@ -1518,7 +1543,11 @@ function showScheduleTooltip(memberId, day, category, anchorRect) {
   root.style.top = `${anchorRect.bottom + window.scrollY + 8}px`;
   root.innerHTML = `
     <div class="leave-tooltip-head">
-      <div class="leave-tooltip-title">${escapeHtml(isLeave ? `${item?.code || ""} ${item?.name || ""}`.trim() : (item?.name || "加班"))}</div>
+      <div class="leave-tooltip-title">${escapeHtml(
+        isLeave
+          ? `${item?.code || ""} ${meta?.displayName || item?.name || ""}`.trim()
+          : (meta?.displayName || item?.name || "加班")
+      )}</div>
       ${isManager()
         ? (isLeave
           ? renderActionIconButton("edit", `data-edit-leave-assignment="${memberId}:${day}"`, "leave-tooltip-btn")
@@ -1668,8 +1697,8 @@ function renderCellInner(key, memberId = "", day = 0) {
     if (leave) {
       const leavePalette = cellState.leaveRequestId
         ? {
-          color: cellState.leaveMeta?.displayColor || getRequestPalette(leave, leave.requestColor || leave.color).color,
-          textColor: cellState.leaveMeta?.displayTextColor || getRequestPalette(leave, leave.requestColor || leave.color).textColor
+          color: cellState.leaveMeta?.displayColor || getRequestDisplayStyle("leave").color,
+          textColor: cellState.leaveMeta?.displayTextColor || getRequestDisplayStyle("leave").textColor
         }
         : { color: leave.color, textColor: getItemTextColor(leave, leave.color) };
       segments.push({
@@ -1686,13 +1715,13 @@ function renderCellInner(key, memberId = "", day = 0) {
     const color = overtime?.color || DEFAULT_STATE.overtime[0].color;
     const overtimePalette = cellState.overtimeRequestId
       ? {
-        color: cellState.overtimeMeta?.displayColor || getRequestPalette(overtime, overtime?.requestColor || color).color,
-        textColor: cellState.overtimeMeta?.displayTextColor || getRequestPalette(overtime, overtime?.requestColor || color).textColor
+        color: cellState.overtimeMeta?.displayColor || getRequestDisplayStyle("overtime").color,
+        textColor: cellState.overtimeMeta?.displayTextColor || getRequestDisplayStyle("overtime").textColor
       }
       : { color, textColor: getItemTextColor(overtime, color) };
     segments.push({
       category: "overtime",
-      name: overtime?.name || cellState.overtimeMeta?.displayName || "加班",
+      name: cellState.overtimeRequestId ? (cellState.overtimeMeta?.displayName || "加班") : (overtime?.name || "加班"),
       color: overtimePalette.color,
       textColor: overtimePalette.textColor,
       status: cellState.overtimeMeta?.requestStatus || "approved"
@@ -2237,6 +2266,54 @@ async function saveOvertimeAssignmentFromModal() {
   queueSave();
 }
 
+function renderRequestStyleSettingsCard(kind) {
+  const style = getRequestDisplayStyle(kind);
+  const previewText = kind === "leave" ? "請假申請" : "加班";
+  return `
+    <div class="result-item">
+      <div class="result-title">${previewText}顏色</div>
+      <div class="leave-preview-wrap">
+        <div class="settings-table-preview" style="background:${escapeHtml(style.color)};color:${escapeHtml(style.textColor)}">${escapeHtml(previewText)}</div>
+        <div class="settings-table-actions">
+          ${renderActionIconButton("edit", `data-open-request-style="${kind}"`)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openRequestStyleModal(kind) {
+  const style = getRequestDisplayStyle(kind);
+  modalColor = style.color;
+  modalTextColor = style.textColor;
+  modalTextColorAuto = style.autoTextColor;
+  modalContext = { category: "request-style", requestKind: kind };
+  openEntityListModal({
+    title: kind === "leave" ? "請假申請顏色" : "加班申請顏色",
+    modalClass: "modal modal-form-compact",
+    body: renderColorPreviewFields("request-style", kind === "leave" ? "請假申請" : "加班"),
+    headerButtons: '<button class="btn-primary" type="button" data-save-request-style="true">儲存設定</button>',
+    hideFooterClose: true
+  });
+  syncNamedColorUi();
+}
+
+function saveRequestStyleFromModal() {
+  const kind = modalContext.requestKind;
+  if (!kind || !state.requestStyles?.[kind]) {
+    return;
+  }
+  state.requestStyles[kind] = {
+    color: modalColor,
+    textColor: modalTextColor,
+    autoTextColor: modalTextColorAuto
+  };
+  closeModal();
+  renderAll();
+  openListSettings(kind);
+  queueSave();
+}
+
 function openListSettings(category) {
   const titleMap = {
     shift: "班別設定",
@@ -2244,8 +2321,12 @@ function openListSettings(category) {
     overtime: "加班設定"
   };
   const list = getItemList(category);
+  const requestStyleCard = (category === "leave" || category === "overtime")
+    ? `${renderRequestStyleSettingsCard(category)}`
+    : "";
   const body = list.length
       ? `
+        ${requestStyleCard}
         <div class="settings-table-wrap">
           <div class="settings-table">
             <div class="settings-table-row settings-table-head settings-table-row-${category}">
@@ -2292,7 +2373,7 @@ function openListSettings(category) {
           </div>
         </div>
       `
-      : '<div class="empty-state">目前還沒有資料</div>';
+      : `${requestStyleCard || ""}<div class="empty-state">目前還沒有資料</div>`;
 
   openEntityListModal({
     title: titleMap[category],
@@ -2330,26 +2411,6 @@ function renderColorPreviewFields(category, previewText) {
   `;
 }
 
-function renderRequestColorPreviewFields(category, previewText) {
-  return `
-    <div class="form-row form-row-compact leave-preview-row">
-      <label>申請預覽</label>
-      <div class="leave-preview-wrap">
-        <div class="leave-preview" data-request-color-preview="${category}" style="background:${escapeHtml(modalRequestColor)};color:${escapeHtml(modalRequestTextColor)}">
-          <span data-request-color-preview-text="${category}">${escapeHtml(previewText)}</span>
-        </div>
-        <div class="leave-color-actions">
-          <button class="ghost-btn leave-color-btn" type="button" data-open-item-color="request-bg">底色</button>
-          <input class="hidden-color-input leave-color-input" type="color" value="${escapeHtml(modalRequestColor)}" data-item-color-input="request-bg">
-          <button class="ghost-btn leave-color-btn" type="button" data-open-item-color="request-text">字色</button>
-          <input class="hidden-color-input leave-color-input" type="color" value="${escapeHtml(modalRequestTextColor)}" data-item-color-input="request-text">
-          <button class="ghost-btn leave-color-btn" type="button" data-set-auto-item-text="request">自動字色</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 function renderActionIconButton(kind, attrs, extraClass = "") {
   const title = kind === "delete" ? "刪除" : "修改";
   const dangerClass = kind === "delete" ? " settings-icon-btn-danger" : "";
@@ -2377,25 +2438,22 @@ function renderActionIconButton(kind, attrs, extraClass = "") {
 function syncNamedColorUi() {
   const preview = document.querySelector("[data-color-preview]");
   const previewText = document.querySelector("[data-color-preview-text]");
-  const requestPreview = document.querySelector("[data-request-color-preview]");
-  const requestPreviewText = document.querySelector("[data-request-color-preview-text]");
   const bgInput = document.querySelector('[data-item-color-input="bg"]');
   const textInput = document.querySelector('[data-item-color-input="text"]');
-  const requestBgInput = document.querySelector('[data-item-color-input="request-bg"]');
-  const requestTextInput = document.querySelector('[data-item-color-input="request-text"]');
   if (modalTextColorAuto) {
     modalTextColor = autoLeaveTextColor(modalColor);
   }
-  if (modalRequestTextColorAuto) {
-    modalRequestTextColor = autoLeaveTextColor(modalRequestColor);
-  }
   const fallbackName = modalContext.category === "shift"
     ? "班別"
+    : modalContext.category === "request-style"
+      ? (modalContext.requestKind === "leave" ? "請假申請" : "加班")
     : modalContext.category === "overtime"
       ? "加班"
       : "名稱";
   const displayName = modalContext.category === "leave"
     ? (document.getElementById("leaveCatalogName")?.value.trim() || "名稱")
+    : modalContext.category === "request-style"
+      ? fallbackName
     : modalContext.category === "shift"
       ? (document.getElementById("shiftName")?.value.trim() || fallbackName)
       : (document.getElementById("namedItemName")?.value.trim() || fallbackName);
@@ -2406,24 +2464,11 @@ function syncNamedColorUi() {
   if (previewText) {
     previewText.textContent = displayName;
   }
-  if (requestPreview) {
-    requestPreview.style.background = modalRequestColor;
-    requestPreview.style.color = modalRequestTextColor;
-  }
-  if (requestPreviewText) {
-    requestPreviewText.textContent = displayName;
-  }
   if (bgInput) {
     bgInput.value = modalColor;
   }
   if (textInput) {
     textInput.value = modalTextColor;
-  }
-  if (requestBgInput) {
-    requestBgInput.value = modalRequestColor;
-  }
-  if (requestTextInput) {
-    requestTextInput.value = modalRequestTextColor;
   }
 }
 
@@ -2446,9 +2491,6 @@ function openShiftFormModal(mode, shiftId = "") {
   modalColor = shift.color;
   modalTextColorAuto = shift.autoTextColor ?? !shift.textColor;
   modalTextColor = shift.textColor || autoLeaveTextColor(shift.color);
-  modalRequestColor = shift.color;
-  modalRequestTextColorAuto = true;
-  modalRequestTextColor = autoLeaveTextColor(shift.color);
   modalContext = { mode, category: "shift", targetId: shiftId };
 
   openEntityListModal({
@@ -2554,9 +2596,6 @@ function openNamedColorFormModal(category, mode, targetId = "") {
   modalColor = item.color;
   modalTextColorAuto = item.autoTextColor ?? !item.textColor;
   modalTextColor = item.textColor || autoLeaveTextColor(item.color);
-  modalRequestColor = item.requestColor || item.color;
-  modalRequestTextColorAuto = item.requestAutoTextColor ?? !item.requestTextColor;
-  modalRequestTextColor = item.requestTextColor || autoLeaveTextColor(modalRequestColor);
   modalContext = { category, mode, targetId };
   const titleMap = {
     shift: "班別",
@@ -2570,9 +2609,6 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         : "modal modal-wide",
       body: `
       ${renderColorPreviewFields(category, item.name || (category === "overtime" ? "加班" : "名稱"))}
-      ${(category === "leave" || category === "overtime")
-        ? renderRequestColorPreviewFields(category, item.name || (category === "overtime" ? "加班" : "名稱"))
-        : ""}
       <div class="form-row">
         <label for="${category === "leave" ? "leaveCatalogCode" : "namedItemName"}">${category === "leave" ? "假別" : "名稱"}</label>
         ${category === "leave"
@@ -2714,9 +2750,6 @@ function saveNamedColorItem(category, mode) {
     color: modalColor,
     textColor: modalTextColor,
     autoTextColor: modalTextColorAuto,
-    requestColor: category === "leave" || category === "overtime" ? modalRequestColor : undefined,
-    requestTextColor: category === "leave" || category === "overtime" ? modalRequestTextColor : undefined,
-    requestAutoTextColor: category === "leave" || category === "overtime" ? modalRequestTextColorAuto : undefined,
     defaultAllDay: category === "leave" ? document.getElementById("leaveDefaultAllDay")?.checked : undefined,
     requireReason: category === "leave" ? document.getElementById("leaveRequireReason")?.checked : undefined,
     hiddenFromToolbar: Boolean(document.getElementById(`${category}HiddenFromToolbar`)?.checked),
@@ -4134,7 +4167,7 @@ function applyApprovedLeaveRequestToSchedule(record) {
   if (!member || !leave) {
     return;
   }
-  const requestPalette = getRequestPalette(leave, leave.requestColor || leave.color);
+  const requestPalette = getRequestDisplayStyle("leave");
   enumerateDateRange(record.startDate, record.endDate).forEach((dateString) => {
     const [year, month, day] = dateString.split("-").map(Number);
     const slotKey = scheduleKey(member.id, year, month - 1, day);
@@ -4176,9 +4209,9 @@ function applyApprovedOvertimeRequestToSchedule(record) {
   const slotKey = scheduleKey(member.id, year, month - 1, day);
   const slot = state.schedule[slotKey] || { shift: null, leave: null, overtime: null };
   slot.overtime = overtime.id;
-  const requestPalette = getRequestPalette(overtime, overtime?.requestColor || overtime?.color || DEFAULT_STATE.overtime[0].color);
+  const requestPalette = getRequestDisplayStyle("overtime");
   slot.overtimeMeta = {
-    displayName: overtime.name || "加班",
+    displayName: "加班",
     displayColor: requestPalette.color,
     displayTextColor: requestPalette.textColor,
     startTime: record.startTime || "",
@@ -4502,6 +4535,8 @@ function bindEvents() {
       target.dataset.editItem ||
       target.dataset.saveShift ||
       target.dataset.saveNamedItem ||
+      target.dataset.openRequestStyle ||
+      target.dataset.saveRequestStyle ||
       target.dataset.saveOvertimeAssignment ||
       target.dataset.openAddDepartment ||
       target.dataset.editDepartment ||
@@ -4552,13 +4587,8 @@ function bindEvents() {
       return;
     }
     if (target.dataset.setAutoItemText !== undefined) {
-      if (target.dataset.setAutoItemText === "request") {
-        modalRequestTextColorAuto = true;
-        modalRequestTextColor = autoLeaveTextColor(modalRequestColor);
-      } else {
-        modalTextColorAuto = true;
-        modalTextColor = autoLeaveTextColor(modalColor);
-      }
+      modalTextColorAuto = true;
+      modalTextColor = autoLeaveTextColor(modalColor);
       syncNamedColorUi();
       return;
     }
@@ -4610,6 +4640,7 @@ function bindEvents() {
     if (target.dataset.openAdd === "shift") openShiftFormModal("add");
     if (target.dataset.openAdd === "leave") openNamedColorFormModal("leave", "add");
     if (target.dataset.openAdd === "overtime") openNamedColorFormModal("overtime", "add");
+    if (target.dataset.openRequestStyle) openRequestStyleModal(target.dataset.openRequestStyle);
     if (target.dataset.editItem === "shift") openShiftFormModal("edit", target.dataset.editId);
     if (target.dataset.editItem === "leave") openNamedColorFormModal("leave", "edit", target.dataset.editId);
     if (target.dataset.editItem === "overtime") openNamedColorFormModal("overtime", "edit", target.dataset.editId);
@@ -4620,6 +4651,10 @@ function bindEvents() {
     }
     if (target.dataset.saveWeekStart) {
       saveWeekStartSettingFromModal();
+    }
+    if (target.dataset.saveRequestStyle) {
+      saveRequestStyleFromModal();
+      return;
     }
     if (target.dataset.saveLeaveAssignment) saveLeaveAssignmentFromModal();
     if (target.dataset.saveOvertimeAssignment) {
@@ -4704,20 +4739,6 @@ function bindEvents() {
     if (target.dataset.itemColorInput === "text") {
       modalTextColor = target.value;
       modalTextColorAuto = false;
-      syncNamedColorUi();
-      return;
-    }
-    if (target.dataset.itemColorInput === "request-bg") {
-      modalRequestColor = target.value;
-      if (modalRequestTextColorAuto) {
-        modalRequestTextColor = autoLeaveTextColor(modalRequestColor);
-      }
-      syncNamedColorUi();
-      return;
-    }
-    if (target.dataset.itemColorInput === "request-text") {
-      modalRequestTextColor = target.value;
-      modalRequestTextColorAuto = false;
       syncNamedColorUi();
     }
   });
