@@ -19,6 +19,7 @@ returns table (
   use_rest_2 boolean,
   rest_2_start_time time,
   rest_2_end_time time,
+  source text,
   status public.request_status,
   created_at timestamptz
 )
@@ -46,6 +47,7 @@ as $$
     false as use_rest_2,
     null::time as rest_2_start_time,
     null::time as rest_2_end_time,
+    r.source,
     r.status,
     r.created_at
   from public.leave_requests r
@@ -75,6 +77,7 @@ as $$
     r.use_rest_2,
     r.rest_2_start_time,
     r.rest_2_end_time,
+    r.source,
     r.status,
     r.created_at
   from public.overtime_requests r
