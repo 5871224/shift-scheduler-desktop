@@ -65,14 +65,82 @@
     );
   }
 
+  function isWorkDay(day) {
+    return Boolean(day.active && (day.hasShift || day.hasOvertime));
+  }
+
+  function pushIssue(issues, issue) {
+    issues.push(issue);
+  }
+
+  function findWeekForDate(weeks, dateString) {
+    return weeks.find((week) => week.dates.includes(dateString)) || null;
+  }
+
+  function checkSlidingConsecutiveWorkDays(member, weeks, slidingDayMap, issues, maxConsecutiveWorkDays, reportStartDate, reportEndDate) {
+    const dates = [...slidingDayMap.keys()].sort();
+    let streak = 0;
+    let streakStartDate = "";
+    let reportedCurrentStreak = false;
+
+    dates.forEach((dateString) => {
+      const week = findWeekForDate(weeks, dateString);
+      if (week && shouldSkipWeek(member, week)) {
+        streak = 0;
+        streakStartDate = "";
+        reportedCurrentStreak = false;
+        return;
+      }
+
+      const day = { date: dateString, ...(slidingDayMap.get(dateString) || {}) };
+      if (isWorkDay(day)) {
+        if (streak === 0) {
+          streakStartDate = dateString;
+          reportedCurrentStreak = false;
+        }
+        streak += 1;
+        if (
+          streak > maxConsecutiveWorkDays &&
+          dateString >= reportStartDate &&
+          dateString <= reportEndDate &&
+          !reportedCurrentStreak
+        ) {
+          pushIssue(issues, {
+            severity: "error",
+            type: "consecutive_work_days_exceeded",
+            memberId: member.memberId,
+            memberName: member.memberName,
+            memberCode: member.memberCode || "",
+            weekStart: week?.startDate || dateString,
+            weekEnd: week?.endDate || dateString,
+            date: dateString,
+            streakStartDate,
+            streakLength: streak,
+            message: `連續出勤超過 ${maxConsecutiveWorkDays} 天`
+          });
+          reportedCurrentStreak = true;
+        }
+        return;
+      }
+
+      streak = 0;
+      streakStartDate = "";
+      reportedCurrentStreak = false;
+    });
+  }
+
   function checkRestCompliance(config) {
     const weeks = buildCalendarWeeks(config.year, config.month, config.weekStart);
     const issues = [];
+    const maxConsecutiveWorkDays = Math.max(1, Number(config.maxConsecutiveWorkDays) || 6);
+    const reportStartDate = config.reportStartDate || weeks[0]?.startDate || "";
+    const reportEndDate = config.reportEndDate || weeks[weeks.length - 1]?.endDate || "";
     let checkedWeeks = 0;
     let skippedWeeks = 0;
 
     (config.memberCalendars || []).forEach((member) => {
       const dayMap = buildDayMap(member.days);
+      const slidingDayMap = buildDayMap(member.slidingDays || member.days);
       weeks.forEach((week) => {
         if (shouldSkipWeek(member, week)) {
           skippedWeeks += 1;
@@ -91,7 +159,7 @@
         const restDays = activeDays.filter((day) => day.leaveCode === REST_DAY_CODE);
 
         if (!regularHolidays.length) {
-          issues.push({
+          pushIssue(issues, {
             severity: "error",
             type: "missing_regular_holiday",
             memberId: member.memberId,
@@ -104,7 +172,7 @@
         }
 
         if (!restDays.length) {
-          issues.push({
+          pushIssue(issues, {
             severity: "error",
             type: "missing_rest_day",
             memberId: member.memberId,
@@ -120,7 +188,7 @@
           if (!day.hasShift && !day.hasOvertime) {
             return;
           }
-          issues.push({
+          pushIssue(issues, {
             severity: "warning",
             type: "regular_holiday_work",
             memberId: member.memberId,
@@ -133,6 +201,7 @@
           });
         });
       });
+      checkSlidingConsecutiveWorkDays(member, weeks, slidingDayMap, issues, maxConsecutiveWorkDays, reportStartDate, reportEndDate);
     });
 
     return {

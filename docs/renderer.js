@@ -156,6 +156,7 @@ const DEFAULT_STATE = {
   ],
   rules: {
     maxConsecutiveWorkDays: 6,
+    weekStart: 0,
     forbidProxyLeaveConflict: true,
     requireEmploymentWindow: true
   },
@@ -170,6 +171,15 @@ const REQUEST_STATUS_LABELS = {
   rejected: "已退回",
   cancelled: "已取消"
 };
+const WEEK_START_OPTIONS = [
+  { value: 0, label: "星期日" },
+  { value: 1, label: "星期一" },
+  { value: 2, label: "星期二" },
+  { value: 3, label: "星期三" },
+  { value: 4, label: "星期四" },
+  { value: 5, label: "星期五" },
+  { value: 6, label: "星期六" }
+];
 
 let state = createEmptyState();
 let modalColor = COLORS[0].hex;
@@ -399,8 +409,14 @@ function weekdayOf(day) {
   return new Date(state.year, state.month, day).getDay();
 }
 
+function getConfiguredWeekStart() {
+  const value = Number(state.rules?.weekStart);
+  return Number.isInteger(value) && value >= 0 && value <= 6 ? value : 0;
+}
+
 function getWeekIndexForDay(day) {
-  return Math.floor((day + weekdayOf(1) - 1) / 7);
+  const offset = (weekdayOf(1) - getConfiguredWeekStart() + 7) % 7;
+  return Math.floor((day + offset - 1) / 7);
 }
 
 function getWeekStripeClass(day) {
@@ -410,10 +426,12 @@ function getWeekStripeClass(day) {
 function getWeekBoundaryClass(day, daysInCurrentMonth) {
   const classes = [];
   const weekday = weekdayOf(day);
-  if (weekday === 0 && day !== 1) {
+  const weekStart = getConfiguredWeekStart();
+  const weekEnd = (weekStart + 6) % 7;
+  if (weekday === weekStart && day !== 1) {
     classes.push("week-boundary-start");
   }
-  if (weekday === 6 && day !== daysInCurrentMonth) {
+  if (weekday === weekEnd && day !== daysInCurrentMonth) {
     classes.push("week-boundary-end");
   }
   return classes.join(" ");
@@ -895,6 +913,7 @@ function normalizeState(payload) {
     : merged.holidays;
   merged.rules = {
     maxConsecutiveWorkDays: Math.max(1, Number(payload.rules?.maxConsecutiveWorkDays) || merged.rules.maxConsecutiveWorkDays),
+    weekStart: Number.isInteger(Number(payload.rules?.weekStart)) ? Math.min(6, Math.max(0, Number(payload.rules?.weekStart))) : merged.rules.weekStart,
     forbidProxyLeaveConflict: payload.rules?.forbidProxyLeaveConflict !== false,
     requireEmploymentWindow: payload.rules?.requireEmploymentWindow !== false
   };
@@ -1144,6 +1163,7 @@ function syncRoleUi() {
     "restComplianceButton",
     "leaveSettingsButton",
     "overtimeSettingsButton",
+    "weekStartSettingsButton",
     "leaveApprovalButton",
     "overtimeApprovalButton"
   ];
@@ -3241,6 +3261,10 @@ function formatMonthText(year, month) {
   return `${year} 年 ${month + 1} 月`;
 }
 
+function formatWeekStartLabel(value) {
+  return WEEK_START_OPTIONS.find((option) => option.value === value)?.label || "星期日";
+}
+
 function formatDateTextFromIso(dateString) {
   const date = toDateObject(dateString);
   if (!date) {
@@ -3266,11 +3290,18 @@ function buildRestComplianceCalendars() {
   if (!checker) {
     return [];
   }
-  const weeks = checker.buildCalendarWeeks(state.year, state.month, checker.DEFAULT_WEEK_START);
+  const weekStart = getConfiguredWeekStart();
+  const weeks = checker.buildCalendarWeeks(state.year, state.month, weekStart);
   const dateRange = [...new Set(weeks.flatMap((week) => week.dates))];
+  const previousMonthStart = new Date(state.year, state.month - 1, 1);
+  const currentMonthEnd = new Date(state.year, state.month + 1, 0);
+  const slidingDateRange = enumerateDateRange(
+    toDateString(previousMonthStart.getFullYear(), previousMonthStart.getMonth(), previousMonthStart.getDate()),
+    toDateString(currentMonthEnd.getFullYear(), currentMonthEnd.getMonth(), currentMonthEnd.getDate())
+  );
 
   return state.members.map((member) => {
-    const days = dateRange.map((dateString) => {
+    const buildDay = (dateString) => {
       const slot = getScheduleSlotByDateString(member.id, dateString);
       const leave = getItem("leave", slot?.leave);
       return {
@@ -3280,16 +3311,50 @@ function buildRestComplianceCalendars() {
         hasShift: Boolean(slot?.shift),
         hasOvertime: Boolean(slot?.overtime)
       };
-    });
+    };
+    const days = dateRange.map(buildDay);
     return {
       memberId: member.id,
       memberName: member.name,
       memberCode: member.code || "",
       hireDate: member.hireDate || "",
       leaveDate: member.leaveDate || "",
-      days
+      days,
+      slidingDays: slidingDateRange.map(buildDay)
     };
   }).filter((member) => member.days.some((day) => day.active));
+}
+
+function openWeekStartSettingModal() {
+  if (!promptManagerAccess("設定每週起算日前請先登入主管帳號")) {
+    return;
+  }
+  openEntityListModal({
+    title: "每週起算設定",
+    modalClass: "modal modal-form-compact",
+    body: `
+      <div class="form-row">
+        <label for="weekStartSetting">每週起算日</label>
+        <select id="weekStartSetting">${WEEK_START_OPTIONS.map((option) => (
+          `<option value="${option.value}" ${option.value === getConfiguredWeekStart() ? "selected" : ""}>${option.label}</option>`
+        )).join("")}</select>
+      </div>
+      <div class="result-item">
+        <div class="result-title">說明</div>
+        <div class="result-detail">班表週期格線、週期底紋與例休檢查都會依這個起算日同步調整。</div>
+      </div>
+    `,
+    headerButtons: '<button class="btn-primary" type="button" data-save-week-start="true">儲存設定</button>',
+    hideFooterClose: true
+  });
+}
+
+function saveWeekStartSettingFromModal() {
+  const value = Number(document.getElementById("weekStartSetting")?.value || 0);
+  state.rules.weekStart = Number.isInteger(value) && value >= 0 && value <= 6 ? value : 0;
+  closeModal();
+  renderAll();
+  queueSave();
 }
 
 function openRestComplianceModal() {
@@ -3305,7 +3370,10 @@ function openRestComplianceModal() {
   const result = checker.checkRestCompliance({
     year: state.year,
     month: state.month,
-    weekStart: checker.DEFAULT_WEEK_START,
+    weekStart: getConfiguredWeekStart(),
+    maxConsecutiveWorkDays: Math.max(1, Number(state.rules?.maxConsecutiveWorkDays) || 6),
+    reportStartDate: toDateString(state.year, state.month, 1),
+    reportEndDate: toDateString(state.year, state.month, daysInMonth(state.year, state.month)),
     memberCalendars: buildRestComplianceCalendars()
   });
   const issueCount = result.issues.length;
@@ -3339,6 +3407,10 @@ function openRestComplianceModal() {
         <div class="result-detail">${result.checkedWeeks} 個人員週期</div>
       </div>
       <div class="result-item">
+        <div class="result-title">每週起算</div>
+        <div class="result-detail">${escapeHtml(formatWeekStartLabel(getConfiguredWeekStart()))}</div>
+      </div>
+      <div class="result-item">
         <div class="result-title">略過週期</div>
         <div class="result-detail">${result.skippedWeeks || 0} 個到離職週期</div>
       </div>
@@ -3352,9 +3424,10 @@ function openRestComplianceModal() {
     <div class="result-item">
       <div class="result-title">檢查說明</div>
       <div class="result-detail compliance-check-note">
-        <div>目前先依系統週欄位，以星期日到星期六為 1 週期檢查。</div>
+        <div>目前依設定的每週起算日，以 ${escapeHtml(formatWeekStartLabel(getConfiguredWeekStart()))} 開始切 7 日週期。</div>
         <div>到職日或離職日落在該週時，該週整週先略過不檢查。</div>
-        <div>ponytail: 這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援自訂週期或彈性工時例外，下一步再加週期設定與例外規則。</div>
+        <div>ponytail: 連續出勤目前用任意滑動日數檢查，並包含上個月資料；以「當天有班別或加班」當作出勤，其他假別會視為中斷，若後續要納入更細的工時制度例外，再補規則表。</div>
+        <div>ponytail: 這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援彈性工時例外，下一步再加例外規則。</div>
       </div>
     </div>
   `;
@@ -3370,7 +3443,7 @@ function openRestComplianceModal() {
             </div>
             <div class="result-detail">
               ${group.issues.map((issue) => `
-                <div>${escapeHtml(issue.message)}｜週期：${escapeHtml(formatWeekRangeText(issue.weekStart, issue.weekEnd))}${issue.date ? `｜日期：${escapeHtml(formatDateTextFromIso(issue.date))}` : ""}</div>
+                <div>${escapeHtml(issue.message)}｜週期：${escapeHtml(formatWeekRangeText(issue.weekStart, issue.weekEnd))}${issue.streakStartDate ? `｜連續區間：${escapeHtml(formatDateTextFromIso(issue.streakStartDate))} - ${escapeHtml(formatDateTextFromIso(issue.date || issue.streakStartDate))}` : ""}${issue.date && !issue.streakStartDate ? `｜日期：${escapeHtml(formatDateTextFromIso(issue.date))}` : ""}</div>
               `).join("")}
             </div>
           </div>
@@ -4187,6 +4260,10 @@ function bindEvents() {
     };
     await openOvertimeApprovalModal(false);
   });
+  bindClick("weekStartSettingsButton", () => {
+    closeCoreActionsMenu();
+    openWeekStartSettingModal();
+  });
   bindClick("restComplianceButton", () => {
     closeCoreActionsMenu();
     openRestComplianceModal();
@@ -4389,6 +4466,9 @@ function bindEvents() {
     if (target.dataset.saveNamedItem) {
       const [category, mode] = target.dataset.saveNamedItem.split(":");
       saveNamedColorItem(category, mode);
+    }
+    if (target.dataset.saveWeekStart) {
+      saveWeekStartSettingFromModal();
     }
     if (target.dataset.saveLeaveAssignment) saveLeaveAssignmentFromModal();
     if (target.dataset.saveOvertimeAssignment) {

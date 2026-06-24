@@ -231,6 +231,10 @@ button {
   justify-content: space-between;
 }
 
+.toolbar-title-row {
+  justify-content: flex-start;
+}
+
 .toolbar-action-group {
   display: flex;
   align-items: center;
@@ -324,7 +328,7 @@ button {
 
 .toolbar-inline-action {
   padding: 6px 12px;
-  margin-left: auto;
+  margin-left: 4px;
   font-size: 12px;
 }
 
@@ -1790,6 +1794,13 @@ thead th.today,
   font-weight: 700;
 }
 
+.member-table-row > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
 .member-table-code,
 .member-table-name {
   font-size: 13px;
@@ -1798,12 +1809,13 @@ thead th.today,
 }
 
 .member-table-actions-head {
-  text-align: right;
+  justify-content: center;
+  text-align: center;
 }
 
 .member-table-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 6px;
 }
 
