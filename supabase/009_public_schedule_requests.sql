@@ -1,3 +1,5 @@
+drop function if exists public.get_public_schedule_requests();
+
 create or replace function public.get_public_schedule_requests()
 returns table (
   kind text,
