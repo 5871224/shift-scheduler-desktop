@@ -3398,22 +3398,6 @@ function openRestComplianceModal() {
         <div class="result-title">檢查月份</div>
         <div class="result-detail">${escapeHtml(formatMonthText(state.year, state.month))}</div>
       </div>
-      <div class="result-item">
-        <div class="result-title">人員數</div>
-        <div class="result-detail">${result.checkedMembers} 人</div>
-      </div>
-      <div class="result-item">
-        <div class="result-title">週期數</div>
-        <div class="result-detail">${result.checkedWeeks} 個人員週期</div>
-      </div>
-      <div class="result-item">
-        <div class="result-title">每週起算</div>
-        <div class="result-detail">${escapeHtml(formatWeekStartLabel(getConfiguredWeekStart()))}</div>
-      </div>
-      <div class="result-item">
-        <div class="result-title">略過週期</div>
-        <div class="result-detail">${result.skippedWeeks || 0} 個到離職週期</div>
-      </div>
       <div class="result-item ${issueCount ? "warning" : "success"}">
         <div class="result-title">檢查結果</div>
         <div class="result-detail">${issueCount ? `${errorCount} 筆缺漏，${warningCount} 筆待確認` : "目前未發現缺少例假或休息日"}</div>
@@ -3426,8 +3410,7 @@ function openRestComplianceModal() {
       <div class="result-detail compliance-check-note">
         <div>目前依設定的每週起算日，以 ${escapeHtml(formatWeekStartLabel(getConfiguredWeekStart()))} 開始切 7 日週期。</div>
         <div>到職日或離職日落在該週時，每週例假／休息日檢查會略過，改檢查「未在職日＋例假＋休息日」是否至少 2 天。</div>
-        <div>ponytail: 連續出勤目前用任意滑動日數檢查，並包含上個月資料與到職／離職週；以「當天有班別或加班」當作出勤，其他假別會視為中斷，若後續要納入更細的工時制度例外，再補規則表。</div>
-        <div>ponytail: 這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援彈性工時例外，下一步再加例外規則。</div>
+        <div>這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援彈性工時例外，下一步再加例外規則。</div>
       </div>
     </div>
   `;
@@ -3443,7 +3426,10 @@ function openRestComplianceModal() {
             </div>
             <div class="result-detail">
               ${group.issues.map((issue) => `
-                <div>${escapeHtml(issue.message)}｜週期：${escapeHtml(formatWeekRangeText(issue.weekStart, issue.weekEnd))}${issue.streakStartDate ? `｜連續區間：${escapeHtml(formatDateTextFromIso(issue.streakStartDate))} - ${escapeHtml(formatDateTextFromIso(issue.date || issue.streakStartDate))}` : ""}${issue.date && !issue.streakStartDate ? `｜日期：${escapeHtml(formatDateTextFromIso(issue.date))}` : ""}</div>
+                <div>${issue.type === "regular_holiday_work" && issue.date
+                  ? `${escapeHtml(formatDateTextFromIso(issue.date))}｜${escapeHtml(issue.message)}`
+                  : `${escapeHtml(formatWeekRangeText(issue.weekStart, issue.weekEnd))}｜${escapeHtml(issue.message)}`
+                }${issue.streakStartDate ? `｜連續區間：${escapeHtml(formatDateTextFromIso(issue.streakStartDate))} - ${escapeHtml(formatDateTextFromIso(issue.date || issue.streakStartDate))}` : ""}</div>
               `).join("")}
             </div>
           </div>
