@@ -187,6 +187,7 @@ const REQUEST_STATUS_LABELS = {
   rejected: "已退回",
   cancelled: "已取消"
 };
+const EFFECTIVE_REQUEST_STATUSES = new Set(["pending", "approved"]);
 const DEFAULT_REQUEST_STYLES = createDefaultRequestStyles();
 const WEEK_START_OPTIONS = [
   { value: 0, label: "星期日" },
@@ -1063,6 +1064,63 @@ function resolveCurrentMember() {
 
 function getRequestStatusLabel(status) {
   return REQUEST_STATUS_LABELS[status] || status;
+}
+
+function isEffectiveRequestStatus(status) {
+  return EFFECTIVE_REQUEST_STATUSES.has(status);
+}
+
+function requestMatchesMember(record, memberId = "", memberCode = "") {
+  if (!record) {
+    return false;
+  }
+  return Boolean(
+    (memberId && record.memberId === memberId)
+    || (memberCode && record.memberCode === memberCode)
+  );
+}
+
+function hasDateRangeOverlap(startDate, endDate, otherStartDate, otherEndDate) {
+  if (!startDate || !endDate || !otherStartDate || !otherEndDate) {
+    return false;
+  }
+  return otherStartDate <= endDate && otherEndDate >= startDate;
+}
+
+function findEffectiveLeaveRequestConflict(memberId, memberCode, startDate, endDate, excludeRequestId = "") {
+  return leaveRequestRecords.find((record) => (
+    record.id !== excludeRequestId
+    && isEffectiveRequestStatus(record.status)
+    && requestMatchesMember(record, memberId, memberCode)
+    && hasDateRangeOverlap(startDate, endDate, record.startDate || "", record.endDate || record.startDate || "")
+  )) || null;
+}
+
+function findDirectLeaveScheduleConflict(scheduleMemberId, startDate, endDate) {
+  if (!scheduleMemberId || !startDate || !endDate) {
+    return "";
+  }
+  return enumerateDateRange(startDate, endDate).find((dateString) => {
+    const slot = getScheduleSlotByDateString(scheduleMemberId, dateString);
+    return Boolean(slot?.leave && !slot?.leaveRequestId);
+  }) || "";
+}
+
+function findEffectiveOvertimeRequestConflict(memberId, memberCode, workDate, excludeRequestId = "") {
+  return overtimeRequestRecords.find((record) => (
+    record.id !== excludeRequestId
+    && isEffectiveRequestStatus(record.status)
+    && requestMatchesMember(record, memberId, memberCode)
+    && record.workDate === workDate
+  )) || null;
+}
+
+function hasDirectOvertimeScheduleConflict(scheduleMemberId, workDate) {
+  if (!scheduleMemberId || !workDate) {
+    return false;
+  }
+  const slot = getScheduleSlotByDateString(scheduleMemberId, workDate);
+  return Boolean(slot?.overtime && !slot?.overtimeRequestId);
 }
 
 function formatRequestDateText(startDate, endDate) {
@@ -4206,15 +4264,34 @@ async function saveLeaveRequestFromModal() {
     reportValidationError("開始時間必須早於結束時間");
     return;
   }
-  await window.schedulerApi.createLeaveRequest({
-    leaveCode: leave.code,
-    startDate,
-    endDate,
-    isAllDay,
-    startTime,
-    endTime,
-    reason: document.getElementById("leaveRequestReason")?.value.trim() || ""
-  });
+  await refreshRequestData();
+  const scheduleMember = currentMember || resolveCurrentMember();
+  const memberId = currentSession?.user?.id || "";
+  const memberCode = currentProfile?.employee_code || scheduleMember?.code || "";
+  const leaveRequestConflict = findEffectiveLeaveRequestConflict(memberId, memberCode, startDate, endDate);
+  if (leaveRequestConflict) {
+    reportValidationError(`同一天只能有一筆請假（待審核或已核準）；${formatRequestDateText(leaveRequestConflict.startDate, leaveRequestConflict.endDate)} 已有請假資料`);
+    return;
+  }
+  const directLeaveConflictDate = findDirectLeaveScheduleConflict(scheduleMember?.id || "", startDate, endDate);
+  if (directLeaveConflictDate) {
+    reportValidationError(`同一天只能有一筆請假（待審核或已核準）；${formatDateTextFromIso(directLeaveConflictDate)} 已有主管設定的請假`);
+    return;
+  }
+  try {
+    await window.schedulerApi.createLeaveRequest({
+      leaveCode: leave.code,
+      startDate,
+      endDate,
+      isAllDay,
+      startTime,
+      endTime,
+      reason: document.getElementById("leaveRequestReason")?.value.trim() || ""
+    });
+  } catch (error) {
+    reportValidationError(`請假申請送出失敗：${formatSchedulerError(error, "送出失敗")}`);
+    return;
+  }
   await refreshRequestData();
   const nextRecord = getOwnRequestRecords("leave").find((record) => (
     record.memberCode === currentProfile?.employee_code &&
@@ -4340,6 +4417,19 @@ async function saveOvertimeRequestFromModal() {
   }
   if (useRest2 && !isValidTimeRange(rest2StartTime, rest2EndTime)) {
     reportValidationError("休息2開始時間必須早於結束時間");
+    return;
+  }
+  await refreshRequestData();
+  const scheduleMember = currentMember || resolveCurrentMember();
+  const memberId = currentSession?.user?.id || "";
+  const memberCode = currentProfile?.employee_code || scheduleMember?.code || "";
+  const overtimeRequestConflict = findEffectiveOvertimeRequestConflict(memberId, memberCode, workDate);
+  if (overtimeRequestConflict) {
+    reportValidationError(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(workDate)} 已有加班資料`);
+    return;
+  }
+  if (hasDirectOvertimeScheduleConflict(scheduleMember?.id || "", workDate)) {
+    reportValidationError(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(workDate)} 已有主管設定的加班`);
     return;
   }
   try {
@@ -4519,10 +4609,54 @@ async function saveRequestReview(kind, requestId) {
   }
   const status = document.getElementById(`${kind}ReviewStatus_${requestId}`)?.value || "pending";
   const managerNote = document.getElementById(`${kind}ReviewNote_${requestId}`)?.value.trim() || "";
-  if (kind === "leave") {
-    await window.schedulerApi.updateLeaveRequest({ id: requestId, status, managerNote });
-  } else {
-    await window.schedulerApi.updateOvertimeRequest({ id: requestId, status, managerNote });
+  const sourceRecords = kind === "leave" ? leaveRequestRecords : overtimeRequestRecords;
+  const currentRecord = sourceRecords.find((item) => item.id === requestId);
+  if (currentRecord && isEffectiveRequestStatus(status)) {
+    const scheduleMember = state.members.find((item) => item.id === currentRecord.memberId)
+      || state.members.find((item) => item.code === currentRecord.memberCode);
+    if (kind === "leave") {
+      const leaveRequestConflict = findEffectiveLeaveRequestConflict(
+        currentRecord.memberId || "",
+        currentRecord.memberCode || "",
+        currentRecord.startDate,
+        currentRecord.endDate,
+        requestId
+      );
+      if (leaveRequestConflict) {
+        showInfoMessage(`同一天只能有一筆請假（待審核或已核準）；${formatRequestDateText(currentRecord.startDate, currentRecord.endDate)} 已有其他請假資料`);
+        return;
+      }
+      const directLeaveConflictDate = findDirectLeaveScheduleConflict(scheduleMember?.id || "", currentRecord.startDate, currentRecord.endDate);
+      if (directLeaveConflictDate) {
+        showInfoMessage(`同一天只能有一筆請假（待審核或已核準）；${formatDateTextFromIso(directLeaveConflictDate)} 已有主管設定的請假`);
+        return;
+      }
+    } else {
+      const overtimeRequestConflict = findEffectiveOvertimeRequestConflict(
+        currentRecord.memberId || "",
+        currentRecord.memberCode || "",
+        currentRecord.workDate,
+        requestId
+      );
+      if (overtimeRequestConflict) {
+        showInfoMessage(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(currentRecord.workDate)} 已有其他加班資料`);
+        return;
+      }
+      if (hasDirectOvertimeScheduleConflict(scheduleMember?.id || "", currentRecord.workDate)) {
+        showInfoMessage(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(currentRecord.workDate)} 已有主管設定的加班`);
+        return;
+      }
+    }
+  }
+  try {
+    if (kind === "leave") {
+      await window.schedulerApi.updateLeaveRequest({ id: requestId, status, managerNote });
+    } else {
+      await window.schedulerApi.updateOvertimeRequest({ id: requestId, status, managerNote });
+    }
+  } catch (error) {
+    showInfoMessage(`儲存審核失敗：${formatSchedulerError(error, "儲存失敗")}`);
+    return;
   }
   await refreshRequestData();
   syncApprovedRequestsToSchedule();

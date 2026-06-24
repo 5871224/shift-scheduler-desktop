@@ -6,6 +6,7 @@ const rootDir = path.resolve(__dirname, "..");
 const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
 const webApi = fs.readFileSync(path.join(rootDir, "src", "renderer", "web-api.js"), "utf8");
 const exporter = fs.readFileSync(path.join(rootDir, "src", "renderer", "browser-exporter.js"), "utf8");
+const requestConstraintSql = fs.readFileSync(path.join(rootDir, "supabase", "010_request_single_effective_entry.sql"), "utf8");
 
 assert(
   renderer.includes('const publicRequests = await window.schedulerApi.listPublicScheduleRequests();'),
@@ -53,6 +54,22 @@ assert(
     exporter.includes("createOvertimeSettingsWorkbook") &&
     exporter.includes("parseOvertimeSettingsWorkbook"),
   "browser exporter should support workbook round-trips for all requested settings screens"
+);
+assert(
+  renderer.includes("const EFFECTIVE_REQUEST_STATUSES = new Set([\"pending\", \"approved\"]);") &&
+    renderer.includes("function findEffectiveLeaveRequestConflict(") &&
+    renderer.includes("function findEffectiveOvertimeRequestConflict("),
+  "renderer should define effective-request conflict helpers"
+);
+assert(
+  renderer.includes("同一天只能有一筆請假（待審核或已核準）") &&
+    renderer.includes("同一天只能有一筆加班（待審核或已核準）"),
+  "renderer should block duplicate effective leave and overtime entries in the UI"
+);
+assert(
+  requestConstraintSql.includes("create or replace function public.enforce_single_effective_leave_request()") &&
+    requestConstraintSql.includes("create or replace function public.enforce_single_effective_overtime_request()"),
+  "supabase should enforce duplicate effective request rules for leave and overtime tables"
 );
 
 console.log("request overlay and settings import/export checks passed");
