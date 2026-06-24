@@ -419,13 +419,20 @@
   async function syncCatalogs(state) {
     ensureManager();
 
-    const leaveRows = (state.leaves || []).map((item) => ({
-      code: item.code,
-      name: item.name,
-      color: item.color,
-      requires_time: item.defaultAllDay === false,
-      requires_reason: Boolean(item.requireReason)
-    }));
+    const leaveMap = new Map();
+    (state.leaves || []).forEach((item) => {
+      if (!item?.code) {
+        return;
+      }
+      leaveMap.set(item.code, {
+        code: item.code,
+        name: item.name,
+        color: item.color,
+        requires_time: Boolean(item.defaultAllDay),
+        requires_reason: Boolean(item.requireReason)
+      });
+    });
+    const leaveRows = [...leaveMap.values()];
     if (leaveRows.length) {
       await restInsert("leave_types", leaveRows, {
         auth: true,

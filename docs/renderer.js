@@ -1201,6 +1201,14 @@ function getAllowedLeaveRequestItems() {
   });
 }
 
+function leaveRequiresTime(leave) {
+  return Boolean(leave?.defaultAllDay);
+}
+
+function defaultLeaveIsAllDay(leave) {
+  return !leaveRequiresTime(leave);
+}
+
 function getLeaveStyleByCode(leaveCode) {
   const configured = state.leaves.find((item) => item.code === leaveCode);
   if (configured) {
@@ -1553,14 +1561,13 @@ function hasLeaveRows() {
 }
 
 function shouldPromptLeaveDetail(leave, leaveMeta = null) {
-  return Boolean(
-    leave?.defaultAllDay === false ||
-    leave?.requireReason ||
-    leaveMeta?.reason ||
-    leaveMeta?.startTime ||
-    leaveMeta?.endTime ||
-    leaveMeta?.allDay !== undefined
-  );
+  if (leaveMeta?.reason || leaveMeta?.startTime || leaveMeta?.endTime || leaveMeta?.allDay !== undefined) {
+    return true;
+  }
+  if (leave?.requireReason) {
+    return true;
+  }
+  return leaveRequiresTime(leave);
 }
 
 function formatLeaveDetailSummary(leave, leaveMeta) {
@@ -1568,7 +1575,7 @@ function formatLeaveDetailSummary(leave, leaveMeta) {
   if (leaveMeta?.requestStatus) {
     lines.push(`狀態：${getRequestStatusLabel(leaveMeta.requestStatus)}`);
   }
-  if (leave && (leave.defaultAllDay || leaveMeta?.allDay !== undefined || leaveMeta?.startTime || leaveMeta?.endTime)) {
+  if (leave && (leaveRequiresTime(leave) || leaveMeta?.allDay !== undefined || leaveMeta?.startTime || leaveMeta?.endTime)) {
     if (leaveMeta?.allDay !== false) {
       lines.push("時間：整天");
     } else {
@@ -2120,7 +2127,7 @@ async function applySelectionToCell(memberId, day) {
           memberId,
           day,
           leaveId: id,
-          isAllDay: leave.defaultAllDay !== false,
+          isAllDay: defaultLeaveIsAllDay(leave),
           startTime: "",
           endTime: "",
           reason: ""
@@ -2349,7 +2356,7 @@ function openLeaveAssignmentModal(memberId, day, leaveId) {
 
   const slot = getSlot(memberId, day);
   const existingMeta = slot?.leave === leaveId ? slot.leaveMeta || null : null;
-  const defaultAllDay = existingMeta?.allDay ?? leave.defaultAllDay;
+  const defaultAllDay = existingMeta?.allDay ?? defaultLeaveIsAllDay(leave);
   const reasonEnabled = existingMeta?.reasonEnabled ?? leave.requireReason;
   const startTime = existingMeta?.startTime || "";
   const endTime = existingMeta?.endTime || "";
@@ -4475,7 +4482,15 @@ function renderManagerRequestList(kind, records) {
   `;
 }
 
-function syncLeaveRequestFormUi() {
+function syncLeaveRequestFormUi(resetAllDay = false) {
+  if (resetAllDay) {
+    const leaveCode = document.getElementById("leaveRequestType")?.value || "";
+    const leave = getAllowedLeaveRequestItems().find((item) => item.code === leaveCode) || null;
+    const allDayToggle = document.getElementById("leaveRequestAllDay");
+    if (allDayToggle) {
+      allDayToggle.checked = defaultLeaveIsAllDay(leave);
+    }
+  }
   const allDay = document.getElementById("leaveRequestAllDay")?.checked !== false;
   const timeSection = document.getElementById("leaveRequestTimeSection");
   if (timeSection) {
@@ -4575,11 +4590,11 @@ async function openLeaveRequestModal() {
       </div>
       <div class="form-row checkbox-row checkbox-row-left">
         <label>
-          <input id="leaveRequestAllDay" type="checkbox" ${defaultLeave?.defaultAllDay !== false ? "checked" : ""}>
+          <input id="leaveRequestAllDay" type="checkbox" ${defaultLeaveIsAllDay(defaultLeave) ? "checked" : ""}>
           整天
         </label>
       </div>
-      <div class="form-grid" id="leaveRequestTimeSection" style="${defaultLeave?.defaultAllDay !== false ? "display:none;" : ""}">
+      <div class="form-grid" id="leaveRequestTimeSection" style="${defaultLeaveIsAllDay(defaultLeave) ? "display:none;" : ""}">
         <div class="form-row">
           <label for="leaveRequestStartTime">開始時間</label>
           ${timeInputMarkup("leaveRequestStartTime", "")}
@@ -5544,6 +5559,10 @@ function bindEvents() {
 
   document.body.addEventListener("change", (event) => {
     const target = event.target;
+    if (target instanceof HTMLSelectElement && target.id === "leaveRequestType") {
+      syncLeaveRequestFormUi(true);
+      return;
+    }
     if (target instanceof HTMLSelectElement && target.dataset.memberSettingsFilterField) {
       const field = target.dataset.memberSettingsFilterField;
       memberSettingsFilters[field] = target.value || (field === "employment" ? "active" : "all");
