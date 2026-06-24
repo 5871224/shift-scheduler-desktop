@@ -1698,6 +1698,10 @@ thead th.today,
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
+.settings-table-row-leave-catalog {
+  grid-template-columns: minmax(96px, 0.8fr) minmax(0, 1.8fr) minmax(96px, 0.7fr);
+}
+
 .settings-table-head {
   position: sticky;
   top: 0;
@@ -1731,7 +1735,8 @@ thead th.today,
 
 .settings-table-row-shift > div,
 .settings-table-row-leave > div,
-.settings-table-row-overtime > div {
+.settings-table-row-overtime > div,
+.settings-table-row-leave-catalog > div {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2252,6 +2257,10 @@ thead th.today,
 
   .settings-table-row-overtime {
     grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .settings-table-row-leave-catalog {
+    grid-template-columns: minmax(88px, 0.8fr) minmax(0, 1.8fr) minmax(88px, 0.7fr);
   }
 
   .settings-table-name {
