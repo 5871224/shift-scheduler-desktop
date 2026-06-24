@@ -1609,7 +1609,7 @@ thead th.today,
 
 .member-settings-filters {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) 160px 132px 132px 132px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1771,7 +1771,7 @@ thead th.today,
 
 .member-table-row {
   display: grid;
-  grid-template-columns: 104px minmax(80px, 0.95fr) 92px 64px 108px 108px 84px 92px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
@@ -2181,7 +2181,7 @@ thead th.today,
   }
 
   .member-table-row {
-    grid-template-columns: 92px minmax(72px, 0.9fr) 72px 52px 90px 90px 72px 84px;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 8px;
     padding: 6px 12px;
     font-size: 12px;

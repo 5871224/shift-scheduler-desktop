@@ -58,7 +58,7 @@
     return new Map((Array.isArray(days) ? days : []).map((day) => [day.date, day]));
   }
 
-  function shouldSkipWeek(member, week) {
+  function isHireOrLeaveWeek(member, week) {
     return Boolean(
       (member.hireDate && week.dates.includes(member.hireDate)) ||
       (member.leaveDate && week.dates.includes(member.leaveDate))
@@ -77,6 +77,34 @@
     return weeks.find((week) => week.dates.includes(dateString)) || null;
   }
 
+  function buildWeekDays(week, dayMap) {
+    return week.dates.map((date) => ({ date, ...(dayMap.get(date) || {}) }));
+  }
+
+  function checkHireOrLeaveWeek(member, week, dayMap, issues) {
+    const weekDays = buildWeekDays(week, dayMap);
+    const protectionDays = weekDays.filter((day) => (
+      !day.active ||
+      day.leaveCode === REGULAR_HOLIDAY_CODE ||
+      day.leaveCode === REST_DAY_CODE
+    ));
+
+    if (protectionDays.length >= 2) {
+      return;
+    }
+
+    pushIssue(issues, {
+      severity: "error",
+      type: "insufficient_non_employment_or_rest_days",
+      memberId: member.memberId,
+      memberName: member.memberName,
+      memberCode: member.memberCode || "",
+      weekStart: week.startDate,
+      weekEnd: week.endDate,
+      message: "到職/離職週未在職日＋例假＋休息日少於 2 天"
+    });
+  }
+
   function checkSlidingConsecutiveWorkDays(member, weeks, slidingDayMap, issues, maxConsecutiveWorkDays, reportStartDate, reportEndDate) {
     const dates = [...slidingDayMap.keys()].sort();
     let streak = 0;
@@ -85,13 +113,6 @@
 
     dates.forEach((dateString) => {
       const week = findWeekForDate(weeks, dateString);
-      if (week && shouldSkipWeek(member, week)) {
-        streak = 0;
-        streakStartDate = "";
-        reportedCurrentStreak = false;
-        return;
-      }
-
       const day = { date: dateString, ...(slidingDayMap.get(dateString) || {}) };
       if (isWorkDay(day)) {
         if (streak === 0) {
@@ -141,15 +162,15 @@
     (config.memberCalendars || []).forEach((member) => {
       const dayMap = buildDayMap(member.days);
       const slidingDayMap = buildDayMap(member.slidingDays || member.days);
+
       weeks.forEach((week) => {
-        if (shouldSkipWeek(member, week)) {
+        if (isHireOrLeaveWeek(member, week)) {
           skippedWeeks += 1;
+          checkHireOrLeaveWeek(member, week, dayMap, issues);
           return;
         }
 
-        const activeDays = week.dates
-          .map((date) => ({ date, ...(dayMap.get(date) || {}) }))
-          .filter((day) => day.active);
+        const activeDays = buildWeekDays(week, dayMap).filter((day) => day.active);
         if (!activeDays.length) {
           return;
         }
@@ -201,7 +222,16 @@
           });
         });
       });
-      checkSlidingConsecutiveWorkDays(member, weeks, slidingDayMap, issues, maxConsecutiveWorkDays, reportStartDate, reportEndDate);
+
+      checkSlidingConsecutiveWorkDays(
+        member,
+        weeks,
+        slidingDayMap,
+        issues,
+        maxConsecutiveWorkDays,
+        reportStartDate,
+        reportEndDate
+      );
     });
 
     return {

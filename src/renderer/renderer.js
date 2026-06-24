@@ -3425,8 +3425,8 @@ function openRestComplianceModal() {
       <div class="result-title">檢查說明</div>
       <div class="result-detail compliance-check-note">
         <div>目前依設定的每週起算日，以 ${escapeHtml(formatWeekStartLabel(getConfiguredWeekStart()))} 開始切 7 日週期。</div>
-        <div>到職日或離職日落在該週時，該週整週先略過不檢查。</div>
-        <div>ponytail: 連續出勤目前用任意滑動日數檢查，並包含上個月資料；以「當天有班別或加班」當作出勤，其他假別會視為中斷，若後續要納入更細的工時制度例外，再補規則表。</div>
+        <div>到職日或離職日落在該週時，每週例假／休息日檢查會略過，改檢查「未在職日＋例假＋休息日」是否至少 2 天。</div>
+        <div>ponytail: 連續出勤目前用任意滑動日數檢查，並包含上個月資料與到職／離職週；以「當天有班別或加班」當作出勤，其他假別會視為中斷，若後續要納入更細的工時制度例外，再補規則表。</div>
         <div>ponytail: 這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援彈性工時例外，下一步再加例外規則。</div>
       </div>
     </div>
