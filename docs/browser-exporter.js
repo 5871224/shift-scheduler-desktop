@@ -126,26 +126,13 @@
     return names.join("\n");
   }
 
-  function getLeaveCatalog(payload) {
-    const items = Array.isArray(payload?.state?.leaveCatalog) ? payload.state.leaveCatalog : [];
-    return items
-      .map((item) => ({
-        code: String(item?.code || "").trim(),
-        name: String(item?.name || "").trim()
-      }))
-      .filter((item) => item.code && item.name);
-  }
-
-  function getLeaveCatalogCodeByName(payload, name) {
-    return getLeaveCatalog(payload).find((item) => item.name === name)?.code || "";
-  }
-
   function buildSapLeaveCsvContent(payload) {
     const { state, year, month } = payload;
     const leaveMap = getItemMap(state.leaves);
     const sapCodeMap = new Map([
-      [getLeaveCatalogCodeByName(payload, "休息日"), "REST"],
-      [getLeaveCatalogCodeByName(payload, "例假"), "OFF"]
+      ["休息日", "REST"],
+      ["休假", "REST"],
+      ["例假", "OFF"]
     ]);
     const rows = [];
 
@@ -159,7 +146,7 @@
         }
         const slot = state.schedule[getScheduleKey(member.id, year, month, day)];
         const leave = leaveMap.get(slot?.leave);
-        const sapCode = sapCodeMap.get(leave?.code || "");
+        const sapCode = sapCodeMap.get(leave?.name);
         if (!sapCode) {
           continue;
         }
@@ -210,9 +197,7 @@
   function getLeaveExportRows(payload) {
     const { state, year, month } = payload;
     const leaveMap = getItemMap(state.leaves);
-    const excludedLeaveCodes = new Set(
-      [getLeaveCatalogCodeByName(payload, "例假"), getLeaveCatalogCodeByName(payload, "休息日")].filter(Boolean)
-    );
+    const excludedLeaveCodes = new Set(["0036", "0047"]);
     const rows = [];
     const hiddenDepartmentIds = new Set(
       (state.departments || [])

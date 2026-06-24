@@ -1211,8 +1211,7 @@ function formatOvertimeRestLines(record) {
 }
 
 function getAllowedLeaveRequestItems() {
-  const excludedLeaveCodes = getExcludedLeaveCodes();
-  return getLeaveCatalog().filter((entry) => !excludedLeaveCodes.has(entry.code)).map((entry) => {
+  return getLeaveCatalog().filter((entry) => !["0036", "0047"].includes(entry.code)).map((entry) => {
     const configured = state.leaves.find((item) => item.code === entry.code);
     return {
       code: entry.code,
@@ -1264,46 +1263,6 @@ function getLeaveCatalogDisplayName(item) {
     return "";
   }
   return getLeaveCatalog().find((entry) => entry.code === item.code)?.name || item.name || "";
-}
-
-function getLeaveCatalogCodeByName(name) {
-  return getLeaveCatalog().find((entry) => entry.name === name)?.code || "";
-}
-
-function getRegularHolidayCode() {
-  return getLeaveCatalogCodeByName("例假");
-}
-
-function getRestDayCode() {
-  return getLeaveCatalogCodeByName("休息日");
-}
-
-function getSapLeaveCodes() {
-  return new Set([getRegularHolidayCode(), getRestDayCode()].filter(Boolean));
-}
-
-function getExcludedLeaveCodes() {
-  return getSapLeaveCodes();
-}
-
-function syncLeaveCodeAcrossState(previousCode, nextCode) {
-  if (!previousCode || !nextCode || previousCode === nextCode) {
-    return;
-  }
-  state.leaves = state.leaves.map((item) => (
-    item.code === previousCode ? { ...item, code: nextCode } : item
-  ));
-  Object.values(state.schedule || {}).forEach((slot) => {
-    if (!slot) {
-      return;
-    }
-    if (slot.leaveMeta?.leaveCode === previousCode) {
-      slot.leaveMeta = {
-        ...slot.leaveMeta,
-        leaveCode: nextCode
-      };
-    }
-  });
 }
 
 function sanitizeRequestStyle(style, fallback) {
@@ -1572,10 +1531,7 @@ async function saveChangedPassword() {
 }
 
 function hasSapLeaveRows() {
-  const sapLeaveCodes = getSapLeaveCodes();
-  if (!sapLeaveCodes.size) {
-    return false;
-  }
+  const sapLeaveCodes = new Set(["0036", "0047"]);
   return state.members.some((member) => {
     if (member.payByDay) {
       return false;
@@ -1609,7 +1565,7 @@ function hasOvertimeRows() {
 }
 
 function hasLeaveRows() {
-  const excludedLeaveCodes = getExcludedLeaveCodes();
+  const excludedLeaveCodes = new Set(["0036", "0047"]);
   return state.members.some((member) => {
     const department = state.departments.find((item) => item.id === member.deptId);
     if (department?.hiddenFromLeave) {
@@ -2760,13 +2716,13 @@ function renderLeaveCatalogSettingsBody() {
   return `
     <div class="settings-table-wrap">
       <div class="settings-table">
-        <div class="settings-table-row settings-table-head settings-table-row-leave-catalog">
+        <div class="settings-table-row settings-table-head">
           <div>假別代碼</div>
           <div>原始名稱</div>
           <div class="settings-table-actions-head">操作</div>
         </div>
         ${leaveCatalog.map((item) => `
-          <div class="settings-table-row settings-table-row-leave-catalog">
+          <div class="settings-table-row">
             <div class="settings-table-code">${escapeHtml(item.code)}</div>
             <div class="settings-table-name">${escapeHtml(item.name)}</div>
             <div class="settings-table-actions">
@@ -2835,11 +2791,9 @@ function saveLeaveCatalogItem(mode) {
     return;
   }
   const nextItem = { code, name };
-  const previousCode = mode === "edit" ? modalContext.targetCode : "";
   state.leaveCatalog = mode === "edit"
     ? currentList.map((item) => item.code === modalContext.targetCode ? nextItem : item)
     : [...currentList, nextItem].sort((a, b) => a.code.localeCompare(b.code, "en"));
-  syncLeaveCodeAcrossState(previousCode, code);
   closeModal();
   renderAll();
   openLeaveCatalogSettings();
@@ -4440,8 +4394,6 @@ function openRestComplianceModal() {
     month: state.month,
     weekStart: getConfiguredWeekStart(),
     maxConsecutiveWorkDays: Math.max(1, Number(state.rules?.maxConsecutiveWorkDays) || 6),
-    regularHolidayCode: getRegularHolidayCode(),
-    restDayCode: getRestDayCode(),
     reportStartDate: toDateString(state.year, state.month, 1),
     reportEndDate: toDateString(state.year, state.month, daysInMonth(state.year, state.month)),
     memberCalendars: buildRestComplianceCalendars()
@@ -4480,7 +4432,7 @@ function openRestComplianceModal() {
       <div class="result-detail compliance-check-note">
         <div>目前依設定的每週起算日，以 ${escapeHtml(formatWeekStartLabel(getConfiguredWeekStart()))} 開始切 7 日週期。</div>
         <div>到職日或離職日落在該週時，每週例假／休息日檢查會略過，改檢查「未在職日＋例假＋休息日」是否至少 2 天。</div>
-        <div>這版只看系統內已標記的「例假 / 休息日」；空白未排班不自動視為例休。</div>
+        <div>這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休。</div>
       </div>
     </div>
   `;

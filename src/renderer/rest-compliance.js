@@ -1,6 +1,6 @@
 (function initRestCompliance(globalScope) {
-  const DEFAULT_REGULAR_HOLIDAY_CODE = "0036";
-  const DEFAULT_REST_DAY_CODE = "0047";
+  const REGULAR_HOLIDAY_CODE = "0036";
+  const REST_DAY_CODE = "0047";
   const DEFAULT_WEEK_START = 0;
 
   function pad2(value) {
@@ -82,13 +82,11 @@
   }
 
   function checkHireOrLeaveWeek(member, week, dayMap, issues) {
-    const regularHolidayCode = member.regularHolidayCode || DEFAULT_REGULAR_HOLIDAY_CODE;
-    const restDayCode = member.restDayCode || DEFAULT_REST_DAY_CODE;
     const weekDays = buildWeekDays(week, dayMap);
     const protectionDays = weekDays.filter((day) => (
       !day.active ||
-      day.leaveCode === regularHolidayCode ||
-      day.leaveCode === restDayCode
+      day.leaveCode === REGULAR_HOLIDAY_CODE ||
+      day.leaveCode === REST_DAY_CODE
     ));
 
     if (protectionDays.length >= 2) {
@@ -155,8 +153,6 @@
   function checkRestCompliance(config) {
     const weeks = buildCalendarWeeks(config.year, config.month, config.weekStart);
     const issues = [];
-    const regularHolidayCode = config.regularHolidayCode || DEFAULT_REGULAR_HOLIDAY_CODE;
-    const restDayCode = config.restDayCode || DEFAULT_REST_DAY_CODE;
     const maxConsecutiveWorkDays = Math.max(1, Number(config.maxConsecutiveWorkDays) || 6);
     const reportStartDate = config.reportStartDate || weeks[0]?.startDate || "";
     const reportEndDate = config.reportEndDate || weeks[weeks.length - 1]?.endDate || "";
@@ -170,11 +166,7 @@
       weeks.forEach((week) => {
         if (isHireOrLeaveWeek(member, week)) {
           skippedWeeks += 1;
-          checkHireOrLeaveWeek({
-            ...member,
-            regularHolidayCode,
-            restDayCode
-          }, week, dayMap, issues);
+          checkHireOrLeaveWeek(member, week, dayMap, issues);
           return;
         }
 
@@ -184,8 +176,8 @@
         }
 
         checkedWeeks += 1;
-        const regularHolidays = activeDays.filter((day) => day.leaveCode === regularHolidayCode);
-        const restDays = activeDays.filter((day) => day.leaveCode === restDayCode);
+        const regularHolidays = activeDays.filter((day) => day.leaveCode === REGULAR_HOLIDAY_CODE);
+        const restDays = activeDays.filter((day) => day.leaveCode === REST_DAY_CODE);
 
         if (!regularHolidays.length) {
           pushIssue(issues, {
@@ -252,8 +244,8 @@
   }
 
   const api = {
-    REGULAR_HOLIDAY_CODE: DEFAULT_REGULAR_HOLIDAY_CODE,
-    REST_DAY_CODE: DEFAULT_REST_DAY_CODE,
+    REGULAR_HOLIDAY_CODE,
+    REST_DAY_CODE,
     DEFAULT_WEEK_START,
     buildCalendarWeeks,
     checkRestCompliance
