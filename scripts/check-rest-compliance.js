@@ -14,8 +14,10 @@ const result = compliance.checkRestCompliance({
   memberCalendars: [
     {
       memberId: "m1",
-      memberName: "正常",
+      memberName: "Compliant",
       memberCode: "A001",
+      hireDate: "",
+      leaveDate: "",
       days: [
         { date: "2026-05-31", active: true, leaveCode: "0036", hasShift: false, hasOvertime: false },
         { date: "2026-06-01", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
@@ -28,8 +30,10 @@ const result = compliance.checkRestCompliance({
     },
     {
       memberId: "m2",
-      memberName: "缺例假",
+      memberName: "Missing Regular Holiday",
       memberCode: "A002",
+      hireDate: "",
+      leaveDate: "",
       days: [
         { date: "2026-05-31", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
         { date: "2026-06-01", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
@@ -42,8 +46,10 @@ const result = compliance.checkRestCompliance({
     },
     {
       memberId: "m3",
-      memberName: "例假出勤",
+      memberName: "Regular Holiday Work",
       memberCode: "A003",
+      hireDate: "",
+      leaveDate: "",
       days: [
         { date: "2026-05-31", active: true, leaveCode: "0036", hasShift: false, hasOvertime: true },
         { date: "2026-06-01", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
@@ -53,13 +59,31 @@ const result = compliance.checkRestCompliance({
         { date: "2026-06-05", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
         { date: "2026-06-06", active: true, leaveCode: "0047", hasShift: false, hasOvertime: false }
       ]
+    },
+    {
+      memberId: "m4",
+      memberName: "Hire Week Skip",
+      memberCode: "A004",
+      hireDate: "2026-06-03",
+      leaveDate: "",
+      days: [
+        { date: "2026-05-31", active: false, leaveCode: "", hasShift: false, hasOvertime: false },
+        { date: "2026-06-01", active: false, leaveCode: "", hasShift: false, hasOvertime: false },
+        { date: "2026-06-02", active: false, leaveCode: "", hasShift: false, hasOvertime: false },
+        { date: "2026-06-03", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
+        { date: "2026-06-04", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
+        { date: "2026-06-05", active: true, leaveCode: "", hasShift: true, hasOvertime: false },
+        { date: "2026-06-06", active: true, leaveCode: "", hasShift: false, hasOvertime: false }
+      ]
     }
   ]
 });
 
 assert(result.checkedWeeks >= 3, "sample calendars should produce checked weeks");
+assert(result.skippedWeeks >= 1, "hire or leave weeks should be skipped");
 assert(result.issues.some((issue) => issue.type === "missing_regular_holiday" && issue.memberId === "m2"), "missing regular holiday should be flagged");
 assert(result.issues.some((issue) => issue.type === "regular_holiday_work" && issue.memberId === "m3"), "work on a regular holiday should be flagged");
 assert(!result.issues.some((issue) => issue.memberId === "m1"), "a compliant week should not generate issues");
+assert(!result.issues.some((issue) => issue.memberId === "m4"), "hire week should be skipped entirely");
 
 console.log("rest compliance checks passed");

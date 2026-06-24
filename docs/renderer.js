@@ -1141,6 +1141,7 @@ function syncRoleUi() {
   const managerOnlyIds = [
     "deptSettingsButton",
     "shiftSettingsButton",
+    "restComplianceButton",
     "leaveSettingsButton",
     "overtimeSettingsButton",
     "leaveApprovalButton",
@@ -3284,6 +3285,8 @@ function buildRestComplianceCalendars() {
       memberId: member.id,
       memberName: member.name,
       memberCode: member.code || "",
+      hireDate: member.hireDate || "",
+      leaveDate: member.leaveDate || "",
       days
     };
   }).filter((member) => member.days.some((day) => day.active));
@@ -3308,6 +3311,19 @@ function openRestComplianceModal() {
   const issueCount = result.issues.length;
   const errorCount = result.issues.filter((issue) => issue.severity === "error").length;
   const warningCount = result.issues.filter((issue) => issue.severity === "warning").length;
+  const groupedIssues = result.issues.reduce((groups, issue) => {
+    const key = issue.memberId || `${issue.memberCode || ""}-${issue.memberName || ""}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        memberId: issue.memberId,
+        memberName: issue.memberName,
+        memberCode: issue.memberCode || "",
+        issues: []
+      });
+    }
+    groups.get(key).issues.push(issue);
+    return groups;
+  }, new Map());
   const summaryCards = `
     <div class="compliance-summary-grid">
       <div class="result-item">
@@ -3322,6 +3338,10 @@ function openRestComplianceModal() {
         <div class="result-title">週期數</div>
         <div class="result-detail">${result.checkedWeeks} 個人員週期</div>
       </div>
+      <div class="result-item">
+        <div class="result-title">略過週期</div>
+        <div class="result-detail">${result.skippedWeeks || 0} 個到離職週期</div>
+      </div>
       <div class="result-item ${issueCount ? "warning" : "success"}">
         <div class="result-title">檢查結果</div>
         <div class="result-detail">${issueCount ? `${errorCount} 筆缺漏，${warningCount} 筆待確認` : "目前未發現缺少例假或休息日"}</div>
@@ -3333,6 +3353,7 @@ function openRestComplianceModal() {
       <div class="result-title">檢查說明</div>
       <div class="result-detail compliance-check-note">
         <div>目前先依系統週欄位，以星期日到星期六為 1 週期檢查。</div>
+        <div>到職日或離職日落在該週時，該週整週先略過不檢查。</div>
         <div>ponytail: 這版只看系統內已標記的「例假 0036 / 休息日 0047」；空白未排班不自動視為例休，若要支援自訂週期或彈性工時例外，下一步再加週期設定與例外規則。</div>
       </div>
     </div>
@@ -3340,13 +3361,17 @@ function openRestComplianceModal() {
   const issuesMarkup = issueCount
     ? `
       <div class="compliance-check-list">
-        ${result.issues.map((issue) => `
-          <div class="result-item ${issue.severity}">
-            <div class="result-title">${escapeHtml(`${issue.memberCode ? `${issue.memberCode} ` : ""}${issue.memberName}`.trim() || issue.memberId)}</div>
+        ${Array.from(groupedIssues.values()).map((group) => `
+          <div class="result-item ${group.issues.some((issue) => issue.severity === "error") ? "error" : "warning"} compliance-member-group">
+            <div class="result-title">${escapeHtml(`${group.memberCode ? `${group.memberCode} ` : ""}${group.memberName}`.trim() || group.memberId)}</div>
+            <div class="result-detail compliance-member-summary">
+              <span>缺漏：${group.issues.filter((issue) => issue.severity === "error").length} 筆</span>
+              <span>待確認：${group.issues.filter((issue) => issue.severity === "warning").length} 筆</span>
+            </div>
             <div class="result-detail">
-              <div>${escapeHtml(issue.message)}</div>
-              <div>週期：${escapeHtml(formatWeekRangeText(issue.weekStart, issue.weekEnd))}</div>
-              ${issue.date ? `<div>日期：${escapeHtml(formatDateTextFromIso(issue.date))}</div>` : ""}
+              ${group.issues.map((issue) => `
+                <div>${escapeHtml(issue.message)}｜週期：${escapeHtml(formatWeekRangeText(issue.weekStart, issue.weekEnd))}${issue.date ? `｜日期：${escapeHtml(formatDateTextFromIso(issue.date))}` : ""}</div>
+              `).join("")}
             </div>
           </div>
         `).join("")}

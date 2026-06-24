@@ -58,14 +58,27 @@
     return new Map((Array.isArray(days) ? days : []).map((day) => [day.date, day]));
   }
 
+  function shouldSkipWeek(member, week) {
+    return Boolean(
+      (member.hireDate && week.dates.includes(member.hireDate)) ||
+      (member.leaveDate && week.dates.includes(member.leaveDate))
+    );
+  }
+
   function checkRestCompliance(config) {
     const weeks = buildCalendarWeeks(config.year, config.month, config.weekStart);
     const issues = [];
     let checkedWeeks = 0;
+    let skippedWeeks = 0;
 
     (config.memberCalendars || []).forEach((member) => {
       const dayMap = buildDayMap(member.days);
       weeks.forEach((week) => {
+        if (shouldSkipWeek(member, week)) {
+          skippedWeeks += 1;
+          return;
+        }
+
         const activeDays = week.dates
           .map((date) => ({ date, ...(dayMap.get(date) || {}) }))
           .filter((day) => day.active);
@@ -125,6 +138,7 @@
     return {
       weeks,
       checkedWeeks,
+      skippedWeeks,
       checkedMembers: (config.memberCalendars || []).length,
       issues
     };

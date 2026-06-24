@@ -305,6 +305,9 @@ button {
 }
 
 .toolbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
@@ -317,6 +320,12 @@ button {
   font-size: 14px;
   font-weight: 700;
   flex: 0 0 auto;
+}
+
+.toolbar-inline-action {
+  padding: 6px 12px;
+  margin-left: auto;
+  font-size: 12px;
 }
 
 .ops-title-row {
@@ -1571,6 +1580,18 @@ thead th.today,
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.compliance-member-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compliance-member-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 
 .member-table-wrap {
