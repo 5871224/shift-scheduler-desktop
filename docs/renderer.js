@@ -1132,6 +1132,13 @@ function getLeaveStyleByCode(leaveCode) {
   };
 }
 
+function getLeaveCatalogDisplayName(item) {
+  if (!item) {
+    return "";
+  }
+  return LEAVE_CATALOG.find((entry) => entry.code === item.code)?.name || item.name || "";
+}
+
 function sanitizeRequestStyle(style, fallback) {
   const color = style?.color || fallback.color;
   const autoTextColor = style?.autoTextColor ?? !style?.textColor;
@@ -2268,13 +2275,14 @@ async function saveOvertimeAssignmentFromModal() {
 
 function renderRequestStyleSettingsCard(kind) {
   const style = getRequestDisplayStyle(kind);
-  const previewText = kind === "leave" ? "請假申請" : "加班";
+  const titleText = kind === "leave" ? "請假申請預覽" : "加班申請預覽";
+  const previewText = kind === "leave" ? "假別" : "加班";
   return `
-    <div class="result-item">
-      <div class="result-title">${previewText}顏色</div>
-      <div class="leave-preview-wrap">
-        <div class="settings-table-preview" style="background:${escapeHtml(style.color)};color:${escapeHtml(style.textColor)}">${escapeHtml(previewText)}</div>
-        <div class="settings-table-actions">
+    <div class="result-item request-style-settings-card">
+      <div class="result-title request-style-settings-title">${titleText}</div>
+      <div class="request-style-settings-controls">
+        <div class="settings-table-preview request-style-settings-preview" style="background:${escapeHtml(style.color)};color:${escapeHtml(style.textColor)}">${escapeHtml(previewText)}</div>
+        <div class="settings-table-actions request-style-settings-actions">
           ${renderActionIconButton("edit", `data-open-request-style="${kind}"`)}
         </div>
       </div>
@@ -2346,7 +2354,7 @@ function openListSettings(category) {
                   <div class="settings-table-preview" style="background:${escapeHtml(item.color)};color:${escapeHtml(getItemTextColor(item, item.color))}">${escapeHtml(item.name || item.code || "名稱")}</div>
                 </div>
                 ${category === "leave" ? `<div class="settings-table-code">${escapeHtml(item.code || "")}</div>` : ""}
-                <div class="settings-table-name">${escapeHtml(item.name)}</div>
+                <div class="settings-table-name">${escapeHtml(category === "leave" ? getLeaveCatalogDisplayName(item) : item.name)}</div>
                 <div class="settings-table-meta">${category === "shift"
                   ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
                   : category === "leave"
@@ -3379,6 +3387,26 @@ async function refreshRequestData() {
   }
   leaveRequestRecords = await window.schedulerApi.listLeaveRequests({ manager: isManager() });
   overtimeRequestRecords = await window.schedulerApi.listOvertimeRequests({ manager: isManager() });
+  try {
+    const publicRequests = await window.schedulerApi.listPublicScheduleRequests();
+    const publicLeaveMap = new Map((publicRequests.leaveRequests || []).map((record) => [record.id, record]));
+    const publicOvertimeMap = new Map((publicRequests.overtimeRequests || []).map((record) => [record.id, record]));
+    leaveRequestRecords = leaveRequestRecords.map((record) => ({
+      ...record,
+      memberCode: record.memberCode || publicLeaveMap.get(record.id)?.memberCode || "",
+      memberName: record.memberName || publicLeaveMap.get(record.id)?.memberName || "",
+      leaveCode: record.leaveCode || publicLeaveMap.get(record.id)?.leaveCode || "",
+      leaveName: record.leaveName || publicLeaveMap.get(record.id)?.leaveName || ""
+    }));
+    overtimeRequestRecords = overtimeRequestRecords.map((record) => ({
+      ...record,
+      memberCode: record.memberCode || publicOvertimeMap.get(record.id)?.memberCode || "",
+      memberName: record.memberName || publicOvertimeMap.get(record.id)?.memberName || "",
+      overtimeName: record.overtimeName || publicOvertimeMap.get(record.id)?.overtimeName || ""
+    }));
+  } catch {
+    // ponytail: 主管審核資料仍以正式 API 為主；公開 overlay 補資料失敗時不擋主流程。
+  }
   requestOverlaySourceLoaded = true;
 }
 
