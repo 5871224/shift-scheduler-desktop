@@ -5753,21 +5753,30 @@ async function loadApp() {
     return;
   }
 
-  try {
-    if (isManager()) {
+  if (isManager()) {
+    try {
       await syncRequestCatalogs();
+    } catch (error) {
+      setSaveStatus(`部分同步失敗：${error.message}`);
     }
+  }
+
+  try {
     await refreshRequestData();
-    if (isManager()) {
-      await migrateLegacyScheduleRequests();
-    }
     syncApprovedRequestsToSchedule();
-    if (isManager()) {
-      await forceSave();
-    }
   } catch (error) {
-    // ponytail: 後續同步失敗不該覆蓋已載入的正式班表；若要深查，再拆成各 API 獨立告警。
     setSaveStatus(`部分同步失敗：${error.message}`);
+  }
+
+  if (isManager()) {
+    try {
+      await migrateLegacyScheduleRequests();
+      await refreshRequestData();
+      syncApprovedRequestsToSchedule();
+      await forceSave();
+    } catch (error) {
+      setSaveStatus(`部分同步失敗：${error.message}`);
+    }
   }
   renderAll();
   syncCoreActionsMenu();
