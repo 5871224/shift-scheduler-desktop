@@ -4190,7 +4190,8 @@ function applyApprovedLeaveRequestToSchedule(record) {
     pruneEmptySchedule();
     return;
   }
-  const member = state.members.find((item) => item.code === record.memberCode);
+  const member = state.members.find((item) => item.id === record.memberId)
+    || state.members.find((item) => item.code === record.memberCode);
   const leave = getLeaveStyleByCode(record.leaveCode);
   if (!member || !leave) {
     return;
@@ -4228,7 +4229,8 @@ function applyApprovedOvertimeRequestToSchedule(record) {
     pruneEmptySchedule();
     return;
   }
-  const member = state.members.find((item) => item.code === record.memberCode);
+  const member = state.members.find((item) => item.id === record.memberId)
+    || state.members.find((item) => item.code === record.memberCode);
   const overtime = state.overtime[0];
   if (!member || !overtime || !record.workDate) {
     return;
