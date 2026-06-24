@@ -485,11 +485,16 @@ button {
 }
 
 .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
   padding: 8px 12px;
   border: 1px solid currentColor;
   background: #fff;
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .toolbar-section-leave .chip {
