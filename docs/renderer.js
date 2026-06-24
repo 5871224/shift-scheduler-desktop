@@ -1194,7 +1194,8 @@ function getAllowedLeaveRequestItems() {
     const configured = state.leaves.find((item) => item.code === entry.code);
     return {
       code: entry.code,
-      name: configured?.name || entry.name,
+      name: entry.name,
+      displayName: configured?.name || entry.name,
       defaultAllDay: configured?.defaultAllDay ?? false,
       requireReason: configured?.requireReason ?? false
     };
@@ -4110,7 +4111,10 @@ async function syncRequestCatalogs() {
   if (!isManager()) {
     return;
   }
-  await window.schedulerApi.syncCatalogs(state);
+  await window.schedulerApi.syncCatalogs({
+    ...state,
+    leaveCatalog: LEAVE_CATALOG
+  });
 }
 
 function renderRequestSummaryLines(record, kind) {
@@ -4406,14 +4410,12 @@ async function deleteEmployeeRequest(kind, requestId) {
   try {
     if (kind === "leave") {
       await window.schedulerApi.deleteLeaveRequest(requestId);
-      await refreshRequestData();
-      renderTable();
+      await refreshScheduleFromRequests();
       await openLeaveRequestModal();
       return;
     }
     await window.schedulerApi.deleteOvertimeRequest(requestId);
-    await refreshRequestData();
-    renderTable();
+    await refreshScheduleFromRequests();
     await openOvertimeRequestModal();
   } catch (error) {
     showInfoMessage(`刪除${label}失敗：${formatSchedulerError(error, "刪除失敗")}`);
@@ -4925,7 +4927,7 @@ function applyApprovedLeaveRequestToSchedule(record) {
     slot.leave = leave.id;
     slot.leaveMeta = {
       leaveCode: record.leaveCode,
-      displayName: record.leaveName || leave.name,
+      displayName: leave.name || record.leaveName || "",
       displayColor: isManagerSource ? (leave.color || "") : requestPalette.color,
       displayTextColor: isManagerSource ? getItemTextColor(leave, leave.color) : requestPalette.textColor,
       allDay: record.isAllDay !== false,

@@ -420,6 +420,18 @@
     ensureManager();
 
     const leaveMap = new Map();
+    (state.leaveCatalog || []).forEach((item) => {
+      if (!item?.code) {
+        return;
+      }
+      leaveMap.set(item.code, {
+        code: item.code,
+        name: item.name,
+        color: item.color || null,
+        requires_time: false,
+        requires_reason: false
+      });
+    });
     (state.leaves || []).forEach((item) => {
       if (!item?.code) {
         return;
@@ -427,7 +439,7 @@
       leaveMap.set(item.code, {
         code: item.code,
         name: item.name,
-        color: item.color,
+        color: item.color || leaveMap.get(item.code)?.color || null,
         requires_time: Boolean(item.defaultAllDay),
         requires_reason: Boolean(item.requireReason)
       });
