@@ -1746,11 +1746,18 @@ function memberLabel(member) {
 }
 
 function memberHasScheduledShiftInDepartment(member, departmentId) {
+  if (member?.deptId === departmentId) {
+    return true;
+  }
   for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
     if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
       continue;
     }
-    const shift = getItem("shift", getSlot(member.id, day)?.shift);
+    const slot = getSlot(member.id, day);
+    if (slot?.leave || slot?.overtime) {
+      return true;
+    }
+    const shift = getItem("shift", slot?.shift);
     if (shift && shiftAllowsDepartment(shift, departmentId)) {
       return true;
     }
