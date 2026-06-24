@@ -1699,7 +1699,7 @@ thead th.today,
 }
 
 .settings-table-row-leave-catalog {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(96px, 0.8fr) minmax(0, 1.8fr) minmax(96px, 0.7fr);
 }
 
 .settings-table-head {
@@ -2260,7 +2260,7 @@ thead th.today,
   }
 
   .settings-table-row-leave-catalog {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(88px, 0.8fr) minmax(0, 1.8fr) minmax(88px, 0.7fr);
   }
 
   .settings-table-name {
