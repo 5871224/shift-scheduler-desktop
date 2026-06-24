@@ -464,7 +464,7 @@ button {
 }
 
 .chips-shift .chip {
-  padding: 7px 11px;
+  padding: 0 11px;
 }
 
 .chips {
@@ -488,21 +488,22 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
-  padding: 8px 12px;
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid currentColor;
   background: #fff;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .toolbar-section-leave .chip {
-  padding: 7px 11px;
+  padding: 0 11px;
 }
 
 .toolbar-section-overtime .chip {
-  padding: 7px 11px;
+  padding: 0 11px;
 }
 
 .chip.active {
@@ -2139,14 +2140,15 @@ thead th.today,
   }
 
   .chip {
-    padding: 5px 9px;
+    height: 30px;
+    padding: 0 9px;
     font-size: 11px;
   }
 
   .toolbar-section-leave .chip,
   .toolbar-section-overtime .chip,
   .chips-shift .chip {
-    padding: 5px 8px;
+    padding: 0 8px;
   }
 
   .table-sticky-header {
