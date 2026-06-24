@@ -24,7 +24,7 @@
   { hex: "#888780", label: "石灰" }
 ];
 
-const LEAVE_CATALOG = [
+const DEFAULT_LEAVE_CATALOG = [
   { code: "0010", name: "事假" },
   { code: "0011", name: "病假" },
   { code: "0012", name: "婚假" },
@@ -151,6 +151,7 @@ const DEFAULT_STATE = {
     { id: "l4", code: "0047", name: "休息日", color: "#7F77DD", defaultAllDay: false, requireReason: false },
     { id: "l5", code: "0036", name: "例假", color: "#639922", defaultAllDay: false, requireReason: false }
   ],
+  leaveCatalog: DEFAULT_LEAVE_CATALOG.map((item) => ({ ...item })),
   overtime: [
     {
       id: "o1",
@@ -773,21 +774,38 @@ function sanitizeNamedColorItem(item, fallbackIndex, prefix, label) {
   };
 }
 
-function resolveLeaveCatalogEntry(item, fallbackIndex) {
+function sanitizeLeaveCatalogItem(item, fallbackIndex) {
+  const fallback = DEFAULT_LEAVE_CATALOG[fallbackIndex % DEFAULT_LEAVE_CATALOG.length] || { code: "", name: "" };
+  return {
+    code: String(item?.code || fallback.code || "").trim(),
+    name: String(item?.name || fallback.name || "").trim()
+  };
+}
+
+function getLeaveCatalog() {
+  const source = Array.isArray(state.leaveCatalog) && state.leaveCatalog.length
+    ? state.leaveCatalog
+    : DEFAULT_LEAVE_CATALOG;
+  return source
+    .map((item, index) => sanitizeLeaveCatalogItem(item, index))
+    .filter((item) => item.code && item.name);
+}
+
+function resolveLeaveCatalogEntry(item, fallbackIndex, leaveCatalog = getLeaveCatalog()) {
   const requestedCode = item?.code || LEGACY_LEAVE_NAME_MAP[item?.name] || "";
-  const byCode = LEAVE_CATALOG.find((entry) => entry.code === requestedCode);
+  const byCode = leaveCatalog.find((entry) => entry.code === requestedCode);
   if (byCode) {
     return byCode;
   }
-  const byName = LEAVE_CATALOG.find((entry) => entry.name === item?.name);
+  const byName = leaveCatalog.find((entry) => entry.name === item?.name);
   if (byName) {
     return byName;
   }
-  return LEAVE_CATALOG[fallbackIndex % LEAVE_CATALOG.length];
+  return leaveCatalog[fallbackIndex % leaveCatalog.length] || DEFAULT_LEAVE_CATALOG[0];
 }
 
-function sanitizeLeaveItem(item, fallbackIndex) {
-  const catalogEntry = resolveLeaveCatalogEntry(item, fallbackIndex);
+function sanitizeLeaveItem(item, fallbackIndex, leaveCatalog = getLeaveCatalog()) {
+  const catalogEntry = resolveLeaveCatalogEntry(item, fallbackIndex, leaveCatalog);
   const color = item?.color || COLORS[fallbackIndex % COLORS.length].hex;
   const autoText = item?.autoTextColor ?? !item?.textColor;
   const requestColor = item?.requestColor || color;
@@ -934,8 +952,11 @@ function normalizeState(payload) {
     ? payload.shifts.map((shift, index) => sanitizeShift(shift, index, merged))
     : merged.shifts;
   merged.shifts = merged.shifts.filter((shift) => shift.name !== "休息");
+  merged.leaveCatalog = Array.isArray(payload.leaveCatalog) && payload.leaveCatalog.length
+    ? payload.leaveCatalog.map((item, index) => sanitizeLeaveCatalogItem(item, index)).filter((item) => item.code && item.name)
+    : DEFAULT_LEAVE_CATALOG.map((item) => ({ ...item }));
   merged.leaves = Array.isArray(payload.leaves)
-    ? payload.leaves.map((item, index) => sanitizeLeaveItem(item, index))
+    ? payload.leaves.map((item, index) => sanitizeLeaveItem(item, index, merged.leaveCatalog))
     : merged.leaves;
   if (merged.leaves.length) {
     merged.leaves = mergeDefaultLeaves(merged.leaves);
@@ -1190,7 +1211,7 @@ function formatOvertimeRestLines(record) {
 }
 
 function getAllowedLeaveRequestItems() {
-  return LEAVE_CATALOG.filter((entry) => !["0036", "0047"].includes(entry.code)).map((entry) => {
+  return getLeaveCatalog().filter((entry) => !["0036", "0047"].includes(entry.code)).map((entry) => {
     const configured = state.leaves.find((item) => item.code === entry.code);
     return {
       code: entry.code,
@@ -1215,11 +1236,12 @@ function getLeaveStyleByCode(leaveCode) {
   if (configured) {
     return configured;
   }
-  const catalogEntry = LEAVE_CATALOG.find((entry) => entry.code === leaveCode);
+  const leaveCatalog = getLeaveCatalog();
+  const catalogEntry = leaveCatalog.find((entry) => entry.code === leaveCode);
   if (!catalogEntry) {
     return null;
   }
-  const catalogIndex = Math.max(0, LEAVE_CATALOG.findIndex((entry) => entry.code === leaveCode));
+  const catalogIndex = Math.max(0, leaveCatalog.findIndex((entry) => entry.code === leaveCode));
   const fallbackColor = COLORS[catalogIndex % COLORS.length].hex;
   return {
     id: `request-leave-${catalogEntry.code}`,
@@ -1240,7 +1262,7 @@ function getLeaveCatalogDisplayName(item) {
   if (!item) {
     return "";
   }
-  return LEAVE_CATALOG.find((entry) => entry.code === item.code)?.name || item.name || "";
+  return getLeaveCatalog().find((entry) => entry.code === item.code)?.name || item.name || "";
 }
 
 function sanitizeRequestStyle(style, fallback) {
@@ -1364,6 +1386,7 @@ function syncRoleUi() {
   const managerOnlyIds = [
     "deptSettingsButton",
     "shiftSettingsButton",
+    "leaveCatalogSettingsButton",
     "restComplianceButton",
     "leaveSettingsButton",
     "overtimeSettingsButton",
@@ -2685,6 +2708,120 @@ function openListSettings(category) {
   });
 }
 
+function renderLeaveCatalogSettingsBody() {
+  const leaveCatalog = getLeaveCatalog();
+  if (!leaveCatalog.length) {
+    return '<div class="empty-state">目前還沒有資料</div>';
+  }
+  return `
+    <div class="settings-table-wrap">
+      <div class="settings-table">
+        <div class="settings-table-row settings-table-head">
+          <div>假別代碼</div>
+          <div>原始名稱</div>
+          <div class="settings-table-actions-head">操作</div>
+        </div>
+        ${leaveCatalog.map((item) => `
+          <div class="settings-table-row">
+            <div class="settings-table-code">${escapeHtml(item.code)}</div>
+            <div class="settings-table-name">${escapeHtml(item.name)}</div>
+            <div class="settings-table-actions">
+              ${renderActionIconButton("edit", `data-edit-leave-catalog="${escapeHtml(item.code)}"`)}
+              ${renderActionIconButton("delete", `data-delete-leave-catalog="${escapeHtml(item.code)}"`)}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function openLeaveCatalogSettings() {
+  openEntityListModal({
+    title: "假別代碼",
+    modalClass: "modal modal-wide catalog-settings-modal",
+    body: renderLeaveCatalogSettingsBody(),
+    headerButtons: '<button class="btn-primary" type="button" data-open-add-leave-catalog="true">新增假別代碼</button>',
+    hideFooterClose: true
+  });
+}
+
+function openLeaveCatalogForm(mode, code = "") {
+  const current = mode === "edit"
+    ? getLeaveCatalog().find((item) => item.code === code)
+    : { code: "", name: "" };
+  if (!current) {
+    return;
+  }
+  modalContext = { category: "leave-catalog", mode, targetCode: code };
+  openEntityListModal({
+    title: `${mode === "edit" ? "修改" : "新增"}假別代碼`,
+    modalClass: "modal modal-form-compact",
+    body: `
+      <div class="form-row">
+        <label for="leaveCatalogEntryCode">假別代碼</label>
+        <input id="leaveCatalogEntryCode" type="text" maxlength="4" value="${escapeHtml(current.code)}" placeholder="例如 0010">
+      </div>
+      <div class="form-row">
+        <label for="leaveCatalogEntryName">原始名稱</label>
+        <input id="leaveCatalogEntryName" type="text" maxlength="20" value="${escapeHtml(current.name)}" placeholder="請輸入原始名稱">
+      </div>
+    `,
+    headerButtons: `<button class="btn-primary" type="button" data-save-leave-catalog="${mode}">${mode === "edit" ? "儲存修改" : "新增假別代碼"}</button>`,
+    hideFooterClose: true
+  });
+}
+
+function saveLeaveCatalogItem(mode) {
+  const code = String(document.getElementById("leaveCatalogEntryCode")?.value || "").trim();
+  const name = String(document.getElementById("leaveCatalogEntryName")?.value || "").trim();
+  if (!/^\d{4}$/.test(code)) {
+    reportValidationError("假別代碼需為 4 碼數字");
+    document.getElementById("leaveCatalogEntryCode")?.focus();
+    return;
+  }
+  if (!name) {
+    document.getElementById("leaveCatalogEntryName")?.focus();
+    return;
+  }
+  const currentList = getLeaveCatalog();
+  const duplicate = currentList.find((item) => item.code === code && (mode !== "edit" || item.code !== modalContext.targetCode));
+  if (duplicate) {
+    reportValidationError("假別代碼不可重複");
+    return;
+  }
+  const nextItem = { code, name };
+  state.leaveCatalog = mode === "edit"
+    ? currentList.map((item) => item.code === modalContext.targetCode ? nextItem : item)
+    : [...currentList, nextItem].sort((a, b) => a.code.localeCompare(b.code, "en"));
+  closeModal();
+  renderAll();
+  openLeaveCatalogSettings();
+  queueSave();
+  syncRequestCatalogs().catch((error) => setSaveStatus(`同步設定失敗：${error.message}`));
+}
+
+async function deleteLeaveCatalogItem(code) {
+  if (getLeaveCatalog().length <= 1) {
+    showInfoMessage("至少需保留 1 筆假別代碼");
+    return;
+  }
+  const linkedLeave = state.leaves.find((item) => item.code === code);
+  if (linkedLeave) {
+    showInfoMessage(`假別代碼 ${code} 已被假別設定「${linkedLeave.name}」使用中，請先刪除或改用其他代碼`);
+    return;
+  }
+  const confirmed = await confirmAction(`確定要刪除假別代碼 ${code} 嗎？`);
+  if (!confirmed) {
+    return;
+  }
+  state.leaveCatalog = getLeaveCatalog().filter((item) => item.code !== code);
+  renderAll();
+  openLeaveCatalogSettings();
+  queueSave();
+  syncRequestCatalogs().catch((error) => setSaveStatus(`同步設定失敗：${error.message}`));
+}
+
 function readApplicableDepartmentInput() {
   const selectedDeptId = document.getElementById("shiftApplicableDept")?.value || "";
   return selectedDeptId ? [selectedDeptId] : [];
@@ -2874,8 +3011,8 @@ function openNamedColorFormModal(category, mode, targetId = "") {
     ? list.find((entry) => entry.id === targetId)
     : {
       id: "",
-      code: LEAVE_CATALOG[0].code,
-      name: LEAVE_CATALOG[0].name,
+      code: getLeaveCatalog()[0]?.code || DEFAULT_LEAVE_CATALOG[0].code,
+      name: getLeaveCatalog()[0]?.name || DEFAULT_LEAVE_CATALOG[0].name,
       color: COLORS[0].hex,
       defaultAllDay: false,
       requireReason: false,
@@ -2911,14 +3048,14 @@ function openNamedColorFormModal(category, mode, targetId = "") {
       <div class="form-row">
         <label for="${category === "leave" ? "leaveCatalogCode" : "namedItemName"}">${category === "leave" ? "假別" : "名稱"}</label>
         ${category === "leave"
-          ? `<select id="leaveCatalogCode">${buildSelectOptions(LEAVE_CATALOG, "code", (entry) => `${entry.code} ${entry.name}`, item.code || "")}</select>`
+          ? `<select id="leaveCatalogCode">${buildSelectOptions(getLeaveCatalog(), "code", (entry) => `${entry.code} ${entry.name}`, item.code || "")}</select>`
           : `<textarea id="namedItemName" class="single-line-textarea" rows="1" maxlength="12" lang="zh-Hant" spellcheck="false" placeholder="請輸入名稱">${escapeHtml(item.name)}</textarea>`
         }
       </div>
       ${category === "leave" ? `
         <div class="form-row">
           <label for="leaveCatalogName">名稱</label>
-          <input id="leaveCatalogName" type="text" maxlength="20" placeholder="請輸入名稱" value="${escapeHtml(item.name || LEAVE_CATALOG.find((entry) => entry.code === item.code)?.name || "")}">
+          <input id="leaveCatalogName" type="text" maxlength="20" placeholder="請輸入名稱" value="${escapeHtml(item.name || getLeaveCatalog().find((entry) => entry.code === item.code)?.name || "")}">
         </div>
         <div class="form-section">
           <div class="form-row checkbox-row checkbox-row-left">
@@ -3007,7 +3144,7 @@ function saveNamedColorItem(category, mode) {
     return;
   }
   const selectedLeave = category === "leave"
-    ? LEAVE_CATALOG.find((entry) => entry.code === (document.getElementById("leaveCatalogCode")?.value || ""))
+    ? getLeaveCatalog().find((entry) => entry.code === (document.getElementById("leaveCatalogCode")?.value || ""))
     : null;
   const name = category === "leave"
     ? (document.getElementById("leaveCatalogName")?.value.trim() || "")
@@ -3966,7 +4103,7 @@ async function importLeaveSettings() {
         skipped += 1;
         continue;
       }
-      const catalogEntry = LEAVE_CATALOG.find((entry) => entry.code === code);
+      const catalogEntry = getLeaveCatalog().find((entry) => entry.code === code);
       if (!catalogEntry) {
         skipped += 1;
         continue;
@@ -4113,7 +4250,7 @@ async function syncRequestCatalogs() {
   }
   await window.schedulerApi.syncCatalogs({
     ...state,
-    leaveCatalog: LEAVE_CATALOG
+    leaveCatalog: getLeaveCatalog()
   });
 }
 
@@ -5219,6 +5356,7 @@ function bindEvents() {
   });
   bindClick("deptSettingsButton", openDepartmentSettings);
   bindClick("shiftSettingsButton", () => openListSettings("shift"));
+  bindClick("leaveCatalogSettingsButton", openLeaveCatalogSettings);
   bindClick("leaveSettingsButton", () => openListSettings("leave"));
   bindClick("overtimeSettingsButton", () => openListSettings("overtime"));
   bindClick("leaveApprovalButton", async () => {
@@ -5444,14 +5582,30 @@ function bindEvents() {
     if (target.dataset.openAdd === "shift") openShiftFormModal("add");
     if (target.dataset.openAdd === "leave") openNamedColorFormModal("leave", "add");
     if (target.dataset.openAdd === "overtime") openNamedColorFormModal("overtime", "add");
+    if (target.dataset.openAddLeaveCatalog !== undefined) {
+      openLeaveCatalogForm("add");
+      return;
+    }
     if (target.dataset.openRequestStyle) openRequestStyleModal(target.dataset.openRequestStyle);
     if (target.dataset.editItem === "shift") openShiftFormModal("edit", target.dataset.editId);
     if (target.dataset.editItem === "leave") openNamedColorFormModal("leave", "edit", target.dataset.editId);
     if (target.dataset.editItem === "overtime") openNamedColorFormModal("overtime", "edit", target.dataset.editId);
+    if (target.dataset.editLeaveCatalog) {
+      openLeaveCatalogForm("edit", target.dataset.editLeaveCatalog);
+      return;
+    }
+    if (target.dataset.deleteLeaveCatalog) {
+      await deleteLeaveCatalogItem(target.dataset.deleteLeaveCatalog);
+      return;
+    }
     if (target.dataset.saveShift) saveShiftFromModal(target.dataset.saveShift);
     if (target.dataset.saveNamedItem) {
       const [category, mode] = target.dataset.saveNamedItem.split(":");
       saveNamedColorItem(category, mode);
+    }
+    if (target.dataset.saveLeaveCatalog) {
+      saveLeaveCatalogItem(target.dataset.saveLeaveCatalog);
+      return;
     }
     if (target.dataset.saveWeekStart) {
       saveWeekStartSettingFromModal();
@@ -5567,6 +5721,15 @@ function bindEvents() {
     const target = event.target;
     if (target instanceof HTMLSelectElement && target.id === "leaveRequestType") {
       syncLeaveRequestFormUi(true);
+      return;
+    }
+    if (target instanceof HTMLSelectElement && target.id === "leaveCatalogCode") {
+      const selected = getLeaveCatalog().find((entry) => entry.code === target.value);
+      const nameInput = document.getElementById("leaveCatalogName");
+      if (nameInput && selected) {
+        nameInput.value = selected.name;
+      }
+      syncNamedColorUi();
       return;
     }
     if (target instanceof HTMLSelectElement && target.dataset.memberSettingsFilterField) {
