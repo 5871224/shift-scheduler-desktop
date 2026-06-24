@@ -1026,6 +1026,14 @@ function getItemList(category) {
   return state.overtime;
 }
 
+function isSyntheticRequestLeaveItem(item) {
+  return String(item?.id || "").startsWith("request-leave-");
+}
+
+function getManagerLeaveItems(items = state.leaves) {
+  return (Array.isArray(items) ? items : []).filter((item) => !isSyntheticRequestLeaveItem(item));
+}
+
 function getItem(category, id) {
   return getItemList(category).find((item) => item.id === id);
 }
@@ -1811,7 +1819,7 @@ function renderToolbar() {
     ? state.shifts
     : state.shifts.filter((shift) => shiftAllowsDepartment(shift, state.deptFilter));
   renderChips("shiftChips", "shift", visibleShifts.filter((item) => !item.hiddenFromToolbar));
-  renderChips("leaveChips", "leave", state.leaves.filter((item) => !item.hiddenFromToolbar));
+  renderChips("leaveChips", "leave", getManagerLeaveItems().filter((item) => !item.hiddenFromToolbar));
   renderChips("overtimeChips", "overtime", state.overtime.filter((item) => !item.hiddenFromToolbar));
   syncRoleUi();
 }
@@ -2015,6 +2023,7 @@ function pruneEmptySchedule() {
 function buildPersistedState() {
   const nextState = {
     ...state,
+    leaves: getManagerLeaveItems(state.leaves),
     schedule: {}
   };
   Object.entries(state.schedule || {}).forEach(([key, slot]) => {
@@ -2682,7 +2691,7 @@ function openListSettings(category) {
     leave: "假別設定",
     overtime: "加班設定"
   };
-  const list = getItemList(category);
+  const list = category === "leave" ? getManagerLeaveItems(getItemList(category)) : getItemList(category);
   const requestStyleCard = (category === "leave" || category === "overtime")
     ? `${renderRequestStyleSettingsCard(category)}`
     : "";
