@@ -2125,10 +2125,6 @@ async function applySelectionToCell(memberId, day) {
     if (!leave) {
       return;
     }
-    if (shouldPromptLeaveDetail(leave, slot.leave === id ? slot.leaveMeta : null)) {
-      openLeaveAssignmentModal(memberId, day, id);
-      return;
-    }
     try {
       if (slot.leave === id && isManagerSlotRequest(slot, "leave")) {
         await deleteManagerScheduleEntry("leave", slot.leaveRequestId);
@@ -2137,6 +2133,9 @@ async function applySelectionToCell(memberId, day) {
         pruneEmptySchedule();
         renderTable();
         queueSave();
+        return;
+      } else if (shouldPromptLeaveDetail(leave, null)) {
+        openLeaveAssignmentModal(memberId, day, id);
         return;
       } else {
         await upsertManagerLeaveEntry({
