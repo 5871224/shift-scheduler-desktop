@@ -58,13 +58,15 @@ create table public.shift_types (
 
 create table public.leave_types (
   id uuid primary key default gen_random_uuid(),
-  code text not null unique,
+  scheduler_item_id text,
+  code text not null,
   name text not null,
   color text,
   requires_time boolean not null default false,
   requires_reason boolean not null default false,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (scheduler_item_id)
 );
 
 create table public.overtime_types (

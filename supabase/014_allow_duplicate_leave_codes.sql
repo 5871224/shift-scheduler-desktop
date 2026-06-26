@@ -1,3 +1,26 @@
+alter table public.leave_types
+  add column if not exists scheduler_item_id text;
+
+update public.leave_types
+set scheduler_item_id = concat('legacy:', id::text)
+where scheduler_item_id is null;
+
+alter table public.leave_types
+  drop constraint if exists leave_types_code_key;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.leave_types'::regclass
+      and conname = 'leave_types_scheduler_item_id_key'
+  ) then
+    alter table public.leave_types
+      add constraint leave_types_scheduler_item_id_key unique (scheduler_item_id);
+  end if;
+end $$;
+
 drop function if exists public.get_public_schedule_requests();
 
 create or replace function public.get_public_schedule_requests()

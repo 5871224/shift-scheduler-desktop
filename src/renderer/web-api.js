@@ -419,26 +419,61 @@
   async function syncCatalogs(state) {
     ensureManager();
 
-    const leaveMap = new Map();
-    (state.leaves || []).forEach((item) => {
-      if (!item?.code) {
-        return;
+    const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code);
+    if (leaveItems.length) {
+      try {
+        const existingLeaveRows = await restSelect("leave_types", {
+          select: "id,scheduler_item_id",
+          auth: true
+        });
+        const existingLeaveMap = new Map(
+          (existingLeaveRows || [])
+            .filter((item) => item?.scheduler_item_id)
+            .map((item) => [item.scheduler_item_id, item])
+        );
+
+        for (const item of leaveItems) {
+          const payload = {
+            scheduler_item_id: item.id,
+            code: item.code,
+            name: item.name,
+            color: item.color,
+            requires_time: Boolean(item.defaultAllDay),
+            requires_reason: Boolean(item.requireReason)
+          };
+          const existing = existingLeaveMap.get(item.id);
+          if (existing?.id) {
+            await restUpdate("leave_types", { id: `eq.${existing.id}` }, payload, {
+              auth: true,
+              prefer: "return=minimal"
+            });
+          } else {
+            await restInsert("leave_types", [payload], {
+              auth: true,
+              prefer: "return=minimal"
+            });
+          }
+        }
+      } catch (error) {
+        if (!/scheduler_item_id/i.test(error.message || "")) {
+          throw error;
+        }
+        const leaveMap = new Map();
+        leaveItems.forEach((item) => {
+          leaveMap.set(item.code, {
+            code: item.code,
+            name: item.name,
+            color: item.color,
+            requires_time: Boolean(item.defaultAllDay),
+            requires_reason: Boolean(item.requireReason)
+          });
+        });
+        await restInsert("leave_types", [...leaveMap.values()], {
+          auth: true,
+          onConflict: "code",
+          prefer: "resolution=merge-duplicates,return=minimal"
+        });
       }
-      leaveMap.set(item.code, {
-        code: item.code,
-        name: item.name,
-        color: item.color,
-        requires_time: Boolean(item.defaultAllDay),
-        requires_reason: Boolean(item.requireReason)
-      });
-    });
-    const leaveRows = [...leaveMap.values()];
-    if (leaveRows.length) {
-      await restInsert("leave_types", leaveRows, {
-        auth: true,
-        onConflict: "code",
-        prefer: "resolution=merge-duplicates,return=minimal"
-      });
     }
 
     const existingOvertime = await restSelect("overtime_types", {
@@ -504,6 +539,8 @@
   async function getLeaveTypeByCode(code) {
     const rows = await restSelect("leave_types", {
       select: "id,code,name",
+      order: "updated_at.desc,created_at.desc",
+      limit: "1",
       filters: {
         code: `eq.${code}`
       },
@@ -513,6 +550,29 @@
       throw new Error("找不到對應的假別，請先同步假別設定");
     }
     return rows[0];
+  }
+
+  async function getLeaveTypeByReference(payload = {}) {
+    const leaveItemId = String(payload.leaveItemId || "").trim();
+    if (leaveItemId) {
+      try {
+        const rows = await restSelect("leave_types", {
+          select: "id,code,name,scheduler_item_id",
+          filters: {
+            scheduler_item_id: `eq.${leaveItemId}`
+          },
+          auth: true
+        });
+        if (rows?.length) {
+          return rows[0];
+        }
+      } catch (error) {
+        if (!/scheduler_item_id/i.test(error.message || "")) {
+          throw error;
+        }
+      }
+    }
+    return getLeaveTypeByCode(payload.leaveCode);
   }
 
   async function getOvertimeTypeByName(name) {
@@ -612,7 +672,7 @@
 
   async function createManagerLeaveRequest(payload) {
     ensureManager();
-    const leaveType = await getLeaveTypeByCode(payload.leaveCode);
+    const leaveType = await getLeaveTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     const now = new Date().toISOString();
     await restInsert("leave_requests", [{
@@ -637,7 +697,7 @@
 
   async function updateManagerLeaveRequest(payload) {
     ensureManager();
-    const leaveType = await getLeaveTypeByCode(payload.leaveCode);
+    const leaveType = await getLeaveTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     await restUpdate("leave_requests", {
       id: `eq.${payload.id}`
@@ -764,13 +824,27 @@
     if (!ids.length) {
       return new Map();
     }
-    const rows = await restSelect("leave_types", {
-      select: "id,code,name",
-      filters: {
-        id: buildInFilter(ids)
-      },
-      auth: true
-    });
+    let rows = [];
+    try {
+      rows = await restSelect("leave_types", {
+        select: "id,code,name,scheduler_item_id",
+        filters: {
+          id: buildInFilter(ids)
+        },
+        auth: true
+      });
+    } catch (error) {
+      if (!/scheduler_item_id/i.test(error.message || "")) {
+        throw error;
+      }
+      rows = await restSelect("leave_types", {
+        select: "id,code,name",
+        filters: {
+          id: buildInFilter(ids)
+        },
+        auth: true
+      });
+    }
     return new Map((rows || []).map((item) => [item.id, item]));
   }
 
@@ -811,6 +885,7 @@
       memberId: item.member_id,
       memberCode: profileMap.get(item.member_id)?.employee_code || "",
       memberName: profileMap.get(item.member_id)?.full_name || "",
+      leaveItemId: leaveTypeMap.get(item.leave_type_id)?.scheduler_item_id || "",
       leaveCode: leaveTypeMap.get(item.leave_type_id)?.code || "",
       leaveName: leaveTypeMap.get(item.leave_type_id)?.name || "",
       startDate: item.start_date,
@@ -879,6 +954,7 @@
           id: item.request_id,
           memberCode: item.member_code || "",
           memberName: item.member_name || "",
+          leaveItemId: item.leave_item_id || "",
           leaveCode: item.leave_code || "",
           leaveName: item.leave_name || "",
           startDate: item.start_date,

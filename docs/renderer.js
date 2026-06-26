@@ -1235,6 +1235,25 @@ function getLeaveStyleByCode(leaveCode) {
   };
 }
 
+function getLeaveStyleForRecord(record) {
+  const leaveItemId = String(record?.leaveItemId || "").trim();
+  if (leaveItemId) {
+    const configured = state.leaves.find((item) => item.id === leaveItemId);
+    if (configured) {
+      return configured;
+    }
+  }
+  return getLeaveStyleByCode(record?.leaveCode || "");
+}
+
+function getLeaveStyleForSlot(slot) {
+  const configured = getItem("leave", slot?.leave);
+  if (configured) {
+    return configured;
+  }
+  return getLeaveStyleByCode(slot?.leaveMeta?.leaveCode || "");
+}
+
 function getLeaveCatalogDisplayName(item) {
   if (!item) {
     return "";
@@ -1629,7 +1648,7 @@ function showScheduleTooltip(memberId, day, category, anchorRect) {
   const requestSource = getSlotRequestSource(slot, category);
   const isManagerSource = isManagerRequestSource(requestSource);
   const item = isLeave
-    ? (slot?.leaveRequestId ? getLeaveStyleByCode(slot?.leaveMeta?.leaveCode || "") : getItem(category, slot?.[category]))
+    ? (slot?.leaveRequestId ? getLeaveStyleForSlot(slot) : getItem(category, slot?.[category]))
     : getItem(category, slot?.[category]);
   const meta = isLeave ? slot?.leaveMeta : slot?.overtimeMeta;
   const requestId = isLeave ? slot?.leaveRequestId : slot?.overtimeRequestId;
@@ -1810,7 +1829,7 @@ function renderCellInner(key, memberId = "", day = 0) {
   }
   if (cellState.leave) {
     const leave = cellState.leaveRequestId
-      ? getLeaveStyleByCode(cellState.leaveMeta?.leaveCode || "")
+      ? getLeaveStyleForSlot(cellState)
       : getItem("leave", cellState.leave);
     if (leave) {
       const leavePalette = cellState.leaveRequestId && !isManagerRequestSource(cellState.leaveMeta?.requestSource || "")
@@ -2028,6 +2047,7 @@ async function upsertManagerLeaveEntry(payload) {
     id: payload.requestId || "",
     memberId: member.id,
     memberCode: member.code,
+    leaveItemId: leave.id,
     leaveCode: leave.code,
     startDate: toDateString(state.year, state.month, payload.day),
     endDate: toDateString(state.year, state.month, payload.day),
@@ -3692,6 +3712,7 @@ async function refreshRequestData() {
       ...record,
       memberCode: record.memberCode || publicLeaveMap.get(record.id)?.memberCode || "",
       memberName: record.memberName || publicLeaveMap.get(record.id)?.memberName || "",
+      leaveItemId: record.leaveItemId || publicLeaveMap.get(record.id)?.leaveItemId || "",
       leaveCode: record.leaveCode || publicLeaveMap.get(record.id)?.leaveCode || "",
       leaveName: record.leaveName || publicLeaveMap.get(record.id)?.leaveName || ""
     }));
@@ -3779,6 +3800,7 @@ async function migrateLegacyScheduleRequests() {
       await window.schedulerApi.createManagerLeaveRequest({
         memberId: entry.member.id,
         memberCode: entry.member.code,
+        leaveItemId: entry.leave.id,
         leaveCode: entry.leave.code,
         startDate: entry.dateString,
         endDate: entry.dateString,
@@ -4906,7 +4928,7 @@ function applyApprovedLeaveRequestToSchedule(record) {
   }
   const member = state.members.find((item) => item.id === record.memberId)
     || state.members.find((item) => item.code === record.memberCode);
-  const leave = getLeaveStyleByCode(record.leaveCode);
+  const leave = getLeaveStyleForRecord(record);
   if (!member || !leave) {
     return;
   }
