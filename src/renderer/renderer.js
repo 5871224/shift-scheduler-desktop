@@ -1761,9 +1761,6 @@ function memberHasScheduledShiftInDepartment(member, departmentId) {
       continue;
     }
     const slot = getSlot(member.id, day);
-    if (slot?.leave || slot?.overtime) {
-      return true;
-    }
     const shift = getItem("shift", slot?.shift);
     if (shift && shiftAllowsDepartment(shift, departmentId)) {
       return true;
