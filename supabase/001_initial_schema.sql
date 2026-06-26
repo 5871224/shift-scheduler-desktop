@@ -24,6 +24,8 @@ create table public.profiles (
   hire_date date,
   leave_date date,
   pay_by_day boolean not null default false,
+  schedule_department_ids text[] not null default '{}',
+  monthly_rest_days integer not null default 0 check (monthly_rest_days >= 0 and monthly_rest_days <= 31),
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -41,6 +43,7 @@ create table public.member_departments (
   id uuid primary key default gen_random_uuid(),
   member_id uuid not null references public.profiles (id) on delete cascade,
   department_id uuid not null references public.departments (id) on delete cascade,
+  sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   unique (member_id, department_id)
 );
@@ -52,6 +55,7 @@ create table public.shift_types (
   color text,
   start_time time not null,
   end_time time not null,
+  required_staff_count integer not null default 0 check (required_staff_count >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -90,6 +94,7 @@ create table public.schedule_months (
   id uuid primary key default gen_random_uuid(),
   year integer not null,
   month integer not null check (month between 1 and 12),
+  month_start_day integer not null default 1 check (month_start_day between 1 and 31),
   name text,
   is_locked boolean not null default false,
   created_by uuid references public.profiles (id) on delete set null,

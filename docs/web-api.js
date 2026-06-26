@@ -488,6 +488,7 @@
         color: item.color,
         start_time: item.startTime,
         end_time: item.endTime,
+        required_staff_count: Math.max(0, Number(item.requiredStaffCount) || 0),
         use_rest_1: Boolean(item.useRest1),
         rest_1_start_time: item.useRest1 ? item.rest1StartTime || null : null,
         rest_1_end_time: item.useRest1 ? item.rest1EndTime || null : null,
@@ -520,7 +521,9 @@
         role: member?.role === "manager" ? "manager" : "employee",
         hireDate: member?.hireDate || null,
         leaveDate: member?.leaveDate || null,
-        payByDay: Boolean(member?.payByDay)
+        payByDay: Boolean(member?.payByDay),
+        scheduleDepartmentIds: Array.isArray(member?.scheduleDeptIds) ? member.scheduleDeptIds : [],
+        monthlyRestDays: Math.max(0, Number(member?.monthlyRestDays) || 0)
       },
       previousEmployeeCode: String(previousEmployeeCode || member?.code || "").trim(),
       defaultPassword: "0000"

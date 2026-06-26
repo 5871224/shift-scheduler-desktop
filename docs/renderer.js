@@ -172,6 +172,7 @@ const DEFAULT_STATE = {
   rules: {
     maxConsecutiveWorkDays: 6,
     weekStart: 0,
+    monthStartDay: 1,
     forbidProxyLeaveConflict: true,
     requireEmploymentWindow: true
   },
@@ -209,8 +210,10 @@ let isSaving = false;
 let latestSaveStatus = "";
 let appInfo = null;
 let dragMemberId = "";
+let dragScheduleDeptId = "";
 let leaveTooltipTimer = null;
 let coreActionsOpen = false;
+let departmentSettingsView = "department";
 let currentSession = null;
 let currentProfile = null;
 let currentMember = null;
@@ -719,14 +722,33 @@ function sanitizePosition(position, fallbackIndex) {
   };
 }
 
+function normalizeScheduleDeptIds(member, departments) {
+  const validDeptIds = new Set((departments || []).map((department) => department.id));
+  const ids = Array.isArray(member?.scheduleDeptIds)
+    ? member.scheduleDeptIds
+    : Array.isArray(member?.departmentIds)
+      ? member.departmentIds
+      : [];
+  const normalized = ids
+    .map((deptId) => String(deptId || ""))
+    .filter((deptId, index, list) => validDeptIds.has(deptId) && list.indexOf(deptId) === index);
+  const fallbackDeptId = member?.deptId && validDeptIds.has(member.deptId)
+    ? member.deptId
+    : departments[0]?.id || "";
+  if (fallbackDeptId && !normalized.includes(fallbackDeptId)) {
+    normalized.unshift(fallbackDeptId);
+  }
+  return normalized;
+}
+
 function sanitizeMember(member, fallbackIndex, merged) {
+  const scheduleDeptIds = normalizeScheduleDeptIds(member, merged.departments);
   return {
     id: member?.id || uid(`m${fallbackIndex}`),
     code: member?.code || `M${String(fallbackIndex + 1).padStart(3, "0")}`,
     name: member?.name || `人員 ${fallbackIndex + 1}`,
-    deptId: member?.deptId && merged.departments.some((department) => department.id === member.deptId)
-      ? member.deptId
-      : merged.departments[0]?.id || "",
+    deptId: scheduleDeptIds[0] || "",
+    scheduleDeptIds,
     positionId: member?.positionId && merged.positions.some((position) => position.id === member.positionId)
       ? member.positionId
       : merged.positions[0]?.id || "",
@@ -734,6 +756,7 @@ function sanitizeMember(member, fallbackIndex, merged) {
     hireDate: member?.hireDate || "",
     leaveDate: member?.leaveDate || "",
     payByDay: Boolean(member?.payByDay),
+    monthlyRestDays: Math.max(0, Number(member?.monthlyRestDays) || 0),
     role: member?.role === "manager" ? "manager" : "employee"
   };
 }
@@ -756,6 +779,7 @@ function sanitizeShift(shift, fallbackIndex, merged) {
       startTime: shift?.startTime || "",
       endTime: shift?.endTime || "",
       hiddenFromToolbar: Boolean(shift?.hiddenFromToolbar),
+      requiredStaffCount: Math.max(0, Number(shift?.requiredStaffCount) || 0),
       applicableDeptIds: applicableDeptId ? [applicableDeptId] : [],
       positionRequirements: Array.isArray(shift?.positionRequirements)
         ? shift.positionRequirements
@@ -950,6 +974,7 @@ function normalizeState(payload) {
   merged.rules = {
     maxConsecutiveWorkDays: Math.max(1, Number(payload.rules?.maxConsecutiveWorkDays) || merged.rules.maxConsecutiveWorkDays),
     weekStart: Number.isInteger(Number(payload.rules?.weekStart)) ? Math.min(6, Math.max(0, Number(payload.rules?.weekStart))) : merged.rules.weekStart,
+    monthStartDay: Number.isInteger(Number(payload.rules?.monthStartDay)) ? Math.min(31, Math.max(1, Number(payload.rules?.monthStartDay))) : merged.rules.monthStartDay,
     forbidProxyLeaveConflict: payload.rules?.forbidProxyLeaveConflict !== false,
     requireEmploymentWindow: payload.rules?.requireEmploymentWindow !== false
   };
@@ -993,6 +1018,31 @@ function getDepartmentSummary(deptIds) {
     return "全部單位";
   }
   return getDepartmentName(deptIds[0]);
+}
+
+function getMemberScheduleDeptIds(member) {
+  const validDeptIds = new Set(state.departments.map((department) => department.id));
+  const ids = Array.isArray(member?.scheduleDeptIds) ? member.scheduleDeptIds : [member?.deptId || ""];
+  const normalized = ids
+    .map((deptId) => String(deptId || ""))
+    .filter((deptId, index, list) => validDeptIds.has(deptId) && list.indexOf(deptId) === index);
+  if (member?.deptId && validDeptIds.has(member.deptId) && !normalized.includes(member.deptId)) {
+    normalized.unshift(member.deptId);
+  }
+  return normalized;
+}
+
+function getMemberHomeDeptId(member) {
+  return getMemberScheduleDeptIds(member)[0] || "";
+}
+
+function getMemberScheduleDeptNames(member) {
+  const names = getMemberScheduleDeptIds(member).map((deptId) => getDepartmentName(deptId)).filter(Boolean);
+  return names.length ? names.join("、") : "未指定";
+}
+
+function memberCanScheduleDepartment(member, departmentId) {
+  return getMemberScheduleDeptIds(member).includes(departmentId);
 }
 
 function shiftAllowsDepartment(shift, deptId) {
@@ -1772,7 +1822,7 @@ function memberLabel(member) {
 }
 
 function memberHasScheduledShiftInDepartment(member, departmentId) {
-  if (member?.deptId === departmentId) {
+  if (getMemberHomeDeptId(member) === departmentId) {
     return true;
   }
   for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
@@ -1794,7 +1844,7 @@ function getVisibleTableGroups() {
     .map((department) => ({
       department,
       members: state.members.filter((member) => {
-        if (member.deptId !== department.id) {
+        if (getMemberHomeDeptId(member) !== department.id) {
           return false;
         }
         if (!isMemberActiveInMonth(member, state.year, state.month)) {
@@ -2644,6 +2694,7 @@ function openListSettings(category) {
               ${category === "leave" ? "<div>假別代碼</div>" : ""}
               <div>${category === "shift" ? "班別" : category === "leave" ? "假別" : "加班"}</div>
               <div>${category === "shift" ? "適用單位" : category === "leave" ? "需填時間" : "時段"}</div>
+              ${category === "shift" ? "<div>需求人數</div>" : ""}
               ${category === "overtime" ? "<div>休息1</div><div>休息2</div>" : ""}
               ${category === "shift" ? "<div>時段</div>" : ""}
               ${category === "leave" ? "<div>需填原因</div>" : ""}
@@ -2663,6 +2714,9 @@ function openListSettings(category) {
                     ? (item.defaultAllDay ? "是" : "否")
                     : escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)
                 }</div>
+                ${category === "shift"
+                  ? `<div class="settings-table-meta">${escapeHtml(String(item.requiredStaffCount ?? 0))}</div>`
+                  : ""}
                 ${category === "overtime"
                   ? `<div class="settings-table-meta">${item.useRest1 ? escapeHtml(`${item.rest1StartTime || "--:--"} - ${item.rest1EndTime || "--:--"}`) : "-"}</div>
                      <div class="settings-table-meta">${item.useRest2 ? escapeHtml(`${item.rest2StartTime || "--:--"} - ${item.rest2EndTime || "--:--"}`) : "-"}</div>`
@@ -2796,6 +2850,7 @@ function openShiftFormModal(mode, shiftId = "") {
       startTime: "",
       endTime: "",
       hiddenFromToolbar: false,
+      requiredStaffCount: 1,
       applicableDeptIds: [state.deptFilter !== "all" ? state.deptFilter : (state.departments[0]?.id || "")].filter(Boolean),
       positionRequirements: []
     };
@@ -2820,6 +2875,10 @@ function openShiftFormModal(mode, shiftId = "") {
         <div class="form-row">
           <label for="shiftName">名稱</label>
           <textarea id="shiftName" class="single-line-textarea" rows="1" maxlength="12" lang="zh-Hant" spellcheck="false" placeholder="例如早班">${escapeHtml(shift.name)}</textarea>
+        </div>
+        <div class="form-row">
+          <label for="shiftRequiredStaffCount">需求人數</label>
+          <input id="shiftRequiredStaffCount" type="number" min="0" max="99" step="1" value="${escapeHtml(String(shift.requiredStaffCount ?? 1))}">
         </div>
       </div>
       <div class="form-section">
@@ -2868,6 +2927,7 @@ function saveShiftFromModal(mode) {
     startTime,
     endTime,
     hiddenFromToolbar: Boolean(document.getElementById("shiftHiddenFromToolbar")?.checked),
+    requiredStaffCount: Math.max(0, Number(document.getElementById("shiftRequiredStaffCount")?.value || 0)),
     applicableDeptIds: readApplicableDepartmentInput(),
     positionRequirements: []
   };
@@ -3121,33 +3181,81 @@ async function deleteListItem(category, id) {
 }
 
 function openDepartmentSettings() {
-  const body = state.departments.length
-    ? state.departments.map((department) => {
-      const members = state.members.filter((member) => member.deptId === department.id);
-      return `
-        <div class="dept-block drop-zone sortable-settings-item" draggable="true" data-sort-category="department" data-sort-item="${department.id}" data-drop-department="${department.id}">
-          <div class="dept-heading">
-            <div class="dept-name">${escapeHtml(department.name)}</div>
-            <div class="dept-count">${members.length} 位</div>
-          </div>
-          <div class="member-inline-list">
-            ${members.length
-              ? members.map((member) => `
-                <div class="member-item draggable-member" draggable="true" data-member-card="${member.id}" data-drop-member="${member.id}" data-drop-department="${department.id}">
-                  <span>${escapeHtml(member.name)}</span>
-                </div>
-              `).join("")
-              : '<div class="dept-empty-pill">拖曳人員到這裡</div>'
-            }
-          </div>
-          <div class="list-item-actions">
-            ${renderActionIconButton("edit", `data-edit-department="${department.id}"`)}
-            ${renderActionIconButton("delete", `data-delete-department="${department.id}"`)}
-          </div>
+  const modeControls = `
+    <div class="settings-view-toggle">
+      <button class="ghost-btn compact-btn ${departmentSettingsView === "department" ? "active" : ""}" type="button" data-set-department-view="department">單位檢視</button>
+      <button class="ghost-btn compact-btn ${departmentSettingsView === "member" ? "active" : ""}" type="button" data-set-department-view="member">人員檢視</button>
+    </div>
+  `;
+  const departmentRows = state.departments.map((department) => {
+    const homeMembers = state.members.filter((member) => getMemberHomeDeptId(member) === department.id);
+    const schedulableMembers = state.members.filter((member) => getMemberHomeDeptId(member) !== department.id && memberCanScheduleDepartment(member, department.id));
+    return `
+      <div class="department-settings-row drop-zone sortable-settings-item" draggable="true" data-sort-category="department" data-sort-item="${department.id}" data-drop-department="${department.id}">
+        <div class="department-settings-title">${escapeHtml(department.name)}</div>
+        <div class="member-inline-list">
+          ${homeMembers.length
+            ? homeMembers.map((member) => `
+              <div class="member-item draggable-member" draggable="true" data-member-card="${member.id}" data-drop-member="${member.id}" data-drop-department="${department.id}">
+                <span>${escapeHtml(member.name)}</span>
+              </div>
+            `).join("")
+            : '<div class="dept-empty-pill">拖曳人員到這裡</div>'
+          }
         </div>
-      `;
-    }).join("")
-    : '<div class="empty-state">目前還沒有單位</div>';
+        <div class="member-inline-list">
+          ${schedulableMembers.length
+            ? schedulableMembers.map((member) => `<div class="dept-empty-pill">${escapeHtml(member.name)}</div>`).join("")
+            : '<div class="dept-empty-pill">-</div>'
+          }
+        </div>
+        <div class="member-table-actions">
+          ${renderActionIconButton("edit", `data-edit-department="${department.id}"`)}
+          ${renderActionIconButton("delete", `data-delete-department="${department.id}"`)}
+        </div>
+      </div>
+    `;
+  }).join("");
+  const memberRows = state.members.map((member) => `
+    <div class="department-settings-row department-settings-row-member">
+      <div class="department-settings-title">${escapeHtml(member.name)}</div>
+      <div>${escapeHtml(getMemberScheduleDeptNames(member))}</div>
+      <div class="member-table-actions">
+        ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
+        ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
+      </div>
+    </div>
+  `).join("");
+  const body = `
+    ${modeControls}
+    ${departmentSettingsView === "department"
+      ? (state.departments.length
+        ? `
+          <div class="department-settings-table department-settings-table-department">
+            <div class="department-settings-row department-settings-head">
+              <div>單位</div>
+              <div>所屬人員</div>
+              <div>可排人員</div>
+              <div>操作</div>
+            </div>
+            ${departmentRows}
+          </div>
+        `
+        : '<div class="empty-state">目前還沒有單位</div>')
+      : (state.members.length
+        ? `
+          <div class="department-settings-table department-settings-table-member">
+            <div class="department-settings-row department-settings-head">
+              <div>人員</div>
+              <div>排班單位</div>
+              <div>操作</div>
+            </div>
+            ${memberRows}
+          </div>
+        `
+        : '<div class="empty-state">目前還沒有人員</div>')
+    }
+  `;
   openEntityListModal({
     title: "單位設定",
     modalClass: "modal modal-wide department-settings-modal",
@@ -3233,7 +3341,7 @@ function removeScheduleByMember(memberId) {
 }
 
 async function deleteDepartment(departmentId) {
-  const memberIds = state.members.filter((member) => member.deptId === departmentId).map((member) => member.id);
+  const memberIds = state.members.filter((member) => getMemberHomeDeptId(member) === departmentId).map((member) => member.id);
   if (memberIds.length) {
     showInfoMessage("這個單位還有人員，請先將人員移轉到其他單位後再刪除。");
     return;
@@ -3262,18 +3370,20 @@ function moveMemberToDepartment(memberId, departmentId, targetMemberId = "") {
   }
   const remaining = state.members.filter((item) => item.id !== memberId);
   const targetDeptId = targetMemberId
-    ? (remaining.find((item) => item.id === targetMemberId)?.deptId || departmentId)
+    ? (getMemberHomeDeptId(remaining.find((item) => item.id === targetMemberId)) || departmentId)
     : departmentId;
   const grouped = new Map(state.departments.map((department) => [department.id, []]));
   remaining.forEach((item) => {
-    if (grouped.has(item.deptId)) {
-      grouped.get(item.deptId).push(item);
+    const homeDeptId = getMemberHomeDeptId(item);
+    if (grouped.has(homeDeptId)) {
+      grouped.get(homeDeptId).push(item);
     }
   });
   if (!grouped.has(targetDeptId)) {
     return;
   }
-  const movedMember = { ...member, deptId: targetDeptId };
+  const movedDeptIds = [targetDeptId, ...getMemberScheduleDeptIds(member).filter((deptId) => deptId !== targetDeptId)];
+  const movedMember = { ...member, deptId: targetDeptId, scheduleDeptIds: movedDeptIds };
   const targetList = grouped.get(targetDeptId);
   const targetIndex = targetMemberId ? targetList.findIndex((item) => item.id === targetMemberId) : -1;
   if (targetIndex >= 0) {
@@ -3328,6 +3438,61 @@ function buildSelectOptions(items, valueField, labelBuilder, selectedValue, incl
   return entries.join("");
 }
 
+function renderScheduleDepartmentSelector(member) {
+  const selectedIds = getMemberScheduleDeptIds(member);
+  const orderedDepartments = [
+    ...selectedIds.map((deptId) => state.departments.find((department) => department.id === deptId)).filter(Boolean),
+    ...state.departments.filter((department) => !selectedIds.includes(department.id))
+  ];
+  return `
+    <div class="schedule-dept-list" id="memberScheduleDeptList">
+      ${orderedDepartments.map((department, index) => {
+        const checked = selectedIds.includes(department.id);
+        return `
+          <label class="schedule-dept-option" draggable="true" data-schedule-dept-option="${escapeHtml(department.id)}">
+            <input type="checkbox" value="${escapeHtml(department.id)}" ${checked ? "checked" : ""}>
+            <span class="schedule-dept-rank">${checked ? index + 1 : "-"}</span>
+            <span>${escapeHtml(department.name)}</span>
+          </label>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function readMemberScheduleDeptIds() {
+  return Array.from(document.querySelectorAll("#memberScheduleDeptList [data-schedule-dept-option]"))
+    .filter((row) => row.querySelector("input")?.checked)
+    .map((row) => row.dataset.scheduleDeptOption || "")
+    .filter(Boolean);
+}
+
+function syncScheduleDeptSelectorRanks() {
+  let rank = 1;
+  document.querySelectorAll("#memberScheduleDeptList [data-schedule-dept-option]").forEach((row) => {
+    const rankElement = row.querySelector(".schedule-dept-rank");
+    const checked = Boolean(row.querySelector("input")?.checked);
+    if (rankElement) {
+      rankElement.textContent = checked ? String(rank) : "-";
+    }
+    if (checked) {
+      rank += 1;
+    }
+  });
+}
+
+function reorderScheduleDepartmentOption(draggedId, targetId) {
+  const list = document.getElementById("memberScheduleDeptList");
+  const rows = Array.from(list?.querySelectorAll("[data-schedule-dept-option]") || []);
+  const dragged = rows.find((row) => row.dataset.scheduleDeptOption === draggedId);
+  const target = rows.find((row) => row.dataset.scheduleDeptOption === targetId);
+  if (!list || !dragged || !target || dragged === target) {
+    return;
+  }
+  list.insertBefore(dragged, target);
+  syncScheduleDeptSelectorRanks();
+}
+
 function openMemberSettings() {
   const normalizedName = memberSettingsFilters.name.trim().toLowerCase();
   const sourceMembers = state.members;
@@ -3336,8 +3501,8 @@ function openMemberSettings() {
     const matchesDepartment = memberSettingsFilters.department === "all"
       ? true
       : memberSettingsFilters.department === "__none__"
-        ? !member.deptId
-        : member.deptId === memberSettingsFilters.department;
+        ? !getMemberHomeDeptId(member)
+        : memberCanScheduleDepartment(member, memberSettingsFilters.department);
     const matchesRole = memberSettingsFilters.role === "all"
       ? true
       : member.role === memberSettingsFilters.role;
@@ -3400,22 +3565,24 @@ function openMemberSettings() {
           <div class="member-table-row member-table-head">
             <div>工號</div>
             <div>姓名</div>
-            <div>單位</div>
+            <div>排班單位</div>
             <div>權限</div>
             <div>到職日</div>
             <div>離職日</div>
             <div>薪資方式</div>
+            <div>月休天數</div>
             <div class="member-table-actions-head">操作</div>
           </div>
           ${filteredMembers.map((member) => `
             <div class="member-table-row">
               <div class="member-table-code">${escapeHtml(member.code)}</div>
               <div class="member-table-name">${escapeHtml(member.name)}</div>
-              <div>${escapeHtml(getDepartmentName(member.deptId))}</div>
+              <div>${escapeHtml(getMemberScheduleDeptNames(member))}</div>
               <div>${member.role === "manager" ? "主管" : "員工"}</div>
               <div>${escapeHtml(member.hireDate || "-")}</div>
               <div>${escapeHtml(member.leaveDate || "-")}</div>
               <div>${getSalaryTypeLabel(member)}</div>
+              <div>${escapeHtml(String(member.monthlyRestDays ?? 0))}</div>
               <div class="member-table-actions">
                 ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
                 ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
@@ -3455,6 +3622,8 @@ function openMemberForm(mode, memberId = "") {
       hireDate: "",
       leaveDate: "",
       payByDay: false,
+      scheduleDeptIds: state.departments[0]?.id ? [state.departments[0].id] : [],
+      monthlyRestDays: 8,
       role: "employee"
     };
   if (!member) {
@@ -3463,7 +3632,7 @@ function openMemberForm(mode, memberId = "") {
   modalContext = { mode, category: "member", targetId: memberId };
   openEntityListModal({
     title: `${mode === "edit" ? "修改" : "新增"}人員`,
-    modalClass: "modal modal-form-compact",
+    modalClass: "modal modal-wide",
     body: `
       <div class="form-grid two-col">
         <div class="form-row">
@@ -3473,10 +3642,6 @@ function openMemberForm(mode, memberId = "") {
         <div class="form-row">
           <label for="memberName">姓名</label>
           <input id="memberName" type="text" maxlength="12" value="${escapeHtml(member.name)}" placeholder="請輸入姓名">
-        </div>
-        <div class="form-row">
-          <label for="memberDept">所屬單位</label>
-          <select id="memberDept">${buildSelectOptions(state.departments, "id", (item) => item.name, member.deptId)}</select>
         </div>
         <div class="form-row">
           <label for="memberRole">權限</label>
@@ -3500,6 +3665,14 @@ function openMemberForm(mode, memberId = "") {
             <option value="daily" ${member.payByDay ? "selected" : ""}>按日計薪</option>
           </select>
         </div>
+        <div class="form-row">
+          <label for="memberMonthlyRestDays">月休天數</label>
+          <input id="memberMonthlyRestDays" type="number" min="0" max="31" step="1" value="${escapeHtml(String(member.monthlyRestDays ?? 0))}">
+        </div>
+        <div class="form-row form-row-wide">
+          <label>排班單位</label>
+          ${renderScheduleDepartmentSelector(member)}
+        </div>
         ${mode === "edit" ? `
           <div class="form-row form-row-wide">
             <button class="ghost-btn" type="button" data-reset-member-password="${escapeHtml(member.code)}">重設密碼為 0000</button>
@@ -3522,16 +3695,20 @@ async function saveMember(mode) {
   const previousMember = mode === "edit"
     ? state.members.find((member) => member.id === modalContext.targetId) || null
     : null;
+  const scheduleDeptIds = readMemberScheduleDeptIds();
+  const monthlyRestDays = Math.max(0, Math.min(31, Number(document.getElementById("memberMonthlyRestDays")?.value || 0)));
   const payload = {
     id: mode === "edit" ? modalContext.targetId : uid("m"),
     code: document.getElementById("memberCode")?.value.trim(),
     name: document.getElementById("memberName")?.value.trim(),
-    deptId: document.getElementById("memberDept")?.value || "",
+    deptId: scheduleDeptIds[0] || "",
+    scheduleDeptIds,
     positionId: mode === "edit" ? (state.members.find((member) => member.id === modalContext.targetId)?.positionId || "") : "",
     proxyMemberId: "",
     hireDate,
     leaveDate,
     payByDay: document.getElementById("memberSalaryType")?.value === "daily",
+    monthlyRestDays,
     role: document.getElementById("memberRole")?.value === "manager" ? "manager" : "employee"
   };
   if (!payload.code || !payload.name || !payload.deptId) {
@@ -3593,6 +3770,13 @@ async function importMembersFromSettings() {
       const name = String(row.name || "").trim();
       const departmentName = String(row.departmentName || "").trim();
       const deptId = departmentMap.get(departmentName);
+      const scheduleDeptIds = String(row.scheduleDepartmentNames || departmentName || "")
+        .split(/[、,，]/)
+        .map((value) => departmentMap.get(value.trim()))
+        .filter((deptIdValue, index, list) => deptIdValue && list.indexOf(deptIdValue) === index);
+      if (deptId && !scheduleDeptIds.includes(deptId)) {
+        scheduleDeptIds.unshift(deptId);
+      }
       if (!code || !name || !deptId) {
         skipped += 1;
         continue;
@@ -3606,12 +3790,14 @@ async function importMembersFromSettings() {
         id: existing?.id || uid("m"),
         code,
         name,
-        deptId,
+        deptId: scheduleDeptIds[0] || deptId,
+        scheduleDeptIds,
         positionId: existing?.positionId || "",
         proxyMemberId: existing?.proxyMemberId || "",
         hireDate: row.hireDate || "",
         leaveDate: row.leaveDate || "",
         payByDay: Boolean(row.payByDay),
+        monthlyRestDays: Math.max(0, Number(row.monthlyRestDays) || 0),
         role: row.role === "manager" ? "manager" : "employee"
       };
       try {
@@ -3949,6 +4135,7 @@ async function importShiftSettings() {
         startTime: row.startTime || "",
         endTime: row.endTime || "",
         hiddenFromToolbar: Boolean(row.hiddenFromToolbar),
+        requiredStaffCount: Math.max(0, Number(row.requiredStaffCount) || 0),
         applicableDeptIds: [deptId],
         positionRequirements: []
       });
@@ -4164,6 +4351,11 @@ function formatWeekStartLabel(value) {
   return WEEK_START_OPTIONS.find((option) => option.value === value)?.label || "星期日";
 }
 
+function getConfiguredMonthStartDay() {
+  const value = Number(state.rules?.monthStartDay);
+  return Number.isInteger(value) && value >= 1 && value <= 31 ? value : 1;
+}
+
 function formatDateTextFromIso(dateString) {
   const date = toDateObject(dateString);
   if (!date) {
@@ -4225,22 +4417,31 @@ function buildRestComplianceCalendars() {
 }
 
 function openWeekStartSettingModal() {
-  if (!promptManagerAccess("設定每週起算日前請先登入主管帳號")) {
+  if (!promptManagerAccess("設定月週規則前請先登入主管帳號")) {
     return;
   }
   openEntityListModal({
-    title: "每週起算設定",
-    modalClass: "modal modal-form-compact",
+    title: "月週設定",
+    modalClass: "modal modal-wide",
     body: `
-      <div class="form-row">
-        <label for="weekStartSetting">每週起算日</label>
-        <select id="weekStartSetting">${WEEK_START_OPTIONS.map((option) => (
-          `<option value="${option.value}" ${option.value === getConfiguredWeekStart() ? "selected" : ""}>${option.label}</option>`
-        )).join("")}</select>
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="weekStartSetting">每週起算日</label>
+          <select id="weekStartSetting">${WEEK_START_OPTIONS.map((option) => (
+            `<option value="${option.value}" ${option.value === getConfiguredWeekStart() ? "selected" : ""}>${option.label}</option>`
+          )).join("")}</select>
+        </div>
+        <div class="form-row">
+          <label for="monthStartSetting">每月起算日</label>
+          <select id="monthStartSetting">${Array.from({ length: 31 }, (_, index) => {
+            const day = index + 1;
+            return `<option value="${day}" ${day === getConfiguredMonthStartDay() ? "selected" : ""}>${day} 日</option>`;
+          }).join("")}</select>
+        </div>
       </div>
       <div class="result-item">
         <div class="result-title">說明</div>
-        <div class="result-detail">班表週期格線、週期底紋與例休檢查都會依這個起算日同步調整。</div>
+        <div class="result-detail">班表週期格線、週期底紋與例休檢查依每週起算日；月休天數統計依每月起算日。</div>
       </div>
     `,
     headerButtons: '<button class="btn-primary" type="button" data-save-week-start="true">儲存設定</button>',
@@ -4249,8 +4450,10 @@ function openWeekStartSettingModal() {
 }
 
 function saveWeekStartSettingFromModal() {
-  const value = Number(document.getElementById("weekStartSetting")?.value || 0);
-  state.rules.weekStart = Number.isInteger(value) && value >= 0 && value <= 6 ? value : 0;
+  const weekValue = Number(document.getElementById("weekStartSetting")?.value || 0);
+  const monthValue = Number(document.getElementById("monthStartSetting")?.value || 1);
+  state.rules.weekStart = Number.isInteger(weekValue) && weekValue >= 0 && weekValue <= 6 ? weekValue : 0;
+  state.rules.monthStartDay = Number.isInteger(monthValue) && monthValue >= 1 && monthValue <= 31 ? monthValue : 1;
   closeModal();
   renderAll();
   queueSave();
@@ -5355,6 +5558,7 @@ function bindEvents() {
       target.dataset.saveRequestStyle ||
       target.dataset.saveOvertimeAssignment ||
       target.dataset.openAddDepartment ||
+      target.dataset.setDepartmentView ||
       target.dataset.editDepartment ||
       target.dataset.saveDepartment ||
       target.dataset.deleteDepartment ||
@@ -5500,6 +5704,11 @@ function bindEvents() {
     }
 
     if (target.dataset.openAddDepartment) openDepartmentForm("add");
+    if (target.dataset.setDepartmentView) {
+      departmentSettingsView = target.dataset.setDepartmentView === "member" ? "member" : "department";
+      openDepartmentSettings();
+      return;
+    }
     if (target.dataset.editDepartment) openDepartmentForm("edit", target.dataset.editDepartment);
     if (target.dataset.saveDepartment) saveDepartment(target.dataset.saveDepartment);
     if (target.dataset.deleteDepartment) {
@@ -5618,6 +5827,10 @@ function bindEvents() {
       syncOvertimeFormUi();
       return;
     }
+    if (target.closest("#memberScheduleDeptList")) {
+      syncScheduleDeptSelectorRanks();
+      return;
+    }
     const targets = toggleMap[target.id];
     if (!targets) {
       return;
@@ -5674,6 +5887,13 @@ function bindEvents() {
   });
 
   document.body.addEventListener("dragstart", (event) => {
+    const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
+    if (scheduleDeptOption) {
+      dragScheduleDeptId = scheduleDeptOption.dataset.scheduleDeptOption || "";
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", dragScheduleDeptId);
+      return;
+    }
     const card = event.target.closest("[data-member-card]");
     if (card) {
       dragMemberId = card.dataset.memberCard || "";
@@ -5692,6 +5912,12 @@ function bindEvents() {
   });
 
   document.body.addEventListener("dragover", (event) => {
+    const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
+    if (scheduleDeptOption && dragScheduleDeptId) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      return;
+    }
     const memberTarget = event.target.closest("[data-drop-member]");
     if (memberTarget && dragMemberId) {
       event.preventDefault();
@@ -5713,6 +5939,13 @@ function bindEvents() {
   });
 
   document.body.addEventListener("drop", (event) => {
+    const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
+    if (scheduleDeptOption && dragScheduleDeptId) {
+      event.preventDefault();
+      reorderScheduleDepartmentOption(dragScheduleDeptId, scheduleDeptOption.dataset.scheduleDeptOption || "");
+      dragScheduleDeptId = "";
+      return;
+    }
     const memberTarget = event.target.closest("[data-drop-member]");
     if (memberTarget && dragMemberId) {
       event.preventDefault();
@@ -5743,6 +5976,7 @@ function bindEvents() {
 
   document.body.addEventListener("dragend", () => {
     dragMemberId = "";
+    dragScheduleDeptId = "";
     dragSortItemId = "";
     dragSortCategory = "";
   });

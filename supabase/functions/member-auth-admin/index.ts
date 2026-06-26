@@ -7,6 +7,8 @@ type MemberPayload = {
   hireDate?: string | null;
   leaveDate?: string | null;
   payByDay?: boolean;
+  scheduleDepartmentIds?: string[];
+  monthlyRestDays?: number;
 };
 
 const DEFAULT_PASSWORD = "0000";
@@ -41,6 +43,10 @@ function normalizeMember(member: MemberPayload) {
     hireDate: member?.hireDate || null,
     leaveDate: member?.leaveDate || null,
     payByDay: Boolean(member?.payByDay),
+    scheduleDepartmentIds: Array.isArray(member?.scheduleDepartmentIds)
+      ? member.scheduleDepartmentIds.map((value) => String(value || "").trim()).filter(Boolean)
+      : [],
+    monthlyRestDays: Math.max(0, Number(member?.monthlyRestDays) || 0),
     loginEmail: buildLoginEmail(employeeCode)
   };
 }
@@ -112,6 +118,8 @@ async function upsertMember(ctx: any, body: any) {
         hire_date: member.hireDate,
         leave_date: member.leaveDate,
         pay_by_day: member.payByDay,
+        schedule_department_ids: member.scheduleDepartmentIds,
+        monthly_rest_days: member.monthlyRestDays,
         login_email: member.loginEmail
       });
     if (insertError) {
@@ -146,6 +154,8 @@ async function upsertMember(ctx: any, body: any) {
       hire_date: member.hireDate,
       leave_date: member.leaveDate,
       pay_by_day: member.payByDay,
+      schedule_department_ids: member.scheduleDepartmentIds,
+      monthly_rest_days: member.monthlyRestDays,
       login_email: member.loginEmail
     })
     .eq("id", profile.id);

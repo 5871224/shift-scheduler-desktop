@@ -1687,7 +1687,7 @@ thead th.today,
 }
 
 .settings-table-row-shift {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .settings-table-row-leave {
@@ -1815,13 +1815,116 @@ thead th.today,
 
 .member-table-row {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
   border-top: 1px solid #ebe3d8;
   min-height: 42px;
   font-size: 13px;
+}
+
+.settings-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-view-toggle .active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.department-settings-table {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.department-settings-row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid #ebe3d8;
+  min-height: 46px;
+  font-size: 13px;
+}
+
+.department-settings-row:first-child {
+  border-top: none;
+}
+
+.department-settings-table-department .department-settings-row {
+  grid-template-columns: 0.8fr 1.4fr 1.4fr 0.7fr;
+}
+
+.department-settings-table-member .department-settings-row {
+  grid-template-columns: 1fr 2fr 0.7fr;
+}
+
+.department-settings-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fbf8f1;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.department-settings-row > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.department-settings-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.schedule-dept-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schedule-dept-option {
+  display: grid;
+  grid-template-columns: auto 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  cursor: grab;
+}
+
+.schedule-dept-option:active {
+  cursor: grabbing;
+}
+
+.schedule-dept-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #f4eadc;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .member-table-row:first-child {
@@ -2226,7 +2329,7 @@ thead th.today,
   }
 
   .member-table-row {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-columns: repeat(9, minmax(0, 1fr));
     gap: 8px;
     padding: 6px 12px;
     font-size: 12px;
@@ -2243,7 +2346,15 @@ thead th.today,
   }
 
   .settings-table-row-shift {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .department-settings-table-department .department-settings-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .department-settings-table-member .department-settings-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .settings-table-row-leave {
