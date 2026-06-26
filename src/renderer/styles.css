@@ -1831,6 +1831,18 @@ thead th.today,
   flex-wrap: wrap;
 }
 
+.settings-view-select {
+  min-height: 34px;
+  width: 126px;
+  padding: 6px 32px 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .settings-view-toggle .active {
   background: var(--accent);
   color: #fff;
@@ -1841,18 +1853,19 @@ thead th.today,
   display: flex;
   flex-direction: column;
   background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 18px;
+  border: 1px solid #ebe3d8;
+  border-radius: 12px;
   overflow: hidden;
 }
 
 .department-settings-row {
   display: grid;
-  align-items: center;
-  gap: 10px;
+  align-items: stretch;
+  gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid #ebe3d8;
   min-height: 46px;
+  height: auto;
   font-size: 13px;
 }
 
@@ -1861,11 +1874,11 @@ thead th.today,
 }
 
 .department-settings-table-department .department-settings-row {
-  grid-template-columns: 0.8fr 1.4fr 1.4fr 0.7fr;
+  grid-template-columns: minmax(76px, 0.55fr) minmax(220px, 2.1fr) minmax(220px, 2.1fr) minmax(74px, 0.45fr);
 }
 
 .department-settings-table-member .department-settings-row {
-  grid-template-columns: 1fr 2fr 0.7fr;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(260px, 2fr) minmax(74px, 0.45fr);
 }
 
 .department-settings-head {
@@ -1884,6 +1897,14 @@ thead th.today,
   align-items: center;
   justify-content: center;
   text-align: center;
+  min-width: 0;
+}
+
+.department-settings-row > .member-inline-list {
+  justify-content: flex-start;
+  align-content: center;
+  align-items: center;
+  min-height: 34px;
 }
 
 .department-settings-title {
@@ -1895,6 +1916,25 @@ thead th.today,
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.schedule-dept-list[hidden] {
+  display: none;
+}
+
+.schedule-dept-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-dept-summary {
+  justify-content: flex-start;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .schedule-dept-option {

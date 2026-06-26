@@ -3181,12 +3181,6 @@ async function deleteListItem(category, id) {
 }
 
 function openDepartmentSettings() {
-  const modeControls = `
-    <div class="settings-view-toggle">
-      <button class="ghost-btn compact-btn ${departmentSettingsView === "department" ? "active" : ""}" type="button" data-set-department-view="department">單位檢視</button>
-      <button class="ghost-btn compact-btn ${departmentSettingsView === "member" ? "active" : ""}" type="button" data-set-department-view="member">人員檢視</button>
-    </div>
-  `;
   const departmentRows = state.departments.map((department) => {
     const homeMembers = state.members.filter((member) => getMemberHomeDeptId(member) === department.id);
     const schedulableMembers = state.members.filter((member) => getMemberHomeDeptId(member) !== department.id && memberCanScheduleDepartment(member, department.id));
@@ -3227,7 +3221,6 @@ function openDepartmentSettings() {
     </div>
   `).join("");
   const body = `
-    ${modeControls}
     ${departmentSettingsView === "department"
       ? (state.departments.length
         ? `
@@ -3264,6 +3257,10 @@ function openDepartmentSettings() {
       <button class="ghost-btn compact-btn" type="button" data-export-departments="true">匯出</button>
       <button class="ghost-btn compact-btn" type="button" data-import-departments="true">匯入</button>
       <button class="btn-primary" type="button" data-open-add-department="true">新增單位</button>
+      <select class="settings-view-select" data-department-view-select="true" aria-label="單位設定檢視">
+        <option value="department" ${departmentSettingsView === "department" ? "selected" : ""}>單位檢視</option>
+        <option value="member" ${departmentSettingsView === "member" ? "selected" : ""}>人員檢視</option>
+      </select>
     `,
     hideFooterClose: true
   });
@@ -3363,11 +3360,12 @@ async function deleteDepartment(departmentId) {
   queueSave();
 }
 
-function moveMemberToDepartment(memberId, departmentId, targetMemberId = "") {
+async function moveMemberToDepartment(memberId, departmentId, targetMemberId = "") {
   const member = state.members.find((item) => item.id === memberId);
   if (!member || targetMemberId === memberId) {
     return;
   }
+  const previousHomeDeptId = getMemberHomeDeptId(member);
   const remaining = state.members.filter((item) => item.id !== memberId);
   const targetDeptId = targetMemberId
     ? (getMemberHomeDeptId(remaining.find((item) => item.id === targetMemberId)) || departmentId)
@@ -3382,7 +3380,14 @@ function moveMemberToDepartment(memberId, departmentId, targetMemberId = "") {
   if (!grouped.has(targetDeptId)) {
     return;
   }
-  const movedDeptIds = [targetDeptId, ...getMemberScheduleDeptIds(member).filter((deptId) => deptId !== targetDeptId)];
+  let keptDeptIds = getMemberScheduleDeptIds(member).filter((deptId) => deptId !== targetDeptId);
+  if (previousHomeDeptId && previousHomeDeptId !== targetDeptId && keptDeptIds.includes(previousHomeDeptId)) {
+    const removeOldDept = await confirmAction("是否將舊單位從這位人員的排班單位移除？");
+    if (removeOldDept) {
+      keptDeptIds = keptDeptIds.filter((deptId) => deptId !== previousHomeDeptId);
+    }
+  }
+  const movedDeptIds = [targetDeptId, ...keptDeptIds];
   const movedMember = { ...member, deptId: targetDeptId, scheduleDeptIds: movedDeptIds };
   const targetList = grouped.get(targetDeptId);
   const targetIndex = targetMemberId ? targetList.findIndex((item) => item.id === targetMemberId) : -1;
@@ -3439,13 +3444,16 @@ function buildSelectOptions(items, valueField, labelBuilder, selectedValue, incl
 }
 
 function renderScheduleDepartmentSelector(member) {
-  const selectedIds = getMemberScheduleDeptIds(member);
+  const today = new Date();
+  const todayString = toDateString(today.getFullYear(), today.getMonth(), today.getDate());
+  const availableDepartments = state.departments.filter((department) => !department.endDate || department.endDate >= todayString);
+  const selectedIds = getMemberScheduleDeptIds(member).filter((deptId) => availableDepartments.some((department) => department.id === deptId));
   const orderedDepartments = [
-    ...selectedIds.map((deptId) => state.departments.find((department) => department.id === deptId)).filter(Boolean),
-    ...state.departments.filter((department) => !selectedIds.includes(department.id))
+    ...selectedIds.map((deptId) => availableDepartments.find((department) => department.id === deptId)).filter(Boolean),
+    ...availableDepartments.filter((department) => !selectedIds.includes(department.id))
   ];
   return `
-    <div class="schedule-dept-list" id="memberScheduleDeptList">
+    <div class="schedule-dept-list" id="memberScheduleDeptList" hidden>
       ${orderedDepartments.map((department, index) => {
         const checked = selectedIds.includes(department.id);
         return `
@@ -3671,6 +3679,10 @@ function openMemberForm(mode, memberId = "") {
         </div>
         <div class="form-row form-row-wide">
           <label>排班單位</label>
+          <div class="schedule-dept-summary-row">
+            <div class="readonly-pill schedule-dept-summary">${escapeHtml(getMemberScheduleDeptNames(member))}</div>
+            <button class="ghost-btn compact-btn" type="button" data-toggle-schedule-depts="true">設定</button>
+          </div>
           ${renderScheduleDepartmentSelector(member)}
         </div>
         ${mode === "edit" ? `
@@ -5559,6 +5571,7 @@ function bindEvents() {
       target.dataset.saveOvertimeAssignment ||
       target.dataset.openAddDepartment ||
       target.dataset.setDepartmentView ||
+      target.dataset.toggleScheduleDepts ||
       target.dataset.editDepartment ||
       target.dataset.saveDepartment ||
       target.dataset.deleteDepartment ||
@@ -5709,6 +5722,13 @@ function bindEvents() {
       openDepartmentSettings();
       return;
     }
+    if (target.dataset.toggleScheduleDepts) {
+      const list = document.getElementById("memberScheduleDeptList");
+      if (list) {
+        list.hidden = !list.hidden;
+      }
+      return;
+    }
     if (target.dataset.editDepartment) openDepartmentForm("edit", target.dataset.editDepartment);
     if (target.dataset.saveDepartment) saveDepartment(target.dataset.saveDepartment);
     if (target.dataset.deleteDepartment) {
@@ -5798,6 +5818,11 @@ function bindEvents() {
       const field = target.dataset.memberSettingsFilterField;
       memberSettingsFilters[field] = target.value || (field === "employment" ? "active" : "all");
       openMemberSettings();
+      return;
+    }
+    if (target instanceof HTMLSelectElement && target.dataset.departmentViewSelect) {
+      departmentSettingsView = target.value === "member" ? "member" : "department";
+      openDepartmentSettings();
       return;
     }
     if (!(target instanceof HTMLInputElement)) {
@@ -5938,7 +5963,7 @@ function bindEvents() {
     event.dataTransfer.dropEffect = "move";
   });
 
-  document.body.addEventListener("drop", (event) => {
+  document.body.addEventListener("drop", async (event) => {
     const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
     if (scheduleDeptOption && dragScheduleDeptId) {
       event.preventDefault();
@@ -5949,7 +5974,7 @@ function bindEvents() {
     const memberTarget = event.target.closest("[data-drop-member]");
     if (memberTarget && dragMemberId) {
       event.preventDefault();
-      moveMemberToDepartment(
+      await moveMemberToDepartment(
         dragMemberId,
         memberTarget.dataset.dropDepartment || "",
         memberTarget.dataset.dropMember || ""
@@ -5970,7 +5995,7 @@ function bindEvents() {
       return;
     }
     event.preventDefault();
-    moveMemberToDepartment(dragMemberId, dropZone.dataset.dropDepartment);
+    await moveMemberToDepartment(dragMemberId, dropZone.dataset.dropDepartment);
     dragMemberId = "";
   });
 
