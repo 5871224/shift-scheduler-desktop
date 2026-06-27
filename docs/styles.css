@@ -998,7 +998,24 @@ thead th.today,
 .department-settings-modal .modal-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-color: #cdbb9f #fbf8f1;
+  scrollbar-width: thin;
+}
+
+.department-settings-modal .modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.department-settings-modal .modal-body::-webkit-scrollbar-track {
+  background: #fbf8f1;
+  border-radius: 999px;
+}
+
+.department-settings-modal .modal-body::-webkit-scrollbar-thumb {
+  background: #cdbb9f;
+  border-radius: 999px;
 }
 
 .modal-form-compact {
@@ -1853,18 +1870,23 @@ thead th.today,
   display: flex;
   flex-direction: column;
   background: #fff;
-  border: 1px solid #ebe3d8;
-  border-radius: 12px;
-  overflow: hidden;
+}
+
+.department-settings-table-wrap {
+  flex: none;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
 }
 
 .department-settings-row {
   display: grid;
-  align-items: stretch;
+  align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 14px;
   border-top: 1px solid #ebe3d8;
-  min-height: 46px;
+  min-height: 42px;
   height: auto;
   font-size: 13px;
 }
@@ -1902,9 +1924,11 @@ thead th.today,
 
 .department-settings-row > .member-inline-list {
   justify-content: flex-start;
-  align-content: center;
-  align-items: center;
+  align-content: flex-start;
+  align-items: flex-start;
   min-height: 34px;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .department-settings-title {

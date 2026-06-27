@@ -3185,7 +3185,7 @@ function openDepartmentSettings() {
     const homeMembers = state.members.filter((member) => getMemberHomeDeptId(member) === department.id);
     const schedulableMembers = state.members.filter((member) => getMemberHomeDeptId(member) !== department.id && memberCanScheduleDepartment(member, department.id));
     return `
-      <div class="department-settings-row drop-zone sortable-settings-item" draggable="true" data-sort-category="department" data-sort-item="${department.id}" data-drop-department="${department.id}">
+      <div class="department-settings-row sortable-settings-item" draggable="true" data-sort-category="department" data-sort-item="${department.id}" data-drop-department="${department.id}">
         <div class="department-settings-title">${escapeHtml(department.name)}</div>
         <div class="member-inline-list">
           ${homeMembers.length
@@ -3224,7 +3224,8 @@ function openDepartmentSettings() {
     ${departmentSettingsView === "department"
       ? (state.departments.length
         ? `
-          <div class="department-settings-table department-settings-table-department">
+          <div class="department-settings-table-wrap">
+            <div class="department-settings-table department-settings-table-department">
             <div class="department-settings-row department-settings-head">
               <div>單位</div>
               <div>所屬人員</div>
@@ -3232,18 +3233,21 @@ function openDepartmentSettings() {
               <div>操作</div>
             </div>
             ${departmentRows}
+            </div>
           </div>
         `
         : '<div class="empty-state">目前還沒有單位</div>')
       : (state.members.length
         ? `
-          <div class="department-settings-table department-settings-table-member">
+          <div class="department-settings-table-wrap">
+            <div class="department-settings-table department-settings-table-member">
             <div class="department-settings-row department-settings-head">
               <div>人員</div>
               <div>排班單位</div>
               <div>操作</div>
             </div>
             ${memberRows}
+            </div>
           </div>
         `
         : '<div class="empty-state">目前還沒有人員</div>')
