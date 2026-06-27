@@ -255,17 +255,39 @@ let toolbarCollapsed = false;
 let toolbarCollapseInitialized = false;
 let measureTextContext = null;
 
-function getSettingsScrollElement() {
-  return document.querySelector(".settings-table-wrap")
-    || document.querySelector(".department-settings-table-wrap")
-    || document.querySelector(".member-table-wrap")
-    || document.querySelector(".modal-body");
+function getSettingsScrollElement(selector = "") {
+  if (selector) {
+    const element = document.querySelector(selector);
+    if (element instanceof HTMLElement) {
+      return element;
+    }
+  }
+  const candidates = [
+    ".department-settings-modal .modal-body",
+    ".member-settings-modal .member-table-wrap",
+    ".catalog-settings-modal .settings-table-wrap",
+    ".settings-table-wrap",
+    ".member-table-wrap",
+    ".modal-body"
+  ];
+  return candidates
+    .map((candidate) => document.querySelector(candidate))
+    .find((element) => element instanceof HTMLElement && element.scrollHeight > element.clientHeight + 1)
+    || candidates.map((candidate) => document.querySelector(candidate)).find((element) => element instanceof HTMLElement)
+    || null;
 }
 
 function captureSettingsReturnContext(fallback = null) {
   const scrollElement = getSettingsScrollElement();
   return {
     ...(fallback || {}),
+    scrollSelector: scrollElement?.matches(".department-settings-modal .modal-body")
+      ? ".department-settings-modal .modal-body"
+      : scrollElement?.matches(".member-settings-modal .member-table-wrap")
+        ? ".member-settings-modal .member-table-wrap"
+        : scrollElement?.matches(".catalog-settings-modal .settings-table-wrap")
+          ? ".catalog-settings-modal .settings-table-wrap"
+          : "",
     scrollTop: scrollElement?.scrollTop || 0
   };
 }
@@ -275,10 +297,12 @@ function restoreSettingsScroll(context) {
     return;
   }
   requestAnimationFrame(() => {
-    const scrollElement = getSettingsScrollElement();
-    if (scrollElement) {
-      scrollElement.scrollTop = Number(context.scrollTop) || 0;
-    }
+    requestAnimationFrame(() => {
+      const scrollElement = getSettingsScrollElement(context.scrollSelector || "");
+      if (scrollElement) {
+        scrollElement.scrollTop = Number(context.scrollTop) || 0;
+      }
+    });
   });
 }
 
