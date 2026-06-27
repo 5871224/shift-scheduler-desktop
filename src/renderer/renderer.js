@@ -110,11 +110,11 @@ const DEFAULT_STATE = {
     { id: "p2", code: "STF", name: "員工" }
   ],
   members: [
-    { id: "m1", code: "A001", name: "王小美", deptId: "d1", positionId: "p1", proxyMemberId: "m2", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "manager" },
-    { id: "m2", code: "A002", name: "林佳怡", deptId: "d1", positionId: "p2", proxyMemberId: "m1", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "employee" },
-    { id: "m3", code: "A003", name: "陳建宏", deptId: "d1", positionId: "p2", proxyMemberId: "", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "employee" },
-    { id: "m4", code: "B001", name: "吳佩珊", deptId: "d2", positionId: "p1", proxyMemberId: "m5", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "manager" },
-    { id: "m5", code: "B002", name: "張志豪", deptId: "d2", positionId: "p2", proxyMemberId: "m4", hireDate: "2025-01-01", leaveDate: "", payByDay: false, role: "employee" }
+    { id: "m1", code: "A001", name: "王小美", deptId: "d1", positionId: "p1", proxyMemberId: "m2", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "manager" },
+    { id: "m2", code: "A002", name: "林佳怡", deptId: "d1", positionId: "p2", proxyMemberId: "m1", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "employee" },
+    { id: "m3", code: "A003", name: "陳建宏", deptId: "d1", positionId: "p2", proxyMemberId: "", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "employee" },
+    { id: "m4", code: "B001", name: "吳佩珊", deptId: "d2", positionId: "p1", proxyMemberId: "m5", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "manager" },
+    { id: "m5", code: "B002", name: "張志豪", deptId: "d2", positionId: "p2", proxyMemberId: "m4", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "employee" }
   ],
   shifts: [
       {
@@ -199,6 +199,15 @@ const WEEK_START_OPTIONS = [
   { value: 4, label: "星期四" },
   { value: 5, label: "星期五" },
   { value: 6, label: "星期六" }
+];
+const REST_WEEKDAY_OPTIONS = [
+  { value: 1, label: "週一" },
+  { value: 2, label: "週二" },
+  { value: 3, label: "週三" },
+  { value: 4, label: "週四" },
+  { value: 5, label: "週五" },
+  { value: 6, label: "週六" },
+  { value: 0, label: "週日" }
 ];
 
 let state = createEmptyState();
@@ -776,6 +785,7 @@ function sanitizeMember(member, fallbackIndex, merged) {
     hireDate: member?.hireDate || "",
     leaveDate: member?.leaveDate || "",
     payByDay: Boolean(member?.payByDay),
+    fixedRestWeekday: normalizeRestWeekday(member?.fixedRestWeekday),
     monthlyRestDays: Math.max(0, Number(member?.monthlyRestDays) || 0),
     role: member?.role === "manager" ? "manager" : "employee"
   };
@@ -1032,6 +1042,15 @@ function getPositionName(positionId) {
 
 function getSalaryTypeLabel(member) {
   return member?.payByDay ? "按日計薪" : "月薪";
+}
+
+function normalizeRestWeekday(value) {
+  const numericValue = Number(value);
+  return Number.isInteger(numericValue) && numericValue >= 0 && numericValue <= 6 ? numericValue : 0;
+}
+
+function getRestWeekdayLabel(value) {
+  return REST_WEEKDAY_OPTIONS.find((option) => option.value === normalizeRestWeekday(value))?.label || "週日";
 }
 
 function getDepartmentSummary(deptIds) {
@@ -3696,6 +3715,7 @@ function openMemberSettings() {
             <div>到職日</div>
             <div>離職日</div>
             <div>薪資方式</div>
+            <div>例假星期</div>
             <div>月休天數</div>
             <div class="member-table-actions-head">操作</div>
           </div>
@@ -3708,6 +3728,7 @@ function openMemberSettings() {
               <div>${escapeHtml(member.hireDate || "-")}</div>
               <div>${escapeHtml(member.leaveDate || "-")}</div>
               <div>${getSalaryTypeLabel(member)}</div>
+              <div>${getRestWeekdayLabel(member.fixedRestWeekday)}</div>
               <div>${escapeHtml(String(member.monthlyRestDays ?? 0))}</div>
               <div class="member-table-actions">
                 ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
@@ -3753,6 +3774,7 @@ function openMemberForm(mode, memberId = "") {
       hireDate: "",
       leaveDate: "",
       payByDay: false,
+      fixedRestWeekday: 0,
       scheduleDeptIds: state.departments[0]?.id ? [state.departments[0].id] : [],
       monthlyRestDays: 8,
       role: "employee"
@@ -3794,6 +3816,14 @@ function openMemberForm(mode, memberId = "") {
           <select id="memberSalaryType">
             <option value="monthly" ${member.payByDay ? "" : "selected"}>月薪</option>
             <option value="daily" ${member.payByDay ? "selected" : ""}>按日計薪</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="memberFixedRestWeekday">例假星期</label>
+          <select id="memberFixedRestWeekday">
+            ${REST_WEEKDAY_OPTIONS.map((option) => (
+              `<option value="${option.value}" ${normalizeRestWeekday(member.fixedRestWeekday) === option.value ? "selected" : ""}>${option.label}</option>`
+            )).join("")}
           </select>
         </div>
         <div class="form-row">
@@ -3844,6 +3874,7 @@ async function saveMember(mode) {
     hireDate,
     leaveDate,
     payByDay: document.getElementById("memberSalaryType")?.value === "daily",
+    fixedRestWeekday: normalizeRestWeekday(document.getElementById("memberFixedRestWeekday")?.value),
     monthlyRestDays,
     role: document.getElementById("memberRole")?.value === "manager" ? "manager" : "employee"
   };
@@ -3933,6 +3964,7 @@ async function importMembersFromSettings() {
         hireDate: row.hireDate || "",
         leaveDate: row.leaveDate || "",
         payByDay: Boolean(row.payByDay),
+        fixedRestWeekday: normalizeRestWeekday(row.fixedRestWeekday),
         monthlyRestDays: Math.max(0, Number(row.monthlyRestDays) || 0),
         role: row.role === "manager" ? "manager" : "employee"
       };

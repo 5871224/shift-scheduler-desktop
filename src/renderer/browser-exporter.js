@@ -420,7 +420,8 @@
   async function createMemberWorkbook(payload) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("人員資料");
-    const headers = ["工號", "姓名", "所屬單位", "權限", "到職日", "離職日", "薪資方式"];
+    const headers = ["工號", "姓名", "所屬單位", "權限", "到職日", "離職日", "薪資方式", "例假星期"];
+    const weekdayLabels = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
 
     sheet.addRow(headers);
     (payload.state?.members || []).forEach((member) => {
@@ -432,7 +433,8 @@
         member.role === "manager" ? "主管" : "員工",
         formatDisplayDate(member.hireDate || ""),
         formatDisplayDate(member.leaveDate || ""),
-        member.payByDay ? "按日計薪" : "月薪"
+        member.payByDay ? "按日計薪" : "月薪",
+        weekdayLabels[Math.max(0, Math.min(6, Number(member.fixedRestWeekday) || 0))] || "週日"
       ]);
     });
 
@@ -444,6 +446,7 @@
       { width: 14 },
       { width: 16 },
       { width: 12 },
+      { width: 14 },
       { width: 14 },
       { width: 14 },
       { width: 14 }
@@ -596,6 +599,22 @@
     if (!sheet) {
       return [];
     }
+    const fixedRestWeekdayMap = new Map([
+      ["週一", 1],
+      ["週二", 2],
+      ["週三", 3],
+      ["週四", 4],
+      ["週五", 5],
+      ["週六", 6],
+      ["週日", 0],
+      ["星期一", 1],
+      ["星期二", 2],
+      ["星期三", 3],
+      ["星期四", 4],
+      ["星期五", 5],
+      ["星期六", 6],
+      ["星期日", 0]
+    ]);
     const rows = [];
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) {
@@ -608,7 +627,8 @@
       const hireDate = normalizeImportedDate(row.getCell(5).value);
       const leaveDate = normalizeImportedDate(row.getCell(6).value);
       const salaryType = getCellDisplayValue(row.getCell(7));
-      if (![code, name, departmentName, roleText, hireDate, leaveDate, salaryType].some(Boolean)) {
+      const fixedRestWeekdayText = getCellDisplayValue(row.getCell(8));
+      if (![code, name, departmentName, roleText, hireDate, leaveDate, salaryType, fixedRestWeekdayText].some(Boolean)) {
         return;
       }
       rows.push({
@@ -618,7 +638,8 @@
         role: roleText === "主管" ? "manager" : "employee",
         hireDate,
         leaveDate,
-        payByDay: salaryType === "按日計薪"
+        payByDay: salaryType === "按日計薪",
+        fixedRestWeekday: fixedRestWeekdayMap.has(fixedRestWeekdayText) ? fixedRestWeekdayMap.get(fixedRestWeekdayText) : 0
       });
     });
     return rows;

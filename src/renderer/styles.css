@@ -1869,7 +1869,7 @@ thead th.today,
 
 .member-table-row {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
@@ -2430,7 +2430,7 @@ thead th.today,
   }
 
   .member-table-row {
-    grid-template-columns: repeat(9, minmax(0, 1fr));
+    grid-template-columns: repeat(10, minmax(0, 1fr));
     gap: 8px;
     padding: 6px 12px;
     font-size: 12px;
