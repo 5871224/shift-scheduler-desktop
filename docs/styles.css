@@ -848,6 +848,18 @@ thead th.today,
   background: #9b9b9b;
 }
 
+.shift-view-cell {
+  cursor: default;
+}
+
+.shift-view-cell:hover {
+  background: #fff;
+}
+
+.demand-col {
+  text-align: center;
+}
+
 .cell-inner {
   min-height: 36px;
   border-radius: 10px;
@@ -887,6 +899,26 @@ thead th.today,
   background-size: 200% 100%;
   animation: pending-shimmer-sweep 1.8s linear infinite;
   pointer-events: none;
+}
+
+.shift-view-members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 36px;
+}
+
+.shift-view-member {
+  min-height: 16px;
+  padding: 1px 3px;
+  border-radius: 6px;
+  background: #f5eee5;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  word-break: keep-all;
 }
 
 @keyframes pending-shimmer-sweep {
