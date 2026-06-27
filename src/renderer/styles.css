@@ -844,6 +844,16 @@ thead th.today,
   background: #faf4ea;
 }
 
+.cell.range-selected {
+  position: relative;
+  background: #f2e4cc;
+  box-shadow: inset 0 0 0 2px #b47a34;
+}
+
+.cell.range-anchor {
+  box-shadow: inset 0 0 0 3px #7f5422;
+}
+
 .cell.inactive-cell {
   background: #9b9b9b;
   cursor: not-allowed;

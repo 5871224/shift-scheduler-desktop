@@ -254,6 +254,12 @@ let dragSortCategory = "";
 let toolbarCollapsed = false;
 let toolbarCollapseInitialized = false;
 let measureTextContext = null;
+let scheduleRangeSelection = null;
+let scheduleDragSelecting = false;
+let scheduleSuppressNextCellClick = false;
+let scheduleClipboard = null;
+let scheduleUndoSnapshot = null;
+let scheduleRedoSnapshot = null;
 
 function getSettingsScrollElement(selector = "") {
   if (selector) {
@@ -1299,6 +1305,360 @@ function getSlot(memberId, day) {
   return key ? state.schedule[key] || null : null;
 }
 
+function getScheduleCellFromEvent(event) {
+  const target = event.target;
+  const cell = target instanceof Element ? target.closest("#mainTable .cell") : null;
+  if (!(cell instanceof HTMLElement)) {
+    return null;
+  }
+  if (!canEditSchedule() || state.tableView !== "member" || state.selected.type || cell.dataset.readonly || cell.classList.contains("inactive-cell")) {
+    return null;
+  }
+  if (!cell.dataset.memberId || !cell.dataset.date) {
+    return null;
+  }
+  return cell;
+}
+
+function getScheduleCellPoint(cell) {
+  return {
+    row: Number(cell.dataset.rowIndex),
+    col: Number(cell.dataset.colIndex),
+    memberId: cell.dataset.memberId || "",
+    date: cell.dataset.date || ""
+  };
+}
+
+function isValidScheduleCellPoint(point) {
+  return point
+    && Number.isInteger(point.row)
+    && Number.isInteger(point.col)
+    && point.memberId
+    && toDateObject(point.date);
+}
+
+function getScheduleSelectionBounds() {
+  if (!scheduleRangeSelection || !isValidScheduleCellPoint(scheduleRangeSelection.anchor) || !isValidScheduleCellPoint(scheduleRangeSelection.focus)) {
+    return null;
+  }
+  return {
+    rowMin: Math.min(scheduleRangeSelection.anchor.row, scheduleRangeSelection.focus.row),
+    rowMax: Math.max(scheduleRangeSelection.anchor.row, scheduleRangeSelection.focus.row),
+    colMin: Math.min(scheduleRangeSelection.anchor.col, scheduleRangeSelection.focus.col),
+    colMax: Math.max(scheduleRangeSelection.anchor.col, scheduleRangeSelection.focus.col)
+  };
+}
+
+function clearScheduleRangeSelection() {
+  scheduleRangeSelection = null;
+  document.querySelectorAll("#mainTable .cell.range-selected").forEach((cell) => {
+    cell.classList.remove("range-selected", "range-anchor");
+  });
+}
+
+function syncScheduleRangeSelectionUi() {
+  const bounds = getScheduleSelectionBounds();
+  document.querySelectorAll("#mainTable .cell.range-selected, #mainTable .cell.range-anchor").forEach((cell) => {
+    cell.classList.remove("range-selected", "range-anchor");
+  });
+  if (!bounds) {
+    return;
+  }
+  document.querySelectorAll("#mainTable .cell[data-member-id][data-date]").forEach((cell) => {
+    if (!(cell instanceof HTMLElement) || cell.classList.contains("inactive-cell")) {
+      return;
+    }
+    const row = Number(cell.dataset.rowIndex);
+    const col = Number(cell.dataset.colIndex);
+    if (row >= bounds.rowMin && row <= bounds.rowMax && col >= bounds.colMin && col <= bounds.colMax) {
+      cell.classList.add("range-selected");
+      if (row === scheduleRangeSelection.anchor.row && col === scheduleRangeSelection.anchor.col) {
+        cell.classList.add("range-anchor");
+      }
+    }
+  });
+}
+
+function setScheduleRangeSelection(anchor, focus = anchor) {
+  if (!isValidScheduleCellPoint(anchor) || !isValidScheduleCellPoint(focus)) {
+    clearScheduleRangeSelection();
+    return;
+  }
+  scheduleRangeSelection = { anchor, focus };
+  syncScheduleRangeSelectionUi();
+}
+
+function getSelectedScheduleCells() {
+  const bounds = getScheduleSelectionBounds();
+  if (!bounds) {
+    return [];
+  }
+  return Array.from(document.querySelectorAll("#mainTable .cell[data-member-id][data-date]"))
+    .filter((cell) => {
+      if (!(cell instanceof HTMLElement) || cell.classList.contains("inactive-cell")) {
+        return false;
+      }
+      const row = Number(cell.dataset.rowIndex);
+      const col = Number(cell.dataset.colIndex);
+      return row >= bounds.rowMin && row <= bounds.rowMax && col >= bounds.colMin && col <= bounds.colMax;
+    })
+    .sort((a, b) => Number(a.dataset.rowIndex) - Number(b.dataset.rowIndex) || Number(a.dataset.colIndex) - Number(b.dataset.colIndex));
+}
+
+function cleanSlotMeta(meta) {
+  if (!meta || typeof meta !== "object") {
+    return null;
+  }
+  const nextMeta = { ...meta };
+  delete nextMeta.requestId;
+  delete nextMeta.requestStatus;
+  nextMeta.requestSource = "manager";
+  return nextMeta;
+}
+
+function serializeScheduleSlotForClipboard(slot) {
+  if (!slot) {
+    return { shift: null, leave: null, leaveMeta: null, overtime: null, overtimeMeta: null };
+  }
+  const canUseLeave = slot.leave && !slotHasBlockingRequest(slot, "leave");
+  const canUseOvertime = slot.overtime && !slotHasBlockingRequest(slot, "overtime");
+  return {
+    shift: slot.shift || null,
+    leave: canUseLeave ? slot.leave : null,
+    leaveMeta: canUseLeave ? cleanSlotMeta(slot.leaveMeta) : null,
+    overtime: canUseOvertime ? slot.overtime : null,
+    overtimeMeta: canUseOvertime ? cleanSlotMeta(slot.overtimeMeta) : null
+  };
+}
+
+function applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot) {
+  const member = state.members.find((item) => item.id === memberId);
+  if (!member || !isMemberActiveOnDateString(member, dateString)) {
+    return false;
+  }
+  const slot = ensureScheduleSlot(memberId, dateString);
+  if (!slot) {
+    return false;
+  }
+  slot.shift = clipboardSlot?.shift || null;
+  if (!slotHasBlockingRequest(slot, "leave")) {
+    slot.leave = clipboardSlot?.leave || null;
+    delete slot.leaveRequestId;
+    if (clipboardSlot?.leaveMeta) {
+      slot.leaveMeta = { ...clipboardSlot.leaveMeta };
+    } else {
+      delete slot.leaveMeta;
+    }
+  }
+  if (!slotHasBlockingRequest(slot, "overtime")) {
+    slot.overtime = clipboardSlot?.overtime || null;
+    delete slot.overtimeRequestId;
+    if (clipboardSlot?.overtimeMeta) {
+      slot.overtimeMeta = { ...clipboardSlot.overtimeMeta };
+    } else {
+      delete slot.overtimeMeta;
+    }
+  }
+  return true;
+}
+
+function clearScheduleCellEditableParts(memberId, dateString) {
+  return applyClipboardSlotToScheduleCell(memberId, dateString, {
+    shift: null,
+    leave: null,
+    leaveMeta: null,
+    overtime: null,
+    overtimeMeta: null
+  });
+}
+
+function rememberScheduleUndoSnapshot() {
+  scheduleUndoSnapshot = deepClone(state.schedule || {});
+  scheduleRedoSnapshot = null;
+}
+
+function finishScheduleGridMutation() {
+  pruneEmptySchedule();
+  renderTable();
+  syncScheduleRangeSelectionUi();
+  queueSave();
+}
+
+function copyScheduleRangeToClipboard() {
+  const cells = getSelectedScheduleCells();
+  const bounds = getScheduleSelectionBounds();
+  if (!cells.length || !bounds) {
+    return false;
+  }
+  const rows = bounds.rowMax - bounds.rowMin + 1;
+  const cols = bounds.colMax - bounds.colMin + 1;
+  const matrix = Array.from({ length: rows }, () => Array.from({ length: cols }, () => serializeScheduleSlotForClipboard(null)));
+  cells.forEach((cell) => {
+    const row = Number(cell.dataset.rowIndex) - bounds.rowMin;
+    const col = Number(cell.dataset.colIndex) - bounds.colMin;
+    matrix[row][col] = serializeScheduleSlotForClipboard(getSlot(cell.dataset.memberId || "", cell.dataset.date || ""));
+  });
+  scheduleClipboard = { rows, cols, matrix };
+  return true;
+}
+
+function clearSelectedScheduleCells() {
+  const cells = getSelectedScheduleCells();
+  if (!cells.length) {
+    return false;
+  }
+  let changed = false;
+  cells.forEach((cell) => {
+    changed = clearScheduleCellEditableParts(cell.dataset.memberId || "", cell.dataset.date || "") || changed;
+  });
+  if (changed) {
+    finishScheduleGridMutation();
+  }
+  return changed;
+}
+
+function pasteScheduleClipboard() {
+  if (!scheduleClipboard || !scheduleRangeSelection) {
+    return false;
+  }
+  let changed = false;
+  for (let rowOffset = 0; rowOffset < scheduleClipboard.rows; rowOffset += 1) {
+    for (let colOffset = 0; colOffset < scheduleClipboard.cols; colOffset += 1) {
+      const row = scheduleRangeSelection.anchor.row + rowOffset;
+      const col = scheduleRangeSelection.anchor.col + colOffset;
+      const cell = document.querySelector(`#mainTable .cell[data-row-index="${row}"][data-col-index="${col}"]`);
+      if (!(cell instanceof HTMLElement) || cell.classList.contains("inactive-cell") || !cell.dataset.memberId || !cell.dataset.date) {
+        continue;
+      }
+      changed = applyClipboardSlotToScheduleCell(cell.dataset.memberId, cell.dataset.date, scheduleClipboard.matrix[rowOffset][colOffset]) || changed;
+    }
+  }
+  if (changed) {
+    finishScheduleGridMutation();
+  }
+  return changed;
+}
+
+function restoreScheduleSnapshot(snapshot) {
+  if (!snapshot) {
+    return false;
+  }
+  state.schedule = deepClone(snapshot);
+  finishScheduleGridMutation();
+  return true;
+}
+
+function isTypingTarget(target) {
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || Boolean(target instanceof HTMLElement && target.isContentEditable);
+}
+
+function beginScheduleRangeSelection(event) {
+  if (event.button !== 0) {
+    return;
+  }
+  const cell = getScheduleCellFromEvent(event);
+  if (!cell) {
+    return;
+  }
+  const point = getScheduleCellPoint(cell);
+  setScheduleRangeSelection(point);
+  scheduleDragSelecting = true;
+  scheduleSuppressNextCellClick = true;
+  event.preventDefault();
+}
+
+function updateScheduleRangeSelection(event) {
+  if (!scheduleDragSelecting || !scheduleRangeSelection) {
+    return;
+  }
+  const cell = getScheduleCellFromEvent(event);
+  if (!cell) {
+    return;
+  }
+  setScheduleRangeSelection(scheduleRangeSelection.anchor, getScheduleCellPoint(cell));
+}
+
+function endScheduleRangeSelection() {
+  scheduleDragSelecting = false;
+}
+
+function handleScheduleGridKeydown(event) {
+  if (document.querySelector("#modalRoot .modal-overlay")
+    || isTypingTarget(event.target)
+    || !canEditSchedule()
+    || state.tableView !== "member"
+    || !scheduleRangeSelection) {
+    return;
+  }
+  const key = event.key.toLowerCase();
+  if (key === "delete" || key === "backspace") {
+    event.preventDefault();
+    rememberScheduleUndoSnapshot();
+    if (!clearSelectedScheduleCells()) {
+      scheduleUndoSnapshot = null;
+    }
+    return;
+  }
+  if (!event.ctrlKey && !event.metaKey) {
+    return;
+  }
+  if (key === "c") {
+    event.preventDefault();
+    copyScheduleRangeToClipboard();
+    return;
+  }
+  if (key === "x") {
+    event.preventDefault();
+    if (!copyScheduleRangeToClipboard()) {
+      return;
+    }
+    rememberScheduleUndoSnapshot();
+    if (!clearSelectedScheduleCells()) {
+      scheduleUndoSnapshot = null;
+    }
+    return;
+  }
+  if (key === "v") {
+    event.preventDefault();
+    rememberScheduleUndoSnapshot();
+    if (!pasteScheduleClipboard()) {
+      scheduleUndoSnapshot = null;
+    }
+    return;
+  }
+  if (key === "z") {
+    event.preventDefault();
+    if (event.shiftKey) {
+      const redoSnapshot = scheduleRedoSnapshot;
+      if (redoSnapshot) {
+        scheduleRedoSnapshot = null;
+        scheduleUndoSnapshot = deepClone(state.schedule || {});
+        restoreScheduleSnapshot(redoSnapshot);
+      }
+      return;
+    }
+    const undoSnapshot = scheduleUndoSnapshot;
+    if (undoSnapshot) {
+      scheduleUndoSnapshot = null;
+      scheduleRedoSnapshot = deepClone(state.schedule || {});
+      restoreScheduleSnapshot(undoSnapshot);
+    }
+    return;
+  }
+  if (key === "y") {
+    event.preventDefault();
+    const redoSnapshot = scheduleRedoSnapshot;
+    if (redoSnapshot) {
+      scheduleRedoSnapshot = null;
+      scheduleUndoSnapshot = deepClone(state.schedule || {});
+      restoreScheduleSnapshot(redoSnapshot);
+    }
+  }
+}
+
 function getLeaveLabel(leave) {
   if (!leave) {
     return "";
@@ -2256,6 +2616,7 @@ function renderTable() {
     }
   } else {
     const groups = getVisibleTableGroups();
+    let rowIndex = 0;
     if (!groups.length) {
       html += `<tr><td class="empty-table" colspan="${days + 2}">${state.tableDeptScopeFilter === "all" ? "目前還沒有人員" : "目前週期沒有排到此單位班別的人員"}</td></tr>`;
     } else {
@@ -2270,13 +2631,14 @@ function renderTable() {
             const active = isMemberActiveOnDateString(member, dateString);
             const weekBoundaryClass = getWeekBoundaryClassForDate(dateString, dateIndex, days);
             if (!active) {
-              html += `<td class="cell inactive-cell ${weekBoundaryClass}" data-disabled="true"><div class="cell-inner"></div></td>`;
+              html += `<td class="cell inactive-cell ${weekBoundaryClass}" data-disabled="true" data-row-index="${rowIndex}" data-col-index="${dateIndex}"><div class="cell-inner"></div></td>`;
               return;
             }
             const key = getScheduleKeyForDateString(member.id, dateString);
-            html += `<td class="cell ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-member-id="${member.id}" data-date="${dateString}">${renderCellInner(key, member.id, dateString)}</td>`;
+            html += `<td class="cell ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-member-id="${member.id}" data-date="${dateString}" data-row-index="${rowIndex}" data-col-index="${dateIndex}">${renderCellInner(key, member.id, dateString)}</td>`;
           });
           html += "</tr>";
+          rowIndex += 1;
         });
       });
     }
@@ -2286,6 +2648,7 @@ function renderTable() {
   table.innerHTML = html;
   syncScheduleColumnWidths();
   renderStickyTableHeader(visibleDates);
+  syncScheduleRangeSelectionUi();
 }
 
 function renderHeader() {
@@ -2606,6 +2969,7 @@ function selectChip(type, id) {
   if (!canEditSchedule()) {
     return;
   }
+  clearScheduleRangeSelection();
   if (state.selected.type === type && state.selected.id === id) {
     state.selected = { type: null, id: null };
   } else {
@@ -5882,11 +6246,18 @@ function bindEvents() {
   if (tableViewSelect) {
     tableViewSelect.addEventListener("change", (event) => {
       state.tableView = event.target.value === "shift" ? "shift" : "member";
+      clearScheduleRangeSelection();
       renderToolbar();
       renderTable();
       queueSave();
     });
   }
+
+  document.body.addEventListener("mousedown", beginScheduleRangeSelection);
+  document.body.addEventListener("mouseover", updateScheduleRangeSelection);
+  document.body.addEventListener("mouseup", endScheduleRangeSelection);
+  document.body.addEventListener("mouseleave", endScheduleRangeSelection);
+  document.addEventListener("keydown", handleScheduleGridKeydown);
 
   document.body.addEventListener("click", async (event) => {
     const target = event.target.closest("button, td");
@@ -5920,6 +6291,10 @@ function bindEvents() {
     }
     const cellTarget = target instanceof Element ? target.closest(".cell") : null;
     if (cellTarget instanceof HTMLElement) {
+      if (scheduleSuppressNextCellClick) {
+        scheduleSuppressNextCellClick = false;
+        return;
+      }
       if (cellTarget.dataset.readonly) {
         return;
       }
