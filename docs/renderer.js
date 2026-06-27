@@ -101,6 +101,7 @@ const DEFAULT_STATE = {
   deptFilter: "all",
   tableView: "member",
   tableDeptScopeFilter: "all",
+  scheduleStartDate: "",
   departments: [
     { id: "d1", name: "門市", startDate: "", endDate: "" },
     { id: "d2", name: "行政", startDate: "", endDate: "" }
@@ -174,6 +175,7 @@ const DEFAULT_STATE = {
     maxConsecutiveWorkDays: 6,
     weekStart: 0,
     monthStartDay: 1,
+    eightWeekStartDate: "",
     forbidProxyLeaveConflict: true,
     requireEmploymentWindow: true
   },
@@ -253,29 +255,56 @@ let toolbarCollapsed = false;
 let toolbarCollapseInitialized = false;
 let measureTextContext = null;
 
-function renderStickyTableHeader(days) {
+function getSettingsScrollElement() {
+  return document.querySelector(".settings-table-wrap")
+    || document.querySelector(".department-settings-table-wrap")
+    || document.querySelector(".member-table-wrap")
+    || document.querySelector(".modal-body");
+}
+
+function captureSettingsReturnContext(fallback = null) {
+  const scrollElement = getSettingsScrollElement();
+  return {
+    ...(fallback || {}),
+    scrollTop: scrollElement?.scrollTop || 0
+  };
+}
+
+function restoreSettingsScroll(context) {
+  if (!context || !Number.isFinite(Number(context.scrollTop))) {
+    return;
+  }
+  requestAnimationFrame(() => {
+    const scrollElement = getSettingsScrollElement();
+    if (scrollElement) {
+      scrollElement.scrollTop = Number(context.scrollTop) || 0;
+    }
+  });
+}
+
+function renderStickyTableHeader(dates) {
   const container = document.getElementById("tableStickyHeaderDays");
   const stickyHeader = document.getElementById("tableStickyHeader");
   if (!container || !stickyHeader) {
     return;
   }
   renderStickyHeaderTitleCells();
-  const today = new Date();
-  const isToday = (day) => (
-    today.getFullYear() === state.year &&
-    today.getMonth() === state.month &&
-    today.getDate() === day
-  );
+  const today = getTodayDateString();
   const cells = [];
-  for (let day = 1; day <= days; day += 1) {
-    const weekday = weekdayOf(day);
+  dates.forEach((dateString, index) => {
+    const date = toDateObject(dateString);
+    if (!date) {
+      return;
+    }
+    const day = date.getDate();
+    const weekday = date.getDay();
     const cls = weekday === 0 ? "sun" : weekday === 6 ? "sat" : "";
-    const weekStripeClass = getWeekStripeClass(day);
-    const weekBoundaryClass = getWeekBoundaryClass(day, days);
+    const weekStripeClass = getWeekStripeClassForDate(dateString);
+    const weekBoundaryClass = getWeekBoundaryClassForDate(dateString, index, dates.length);
     cells.push(
-      `<div class="table-sticky-cell table-sticky-cell-day ${cls} ${weekStripeClass} ${weekBoundaryClass} ${isToday(day) ? "today" : ""}">${day}<span>${WEEKDAY_LABELS[weekday]}</span></div>`
+      `<div class="table-sticky-cell table-sticky-cell-day ${cls} ${weekStripeClass} ${weekBoundaryClass} ${dateString === today ? "today" : ""}">${date.getMonth() + 1}/${day}<span>${WEEKDAY_LABELS[weekday]}</span></div>`
     );
-  }
+  });
   container.innerHTML = cells.join("");
   requestAnimationFrame(() => {
     syncStickyHeaderLayout();
@@ -362,6 +391,7 @@ function createEmptyState() {
   empty.deptFilter = "all";
   empty.tableView = "member";
   empty.tableDeptScopeFilter = "all";
+  empty.scheduleStartDate = "";
   return empty;
 }
 
@@ -439,7 +469,7 @@ function syncScheduleColumnWidths() {
     deptWidth = clamp(Math.ceil(Math.max(deptContentWidth, deptHeaderWidth) + 18), 52, 88);
     personWidth = clamp(Math.ceil(Math.max(personContentWidth, personHeaderWidth) + 18), 64, 118);
   }
-  const days = daysInMonth(state.year, state.month);
+  const days = getVisibleDates().length;
   const availableDayWidth = tableWrap
     ? Math.floor((tableWrap.clientWidth - deptWidth - personWidth - 2) / Math.max(days, 1))
     : 0;
@@ -475,6 +505,16 @@ function getWeekStripeClass(day) {
   return getWeekIndexForDay(day) % 2 === 1 ? "week-alt" : "";
 }
 
+function getWeekIndexForDate(dateString) {
+  const dates = getVisibleDates();
+  const index = dates.indexOf(dateString);
+  return index >= 0 ? Math.floor(index / 7) : 0;
+}
+
+function getWeekStripeClassForDate(dateString) {
+  return getWeekIndexForDate(dateString) % 2 === 1 ? "week-alt" : "";
+}
+
 function getWeekBoundaryClass(day, daysInCurrentMonth) {
   const classes = [];
   const weekday = weekdayOf(day);
@@ -489,14 +529,113 @@ function getWeekBoundaryClass(day, daysInCurrentMonth) {
   return classes.join(" ");
 }
 
+function getWeekBoundaryClassForDate(dateString, index, totalDays) {
+  const classes = [];
+  const date = toDateObject(dateString);
+  if (!date) {
+    return "";
+  }
+  const weekday = date.getDay();
+  const weekStart = getConfiguredWeekStart();
+  const weekEnd = (weekStart + 6) % 7;
+  if (weekday === weekStart && index !== 0) {
+    classes.push("week-boundary-start");
+  }
+  if (weekday === weekEnd && index !== totalDays - 1) {
+    classes.push("week-boundary-end");
+  }
+  return classes.join(" ");
+}
+
 function toDateString(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function resetVisibleMonthToToday() {
-  const today = new Date();
-  state.year = today.getFullYear();
-  state.month = today.getMonth();
+function toDateStringFromDate(date) {
+  return toDateString(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getTodayDateString() {
+  return toDateStringFromDate(new Date());
+}
+
+function addDaysToDateString(dateString, count) {
+  const date = toDateObject(dateString);
+  if (!date) {
+    return "";
+  }
+  date.setDate(date.getDate() + count);
+  return toDateStringFromDate(date);
+}
+
+function diffDays(startDateString, endDateString) {
+  const start = toDateObject(startDateString);
+  const end = toDateObject(endDateString);
+  if (!start || !end) {
+    return 0;
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((end - start) / dayMs);
+}
+
+function getConfiguredEightWeekAnchorDate() {
+  return toDateObject(state.rules?.eightWeekStartDate) ? state.rules.eightWeekStartDate : getTodayDateString();
+}
+
+function getEightWeekCycleStartForDate(dateString) {
+  const anchorDate = getConfiguredEightWeekAnchorDate();
+  const offset = diffDays(anchorDate, dateString);
+  const periodLength = 56;
+  const periods = Math.floor(offset / periodLength);
+  return addDaysToDateString(anchorDate, periods * periodLength) || dateString;
+}
+
+function syncVisibleDatePartsFromStart() {
+  const start = toDateObject(state.scheduleStartDate);
+  if (!start) {
+    return;
+  }
+  state.year = start.getFullYear();
+  state.month = start.getMonth();
+}
+
+function resetScheduleWindowToToday() {
+  const today = getTodayDateString();
+  if (!toDateObject(state.rules?.eightWeekStartDate)) {
+    state.rules.eightWeekStartDate = today;
+  }
+  state.scheduleStartDate = getEightWeekCycleStartForDate(today);
+  state.tableView = "member";
+  state.tableDeptScopeFilter = "all";
+  syncVisibleDatePartsFromStart();
+}
+
+function getVisibleDates() {
+  const startDate = toDateObject(state.scheduleStartDate) ? state.scheduleStartDate : getEightWeekCycleStartForDate(getTodayDateString());
+  return enumerateDateRange(startDate, addDaysToDateString(startDate, 55));
+}
+
+function getVisibleDateRange() {
+  const dates = getVisibleDates();
+  return {
+    startDate: dates[0] || getTodayDateString(),
+    endDate: dates[dates.length - 1] || getTodayDateString()
+  };
+}
+
+function getScheduleKeyForDateString(memberId, dateString) {
+  const date = toDateObject(dateString);
+  if (!date) {
+    return "";
+  }
+  return scheduleKey(memberId, date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function normalizeScheduleDateInput(value) {
+  if (typeof value === "string" && toDateObject(value)) {
+    return value;
+  }
+  return toDateString(state.year, state.month, Number(value) || 1);
 }
 
 function isMemberCurrentlyActive(member) {
@@ -717,6 +856,26 @@ function isDepartmentActiveInMonth(department, year, month) {
 
 function isMemberActiveInMonth(member, year, month) {
   return doesDateRangeOverlapMonth(member?.hireDate || "", member?.leaveDate || "", year, month);
+}
+
+function doesDateRangeOverlapRange(startDate, endDate, rangeStart, rangeEnd) {
+  if (startDate && startDate > rangeEnd) {
+    return false;
+  }
+  if (endDate && endDate < rangeStart) {
+    return false;
+  }
+  return true;
+}
+
+function isDepartmentActiveInVisibleRange(department) {
+  const { startDate, endDate } = getVisibleDateRange();
+  return doesDateRangeOverlapRange(department?.startDate || "", department?.endDate || "", startDate, endDate);
+}
+
+function isMemberActiveInVisibleRange(member) {
+  const { startDate, endDate } = getVisibleDateRange();
+  return doesDateRangeOverlapRange(member?.hireDate || "", member?.leaveDate || "", startDate, endDate);
 }
 
 function textColor(hex) {
@@ -1005,6 +1164,7 @@ function normalizeState(payload) {
     maxConsecutiveWorkDays: Math.max(1, Number(payload.rules?.maxConsecutiveWorkDays) || merged.rules.maxConsecutiveWorkDays),
     weekStart: Number.isInteger(Number(payload.rules?.weekStart)) ? Math.min(6, Math.max(0, Number(payload.rules?.weekStart))) : merged.rules.weekStart,
     monthStartDay: Number.isInteger(Number(payload.rules?.monthStartDay)) ? Math.min(31, Math.max(1, Number(payload.rules?.monthStartDay))) : merged.rules.monthStartDay,
+    eightWeekStartDate: toDateObject(payload.rules?.eightWeekStartDate) ? payload.rules.eightWeekStartDate : merged.rules.eightWeekStartDate,
     forbidProxyLeaveConflict: payload.rules?.forbidProxyLeaveConflict !== false,
     requireEmploymentWindow: payload.rules?.requireEmploymentWindow !== false
   };
@@ -1015,6 +1175,7 @@ function normalizeState(payload) {
   merged.deptFilter = typeof payload.deptFilter === "string" ? payload.deptFilter : merged.deptFilter;
   merged.tableView = payload.tableView === "shift" ? "shift" : "member";
   merged.tableDeptScopeFilter = typeof payload.tableDeptScopeFilter === "string" ? payload.tableDeptScopeFilter : merged.tableDeptScopeFilter;
+  merged.scheduleStartDate = toDateObject(payload.scheduleStartDate) ? payload.scheduleStartDate : merged.scheduleStartDate;
   merged.schedule = cleanupScheduleEntries(payload.schedule && typeof payload.schedule === "object" ? payload.schedule : merged.schedule, merged);
 
   if (!merged.departments.some((department) => department.id === merged.deptFilter)) {
@@ -1110,7 +1271,8 @@ function getItemTextColor(item, fallback = "#000000") {
 }
 
 function getSlot(memberId, day) {
-  return state.schedule[scheduleKey(memberId, state.year, state.month, day)] || null;
+  const key = getScheduleKeyForDateString(memberId, normalizeScheduleDateInput(day));
+  return key ? state.schedule[key] || null : null;
 }
 
 function getLeaveLabel(leave) {
@@ -1621,11 +1783,11 @@ function hasSapLeaveRows() {
     if (member.payByDay) {
       return false;
     }
-    for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
-      if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
+    for (const dateString of getVisibleDates()) {
+      if (!isMemberActiveOnDateString(member, dateString)) {
         continue;
       }
-      const leaveId = getSlot(member.id, day)?.leave;
+      const leaveId = getSlot(member.id, dateString)?.leave;
       const leave = getItem("leave", leaveId);
       if (leave && sapLeaveCodes.has(leave.code)) {
         return true;
@@ -1637,11 +1799,11 @@ function hasSapLeaveRows() {
 
 function hasOvertimeRows() {
   return state.members.some((member) => {
-    for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
-      if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
+    for (const dateString of getVisibleDates()) {
+      if (!isMemberActiveOnDateString(member, dateString)) {
         continue;
       }
-      if (getSlot(member.id, day)?.overtime) {
+      if (getSlot(member.id, dateString)?.overtime) {
         return true;
       }
     }
@@ -1656,11 +1818,11 @@ function hasLeaveRows() {
     if (department?.hiddenFromLeave) {
       return false;
     }
-    for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
-      if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
+    for (const dateString of getVisibleDates()) {
+      if (!isMemberActiveOnDateString(member, dateString)) {
         continue;
       }
-      const leave = getItem("leave", getSlot(member.id, day)?.leave);
+      const leave = getItem("leave", getSlot(member.id, dateString)?.leave);
       if (leave && !excludedLeaveCodes.has(leave.code)) {
         return true;
       }
@@ -1805,10 +1967,17 @@ function reopenModalFromContext(context) {
       departmentSettingsView = context.view === "member" ? "member" : "department";
     }
     openDepartmentSettings();
+    restoreSettingsScroll(context);
     return;
   }
   if (context.category === "member-settings") {
     openMemberSettings();
+    restoreSettingsScroll(context);
+    return;
+  }
+  if (context.category === "list-settings") {
+    openListSettings(context.listCategory);
+    restoreSettingsScroll(context);
   }
 }
 
@@ -1818,7 +1987,7 @@ function setModal(content) {
 
 function renderDeptFilter() {
   const select = document.getElementById("deptFilter");
-  const departments = state.departments.filter((department) => isDepartmentActiveInMonth(department, state.year, state.month));
+  const departments = state.departments.filter((department) => isDepartmentActiveInVisibleRange(department));
   if (state.deptFilter !== "all" && !departments.some((department) => department.id === state.deptFilter)) {
     state.deptFilter = "all";
   }
@@ -1835,7 +2004,7 @@ function renderTableDeptScopeFilter() {
   if (!select) {
     return;
   }
-  const departments = state.departments.filter((department) => isDepartmentActiveInMonth(department, state.year, state.month));
+  const departments = state.departments.filter((department) => isDepartmentActiveInVisibleRange(department));
   if (state.tableDeptScopeFilter !== "all" && !departments.some((department) => department.id === state.tableDeptScopeFilter)) {
     state.tableDeptScopeFilter = "all";
   }
@@ -1890,11 +2059,11 @@ function memberHasScheduledShiftInDepartment(member, departmentId) {
   if (getMemberHomeDeptId(member) === departmentId) {
     return true;
   }
-  for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
-    if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
+  for (const dateString of getVisibleDates()) {
+    if (!isMemberActiveOnDateString(member, dateString)) {
       continue;
     }
-    const slot = getSlot(member.id, day);
+    const slot = getSlot(member.id, dateString);
     const shift = getItem("shift", slot?.shift);
     if (shift && shiftAllowsDepartment(shift, departmentId)) {
       return true;
@@ -1905,14 +2074,14 @@ function memberHasScheduledShiftInDepartment(member, departmentId) {
 
 function getVisibleTableGroups() {
   return state.departments
-    .filter((department) => isDepartmentActiveInMonth(department, state.year, state.month))
+    .filter((department) => isDepartmentActiveInVisibleRange(department))
     .map((department) => ({
       department,
       members: state.members.filter((member) => {
         if (getMemberHomeDeptId(member) !== department.id) {
           return false;
         }
-        if (!isMemberActiveInMonth(member, state.year, state.month)) {
+        if (!isMemberActiveInVisibleRange(member)) {
           return false;
         }
         if (state.tableDeptScopeFilter === "all") {
@@ -1930,18 +2099,18 @@ function getVisibleShiftRows() {
   ));
 }
 
-function getShiftViewMembersForDay(shiftId, day) {
+function getShiftViewMembersForDay(shiftId, dateString) {
   return state.members.filter((member) => {
-    if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
+    if (!isMemberActiveOnDateString(member, dateString)) {
       return false;
     }
-    const slot = getSlot(member.id, day);
+    const slot = getSlot(member.id, dateString);
     return slot?.shift === shiftId;
   });
 }
 
-function getShiftViewCellState(shift, day) {
-  const members = getShiftViewMembersForDay(shift.id, day);
+function getShiftViewCellState(shift, dateString) {
+  const members = getShiftViewMembersForDay(shift.id, dateString);
   const requiredStaffCount = Math.max(0, Number(shift?.requiredStaffCount) || 0);
   return {
     members,
@@ -2034,18 +2203,14 @@ function renderCellInner(key, memberId = "", day = 0) {
 function renderTable() {
   hideLeaveTooltip();
   const table = document.getElementById("mainTable");
-  const days = daysInMonth(state.year, state.month);
-  const today = new Date();
-  const isToday = (day) => (
-    today.getFullYear() === state.year &&
-    today.getMonth() === state.month &&
-    today.getDate() === day
-  );
+  const visibleDates = getVisibleDates();
+  const days = visibleDates.length;
+  const today = getTodayDateString();
 
   let html = '<colgroup><col class="col-dept"><col class="col-person">';
-  for (let day = 1; day <= days; day += 1) {
+  visibleDates.forEach(() => {
     html += '<col class="col-day">';
-  }
+  });
   html += "</colgroup><tbody>";
 
   if (state.tableView === "shift") {
@@ -2057,18 +2222,18 @@ function renderTable() {
         html += "<tr>";
         html += `<td class="dept-col">${escapeHtml(shift.name)}</td>`;
         html += `<td class="person-col demand-col">${escapeHtml(String(shift.requiredStaffCount ?? 0))}</td>`;
-        for (let day = 1; day <= days; day += 1) {
-          const weekBoundaryClass = getWeekBoundaryClass(day, days);
-          const shiftViewCellState = getShiftViewCellState(shift, day);
-          html += `<td class="cell shift-view-cell ${shiftViewCellState.isShortage ? "shift-view-shortage" : ""} ${weekBoundaryClass} ${isToday(day) ? "today" : ""}" data-readonly="true" data-shift-id="${shift.id}" data-day="${day}">${renderShiftViewCell(shiftViewCellState.members)}</td>`;
-        }
+        visibleDates.forEach((dateString, index) => {
+          const weekBoundaryClass = getWeekBoundaryClassForDate(dateString, index, days);
+          const shiftViewCellState = getShiftViewCellState(shift, dateString);
+          html += `<td class="cell shift-view-cell ${shiftViewCellState.isShortage ? "shift-view-shortage" : ""} ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-readonly="true" data-shift-id="${shift.id}" data-date="${dateString}">${renderShiftViewCell(shiftViewCellState.members)}</td>`;
+        });
         html += "</tr>";
       });
     }
   } else {
     const groups = getVisibleTableGroups();
     if (!groups.length) {
-      html += `<tr><td class="empty-table" colspan="${days + 2}">${state.tableDeptScopeFilter === "all" ? "目前還沒有人員" : "當月沒有排到此單位班別的人員"}</td></tr>`;
+      html += `<tr><td class="empty-table" colspan="${days + 2}">${state.tableDeptScopeFilter === "all" ? "目前還沒有人員" : "目前週期沒有排到此單位班別的人員"}</td></tr>`;
     } else {
       groups.forEach(({ department, members }) => {
         members.forEach((member, index) => {
@@ -2077,16 +2242,16 @@ function renderTable() {
             html += `<td class="dept-col" rowspan="${members.length}">${escapeHtml(department.name)}</td>`;
           }
           html += `<td class="person-col"><div class="member-label">${memberLabel(member)}</div></td>`;
-          for (let day = 1; day <= days; day += 1) {
-            const active = isMemberActiveOnDate(member, state.year, state.month, day);
-            const weekBoundaryClass = getWeekBoundaryClass(day, days);
+          visibleDates.forEach((dateString, dateIndex) => {
+            const active = isMemberActiveOnDateString(member, dateString);
+            const weekBoundaryClass = getWeekBoundaryClassForDate(dateString, dateIndex, days);
             if (!active) {
               html += `<td class="cell inactive-cell ${weekBoundaryClass}" data-disabled="true"><div class="cell-inner"></div></td>`;
-              continue;
+              return;
             }
-            const key = scheduleKey(member.id, state.year, state.month, day);
-            html += `<td class="cell ${weekBoundaryClass} ${isToday(day) ? "today" : ""}" data-member-id="${member.id}" data-day="${day}">${renderCellInner(key, member.id, day)}</td>`;
-          }
+            const key = getScheduleKeyForDateString(member.id, dateString);
+            html += `<td class="cell ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-member-id="${member.id}" data-date="${dateString}">${renderCellInner(key, member.id, dateString)}</td>`;
+          });
           html += "</tr>";
         });
       });
@@ -2096,11 +2261,12 @@ function renderTable() {
   html += "</tbody>";
   table.innerHTML = html;
   syncScheduleColumnWidths();
-  renderStickyTableHeader(days);
+  renderStickyTableHeader(visibleDates);
 }
 
 function renderHeader() {
-  document.getElementById("monthTitle").textContent = `${state.year} 年 ${MONTH_LABELS[state.month]}`;
+  const { startDate, endDate } = getVisibleDateRange();
+  document.getElementById("monthTitle").textContent = `${startDate} ～ ${endDate}`;
   document.getElementById("dbHint").textContent = "";
   renderAuthBar();
 }
@@ -2113,7 +2279,10 @@ function renderAll() {
 }
 
 function ensureScheduleSlot(memberId, day) {
-  const key = scheduleKey(memberId, state.year, state.month, day);
+  const key = getScheduleKeyForDateString(memberId, normalizeScheduleDateInput(day));
+  if (!key) {
+    return null;
+  }
   if (!state.schedule[key]) {
     state.schedule[key] = { shift: null, leave: null, overtime: null };
   }
@@ -2212,14 +2381,15 @@ async function upsertManagerLeaveEntry(payload) {
   if (!payload.isAllDay && !isValidTimeRange(payload.startTime, payload.endTime)) {
     throw new Error("請確認開始時間與結束時間");
   }
+  const dateString = normalizeScheduleDateInput(payload.dateString || payload.day);
   const requestPayload = {
     id: payload.requestId || "",
     memberId: member.id,
     memberCode: member.code,
     leaveItemId: leave.id,
     leaveCode: leave.code,
-    startDate: toDateString(state.year, state.month, payload.day),
-    endDate: toDateString(state.year, state.month, payload.day),
+    startDate: dateString,
+    endDate: dateString,
     isAllDay: payload.isAllDay,
     startTime: payload.isAllDay ? "" : payload.startTime || "",
     endTime: payload.isAllDay ? "" : payload.endTime || "",
@@ -2238,12 +2408,13 @@ async function upsertManagerOvertimeEntry(payload) {
   if (!member || !overtime) {
     throw new Error("找不到加班資料");
   }
+  const dateString = normalizeScheduleDateInput(payload.dateString || payload.day);
   const requestPayload = {
     id: payload.requestId || "",
     memberId: member.id,
     memberCode: member.code,
     overtimeName: overtime.name,
-    workDate: toDateString(state.year, state.month, payload.day),
+    workDate: dateString,
     startTime: payload.startTime || "",
     endTime: payload.endTime || "",
     useRest1: Boolean(payload.useRest1),
@@ -2273,17 +2444,21 @@ async function deleteManagerScheduleEntry(category, requestId) {
 }
 
 async function applySelectionToCell(memberId, day) {
+  const dateString = normalizeScheduleDateInput(day);
   if (!canEditSchedule()) {
     return;
   }
   const member = state.members.find((item) => item.id === memberId);
-  if (!member || !isMemberActiveOnDate(member, state.year, state.month, day)) {
+  if (!member || !isMemberActiveOnDateString(member, dateString)) {
     return;
   }
   if (!state.selected.type) {
     return;
   }
-  const slot = ensureScheduleSlot(memberId, day);
+  const slot = ensureScheduleSlot(memberId, dateString);
+  if (!slot) {
+    return;
+  }
   const { type, id } = state.selected;
   if (type === "leave") {
     if (slotHasBlockingRequest(slot, "leave")) {
@@ -2304,13 +2479,13 @@ async function applySelectionToCell(memberId, day) {
         queueSave();
         return;
       } else if (shouldPromptLeaveDetail(leave, null)) {
-        openLeaveAssignmentModal(memberId, day, id);
+        openLeaveAssignmentModal(memberId, dateString, id);
         return;
       } else {
         await upsertManagerLeaveEntry({
           requestId: isManagerSlotRequest(slot, "leave") ? slot.leaveRequestId : "",
           memberId,
-          day,
+          dateString,
           leaveId: id,
           isAllDay: defaultLeaveIsAllDay(leave),
           startTime: "",
@@ -2337,7 +2512,7 @@ async function applySelectionToCell(memberId, day) {
         await upsertManagerOvertimeEntry({
           requestId: isManagerSlotRequest(slot, "overtime") ? slot.overtimeRequestId : "",
           memberId,
-          day,
+          dateString,
           overtimeId: nextOvertimeId,
           startTime: slot.overtimeMeta?.startTime || overtime?.startTime || "",
           endTime: slot.overtimeMeta?.endTime || overtime?.endTime || "",
@@ -2533,13 +2708,14 @@ function syncOvertimeFormUi() {
 }
 
 function openLeaveAssignmentModal(memberId, day, leaveId) {
+  const dateString = normalizeScheduleDateInput(day);
   const member = state.members.find((item) => item.id === memberId);
   const leave = getItem("leave", leaveId);
   if (!member || !leave) {
     return;
   }
 
-  const slot = getSlot(memberId, day);
+  const slot = getSlot(memberId, dateString);
   const existingMeta = slot?.leave === leaveId ? slot.leaveMeta || null : null;
   const defaultAllDay = existingMeta?.allDay ?? defaultLeaveIsAllDay(leave);
   const reasonEnabled = existingMeta?.reasonEnabled ?? leave.requireReason;
@@ -2550,7 +2726,7 @@ function openLeaveAssignmentModal(memberId, day, leaveId) {
   modalContext = {
     category: "leave-assignment",
     memberId,
-    day,
+    day: dateString,
     leaveId,
     requestId: isManagerSlotRequest(slot, "leave") ? slot.leaveRequestId || "" : ""
   };
@@ -2560,7 +2736,7 @@ function openLeaveAssignmentModal(memberId, day, leaveId) {
     body: `
       <div class="form-row">
         <label>假別</label>
-        <div class="readonly-pill">${escapeHtml(member.name)} · ${day} 日 · ${escapeHtml(getLeaveLabel(leave))}</div>
+        <div class="readonly-pill">${escapeHtml(member.name)} · ${escapeHtml(formatDateTextFromIso(dateString))} · ${escapeHtml(getLeaveLabel(leave))}</div>
       </div>
       <div class="form-row checkbox-row checkbox-row-left">
         <label>
@@ -2609,7 +2785,7 @@ async function saveLeaveAssignmentFromModal() {
     await upsertManagerLeaveEntry({
       requestId,
       memberId,
-      day: Number(day),
+      dateString: normalizeScheduleDateInput(day),
       leaveId,
       isAllDay: allDay,
       startTime,
@@ -2624,8 +2800,9 @@ async function saveLeaveAssignmentFromModal() {
 }
 
 function openOvertimeAssignmentModal(memberId, day) {
+  const dateString = normalizeScheduleDateInput(day);
   const member = state.members.find((item) => item.id === memberId);
-  const slot = getSlot(memberId, day);
+  const slot = getSlot(memberId, dateString);
   const overtimeMeta = slot?.overtimeMeta || null;
   if (!member || !slot?.overtime) {
     return;
@@ -2633,7 +2810,7 @@ function openOvertimeAssignmentModal(memberId, day) {
   modalContext = {
     category: "overtime-assignment",
     memberId,
-    day,
+    day: dateString,
     requestId: isManagerSlotRequest(slot, "overtime") ? slot.overtimeRequestId || "" : ""
   };
   openEntityListModal({
@@ -2642,7 +2819,7 @@ function openOvertimeAssignmentModal(memberId, day) {
     body: `
       <div class="form-row">
         <label>人員</label>
-        <div class="readonly-pill">${escapeHtml(member.name)} · ${day} 日</div>
+        <div class="readonly-pill">${escapeHtml(member.name)} · ${escapeHtml(formatDateTextFromIso(dateString))}</div>
       </div>
       <div class="form-grid">
         <div class="form-row">
@@ -2726,7 +2903,7 @@ async function saveOvertimeAssignmentFromModal() {
     await upsertManagerOvertimeEntry({
       requestId,
       memberId,
-      day: Number(day),
+      dateString: normalizeScheduleDateInput(day),
       overtimeId: state.overtime[0]?.id || "",
       startTime,
       endTime,
@@ -2794,6 +2971,7 @@ function saveRequestStyleFromModal() {
 }
 
 function openListSettings(category) {
+  modalContext = { category: "list-settings", listCategory: category };
   const titleMap = {
     shift: "班別設定",
     leave: "假別設定",
@@ -2960,6 +3138,9 @@ function syncNamedColorUi() {
 }
 
 function openShiftFormModal(mode, shiftId = "") {
+  const returnTo = modalContext?.category === "list-settings"
+    ? captureSettingsReturnContext({ category: "list-settings", listCategory: "shift" })
+    : null;
   const shift = mode === "edit"
     ? state.shifts.find((item) => item.id === shiftId)
     : {
@@ -2979,7 +3160,7 @@ function openShiftFormModal(mode, shiftId = "") {
   modalColor = shift.color;
   modalTextColorAuto = shift.autoTextColor ?? !shift.textColor;
   modalTextColor = shift.textColor || autoLeaveTextColor(shift.color);
-  modalContext = { mode, category: "shift", targetId: shiftId };
+  modalContext = { mode, category: "shift", targetId: shiftId, returnTo };
 
   openEntityListModal({
     title: mode === "edit" ? "修改班別" : "新增班別",
@@ -3026,6 +3207,7 @@ function openShiftFormModal(mode, shiftId = "") {
 }
 
 function saveShiftFromModal(mode) {
+  const returnTo = modalContext.returnTo || null;
   const name = document.getElementById("shiftName")?.value.trim();
   if (!name) {
     document.getElementById("shiftName")?.focus();
@@ -3058,11 +3240,14 @@ function saveShiftFromModal(mode) {
   }
   closeModal();
   renderAll();
-  openListSettings("shift");
+  reopenModalFromContext(returnTo || { category: "list-settings", listCategory: "shift" });
   queueSave();
 }
 
 function openNamedColorFormModal(category, mode, targetId = "") {
+  const returnTo = modalContext?.category === "list-settings"
+    ? captureSettingsReturnContext({ category: "list-settings", listCategory: category })
+    : null;
   const list = getItemList(category);
   const item = mode === "edit"
     ? list.find((entry) => entry.id === targetId)
@@ -3089,7 +3274,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
   modalColor = item.color;
   modalTextColorAuto = item.autoTextColor ?? !item.textColor;
   modalTextColor = item.textColor || autoLeaveTextColor(item.color);
-  modalContext = { category, mode, targetId };
+  modalContext = { category, mode, targetId, returnTo };
   const titleMap = {
     shift: "班別",
     leave: "假別",
@@ -3196,6 +3381,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
 }
 
 function saveNamedColorItem(category, mode) {
+  const returnTo = modalContext.returnTo || null;
   if (category === "shift") {
     saveShiftFromModal(mode);
     return;
@@ -3273,7 +3459,7 @@ function saveNamedColorItem(category, mode) {
   if (category === "overtime") state.overtime = nextList;
   closeModal();
   renderAll();
-  openListSettings(category);
+  reopenModalFromContext(returnTo || { category: "list-settings", listCategory: category });
   queueSave();
   if (category === "leave" || category === "overtime") {
     syncRequestCatalogs().catch((error) => setSaveStatus(`同步設定失敗：${error.message}`));
@@ -3391,13 +3577,16 @@ function openDepartmentSettings() {
 }
 
 function openDepartmentForm(mode, departmentId = "") {
+  const returnTo = modalContext?.category === "department-settings"
+    ? captureSettingsReturnContext({ category: "department-settings", view: departmentSettingsView })
+    : null;
   const department = mode === "edit"
     ? state.departments.find((item) => item.id === departmentId)
     : { id: "", name: "", startDate: "", endDate: "", hiddenFromLeave: false };
   if (!department) {
     return;
   }
-  modalContext = { mode, category: "department", targetId: departmentId };
+  modalContext = { mode, category: "department", targetId: departmentId, returnTo };
   openEntityListModal({
     title: `${mode === "edit" ? "修改" : "新增"}單位`,
     modalClass: "modal modal-form-compact",
@@ -3429,6 +3618,7 @@ function openDepartmentForm(mode, departmentId = "") {
 }
 
 function saveDepartment(mode) {
+  const returnTo = modalContext.returnTo || null;
   const name = document.getElementById("departmentName")?.value.trim();
   const startDate = document.getElementById("departmentStartDate")?.value || "";
   const endDate = document.getElementById("departmentEndDate")?.value || "";
@@ -3449,7 +3639,7 @@ function saveDepartment(mode) {
   }
   closeModal();
   renderAll();
-  openDepartmentSettings();
+  reopenModalFromContext(returnTo || { category: "department-settings", view: departmentSettingsView });
   queueSave();
 }
 
@@ -3716,7 +3906,6 @@ function openMemberSettings() {
             <div>離職日</div>
             <div>計薪方式</div>
             <div>例假星期</div>
-            <div>月休天數</div>
             <div class="member-table-actions-head">操作</div>
           </div>
           ${filteredMembers.map((member) => `
@@ -3729,7 +3918,6 @@ function openMemberSettings() {
               <div>${escapeHtml(member.leaveDate || "-")}</div>
               <div>${getSalaryTypeLabel(member)}</div>
               <div>${getRestWeekdayLabel(member.fixedRestWeekday)}</div>
-              <div>${escapeHtml(String(member.monthlyRestDays ?? 0))}</div>
               <div class="member-table-actions">
                 ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
                 ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
@@ -3758,9 +3946,9 @@ function openMemberSettings() {
 
 function openMemberForm(mode, memberId = "") {
   const returnTo = modalContext?.category === "department-settings"
-    ? { category: "department-settings", view: modalContext.view || departmentSettingsView }
+    ? captureSettingsReturnContext({ category: "department-settings", view: modalContext.view || departmentSettingsView })
     : modalContext?.category === "member-settings"
-      ? { category: "member-settings" }
+      ? captureSettingsReturnContext({ category: "member-settings" })
       : null;
   const member = mode === "edit"
     ? state.members.find((item) => item.id === memberId)
@@ -3776,7 +3964,6 @@ function openMemberForm(mode, memberId = "") {
       payByDay: false,
       fixedRestWeekday: 0,
       scheduleDeptIds: state.departments[0]?.id ? [state.departments[0].id] : [],
-      monthlyRestDays: 8,
       role: "employee"
     };
   if (!member) {
@@ -3826,12 +4013,8 @@ function openMemberForm(mode, memberId = "") {
             )).join("")}
           </select>
         </div>
-        <div class="form-row">
-          <label for="memberMonthlyRestDays">月休天數</label>
-          <input id="memberMonthlyRestDays" type="number" min="0" max="31" step="1" value="${escapeHtml(String(member.monthlyRestDays ?? 0))}">
-        </div>
         ${mode === "edit" ? `
-          <div class="form-row form-row-wide">
+          <div class="form-row">
             <button class="ghost-btn" type="button" data-reset-member-password="${escapeHtml(member.code)}">重設密碼為 0000</button>
           </div>
         ` : ""}
@@ -3862,7 +4045,7 @@ async function saveMember(mode) {
     ? state.members.find((member) => member.id === modalContext.targetId) || null
     : null;
   const scheduleDeptIds = readMemberScheduleDeptIds();
-  const monthlyRestDays = Math.max(0, Math.min(31, Number(document.getElementById("memberMonthlyRestDays")?.value || 0)));
+  const monthlyRestDays = Math.max(0, Number(previousMember?.monthlyRestDays) || 0);
   const payload = {
     id: mode === "edit" ? modalContext.targetId : uid("m"),
     code: document.getElementById("memberCode")?.value.trim(),
@@ -4585,14 +4768,18 @@ function buildRestComplianceCalendars() {
 }
 
 function openWeekStartSettingModal() {
-  if (!promptManagerAccess("設定月週規則前請先登入主管帳號")) {
+  if (!promptManagerAccess("設定週期規則前請先登入主管帳號")) {
     return;
   }
   openEntityListModal({
-    title: "月週設定",
+    title: "週期設定",
     modalClass: "modal modal-wide",
     body: `
       <div class="form-grid">
+        <div class="form-row">
+          <label for="eightWeekStartSetting">八週起算日</label>
+          <input id="eightWeekStartSetting" type="date" value="${escapeHtml(getConfiguredEightWeekAnchorDate())}">
+        </div>
         <div class="form-row">
           <label for="weekStartSetting">每週起算日</label>
           <select id="weekStartSetting">${WEEK_START_OPTIONS.map((option) => (
@@ -4609,7 +4796,7 @@ function openWeekStartSettingModal() {
       </div>
       <div class="result-item">
         <div class="result-title">說明</div>
-        <div class="result-detail">班表週期格線、週期底紋與例休檢查依每週起算日；月休天數統計依每月起算日。</div>
+        <div class="result-detail">班表預設顯示今天所在的八週週期；週期由八週起算日往前後每 56 天推算。</div>
       </div>
     `,
     headerButtons: '<button class="btn-primary" type="button" data-save-week-start="true">儲存設定</button>',
@@ -4620,8 +4807,12 @@ function openWeekStartSettingModal() {
 function saveWeekStartSettingFromModal() {
   const weekValue = Number(document.getElementById("weekStartSetting")?.value || 0);
   const monthValue = Number(document.getElementById("monthStartSetting")?.value || 1);
+  const eightWeekStartDate = document.getElementById("eightWeekStartSetting")?.value || getTodayDateString();
   state.rules.weekStart = Number.isInteger(weekValue) && weekValue >= 0 && weekValue <= 6 ? weekValue : 0;
   state.rules.monthStartDay = Number.isInteger(monthValue) && monthValue >= 1 && monthValue <= 31 ? monthValue : 1;
+  state.rules.eightWeekStartDate = toDateObject(eightWeekStartDate) ? eightWeekStartDate : getTodayDateString();
+  state.scheduleStartDate = getEightWeekCycleStartForDate(getTodayDateString());
+  syncVisibleDatePartsFromStart();
   closeModal();
   renderAll();
   queueSave();
@@ -5482,16 +5673,10 @@ async function handleSignOut() {
   await loadApp();
 }
 
-function changeMonth(delta) {
-  state.month += delta;
-  if (state.month > 11) {
-    state.month = 0;
-    state.year += 1;
-  }
-  if (state.month < 0) {
-    state.month = 11;
-    state.year -= 1;
-  }
+function changeScheduleWindowWeeks(weeks) {
+  const startDate = toDateObject(state.scheduleStartDate) ? state.scheduleStartDate : getEightWeekCycleStartForDate(getTodayDateString());
+  state.scheduleStartDate = addDaysToDateString(startDate, weeks * 7);
+  syncVisibleDatePartsFromStart();
   renderAll();
   queueSave();
 }
@@ -5590,8 +5775,10 @@ function bindEvents() {
     event.stopPropagation();
     toggleToolbarCollapse();
   });
-  bindClick("prevMonthButton", () => changeMonth(-1));
-  bindClick("nextMonthButton", () => changeMonth(1));
+  bindClick("prevPeriodButton", () => changeScheduleWindowWeeks(-8));
+  bindClick("prevWeekButton", () => changeScheduleWindowWeeks(-1));
+  bindClick("nextWeekButton", () => changeScheduleWindowWeeks(1));
+  bindClick("nextPeriodButton", () => changeScheduleWindowWeeks(8));
   bindClick("exportSapButton", () => {
     closeCoreActionsMenu();
     exportSapCsv();
@@ -5716,15 +5903,15 @@ function bindEvents() {
         return;
       }
       const memberId = cellTarget.dataset.memberId;
-      const day = Number(cellTarget.dataset.day);
+      const dateString = cellTarget.dataset.date || "";
       if (!state.selected.type) {
-        const slot = getSlot(memberId, day);
+        const slot = getSlot(memberId, dateString);
         if (canEditSchedule() && slot?.overtime) {
-          openOvertimeAssignmentModal(memberId, day);
+          openOvertimeAssignmentModal(memberId, dateString);
           return;
         }
       }
-      await applySelectionToCell(memberId, day);
+      await applySelectionToCell(memberId, dateString);
       return;
     }
     const managerOnlyAction = Boolean(
@@ -5810,18 +5997,18 @@ function bindEvents() {
       return;
     }
     if (target.dataset.editLeaveAssignment) {
-      const [memberId, day] = target.dataset.editLeaveAssignment.split(":");
-      const slot = getSlot(memberId, Number(day));
+      const [memberId, dateString] = target.dataset.editLeaveAssignment.split(":");
+      const slot = getSlot(memberId, dateString);
       hideLeaveTooltip();
       if (slot?.leave) {
-        openLeaveAssignmentModal(memberId, Number(day), slot.leave);
+        openLeaveAssignmentModal(memberId, dateString, slot.leave);
       }
       return;
     }
     if (target.dataset.editOvertimeAssignment) {
-      const [memberId, day] = target.dataset.editOvertimeAssignment.split(":");
+      const [memberId, dateString] = target.dataset.editOvertimeAssignment.split(":");
       hideLeaveTooltip();
-      openOvertimeAssignmentModal(memberId, Number(day));
+      openOvertimeAssignmentModal(memberId, dateString);
       return;
     }
     if (target.dataset.openRequestReview) {
@@ -6049,7 +6236,7 @@ function bindEvents() {
       clearTimeout(leaveTooltipTimer);
       leaveTooltipTimer = null;
     }
-    showScheduleTooltip(memberId, Number(day), category, target.getBoundingClientRect());
+    showScheduleTooltip(memberId, day, category, target.getBoundingClientRect());
   });
 
   document.body.addEventListener("mouseout", (event) => {
@@ -6204,7 +6391,7 @@ async function loadApp() {
     appInfo = await window.schedulerApi.getAppInfo();
     const payload = await window.schedulerApi.loadState();
     state = normalizeState(payload);
-    resetVisibleMonthToToday();
+    resetScheduleWindowToToday();
     currentMember = resolveCurrentMember();
   } catch (error) {
     setSaveStatus(`載入失敗：${error.message}`);

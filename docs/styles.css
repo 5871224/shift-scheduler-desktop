@@ -551,6 +551,8 @@ button {
 
 .nav-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1873,7 +1875,7 @@ thead th.today,
 
 .member-table-row {
   display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   align-items: center;
   gap: 8px;
   padding: 6px 14px;
@@ -2434,7 +2436,7 @@ thead th.today,
   }
 
   .member-table-row {
-    grid-template-columns: repeat(10, minmax(0, 1fr));
+    grid-template-columns: repeat(9, minmax(0, 1fr));
     gap: 8px;
     padding: 6px 12px;
     font-size: 12px;
@@ -2513,6 +2515,19 @@ thead th.today,
 
   .calendar-nav-left {
     width: 100%;
+  }
+
+  .month-title-wrap,
+  .nav-actions {
+    width: 100%;
+  }
+
+  .nav-actions {
+    justify-content: stretch;
+  }
+
+  .nav-actions .nav-btn {
+    flex: 1 1 calc(50% - 8px);
   }
 
   .calendar-nav-left select {
