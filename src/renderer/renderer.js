@@ -1756,6 +1756,22 @@ function closeModal() {
   hideLeaveTooltip();
 }
 
+function reopenModalFromContext(context) {
+  if (!context || typeof context !== "object") {
+    return;
+  }
+  if (context.category === "department-settings") {
+    if (context.view) {
+      departmentSettingsView = context.view === "member" ? "member" : "department";
+    }
+    openDepartmentSettings();
+    return;
+  }
+  if (context.category === "member-settings") {
+    openMemberSettings();
+  }
+}
+
 function setModal(content) {
   document.getElementById("modalRoot").innerHTML = content;
 }
@@ -3181,6 +3197,7 @@ async function deleteListItem(category, id) {
 }
 
 function openDepartmentSettings() {
+  modalContext = { category: "department-settings", view: departmentSettingsView };
   const departmentRows = state.departments.map((department) => {
     const homeMembers = state.members.filter((member) => getMemberHomeDeptId(member) === department.id);
     const schedulableMembers = state.members.filter((member) => getMemberHomeDeptId(member) !== department.id && memberCanScheduleDepartment(member, department.id));
@@ -3479,6 +3496,17 @@ function readMemberScheduleDeptIds() {
     .filter(Boolean);
 }
 
+function syncScheduleDeptSummary() {
+  const summary = document.querySelector(".schedule-dept-summary");
+  if (!summary) {
+    return;
+  }
+  const names = readMemberScheduleDeptIds()
+    .map((deptId) => getDepartmentName(deptId))
+    .filter(Boolean);
+  summary.textContent = names.length ? names.join("、") : "未指定";
+}
+
 function syncScheduleDeptSelectorRanks() {
   let rank = 1;
   document.querySelectorAll("#memberScheduleDeptList [data-schedule-dept-option]").forEach((row) => {
@@ -3503,9 +3531,11 @@ function reorderScheduleDepartmentOption(draggedId, targetId) {
   }
   list.insertBefore(dragged, target);
   syncScheduleDeptSelectorRanks();
+  syncScheduleDeptSummary();
 }
 
 function openMemberSettings() {
+  modalContext = { category: "member-settings" };
   const normalizedName = memberSettingsFilters.name.trim().toLowerCase();
   const sourceMembers = state.members;
   const filteredMembers = sourceMembers.filter((member) => {
@@ -3622,6 +3652,11 @@ function openMemberSettings() {
 }
 
 function openMemberForm(mode, memberId = "") {
+  const returnTo = modalContext?.category === "department-settings"
+    ? { category: "department-settings", view: modalContext.view || departmentSettingsView }
+    : modalContext?.category === "member-settings"
+      ? { category: "member-settings" }
+      : null;
   const member = mode === "edit"
     ? state.members.find((item) => item.id === memberId)
     : {
@@ -3641,7 +3676,7 @@ function openMemberForm(mode, memberId = "") {
   if (!member) {
     return;
   }
-  modalContext = { mode, category: "member", targetId: memberId };
+  modalContext = { mode, category: "member", targetId: memberId, returnTo };
   openEntityListModal({
     title: `${mode === "edit" ? "修改" : "新增"}人員`,
     modalClass: "modal modal-wide",
@@ -3702,6 +3737,7 @@ function openMemberForm(mode, memberId = "") {
 }
 
 async function saveMember(mode) {
+  const returnTo = modalContext.returnTo || null;
   const hireDate = document.getElementById("memberHireDate")?.value || "";
   const leaveDate = document.getElementById("memberLeaveDate")?.value || "";
   if (hireDate && leaveDate && !isValidDateRange(hireDate, leaveDate)) {
@@ -3752,7 +3788,7 @@ async function saveMember(mode) {
   currentMember = resolveCurrentMember();
   closeModal();
   renderAll();
-  openMemberSettings();
+  reopenModalFromContext(returnTo);
   queueSave();
 }
 
@@ -5541,7 +5577,9 @@ function bindEvents() {
       return;
     }
     if (target.dataset.closeButton) {
+      const returnTo = modalContext.returnTo || null;
       closeModal();
+      reopenModalFromContext(returnTo);
       return;
     }
     const cellTarget = target instanceof Element ? target.closest(".cell") : null;
@@ -5858,6 +5896,7 @@ function bindEvents() {
     }
     if (target.closest("#memberScheduleDeptList")) {
       syncScheduleDeptSelectorRanks();
+      syncScheduleDeptSummary();
       return;
     }
     const targets = toggleMap[target.id];
