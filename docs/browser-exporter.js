@@ -420,7 +420,7 @@
   async function createMemberWorkbook(payload) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("人員資料");
-    const headers = ["工號", "姓名", "所屬單位", "權限", "到職日", "離職日", "薪資方式", "例假星期"];
+    const headers = ["工號", "姓名", "所屬單位", "權限", "到職日", "離職日", "計薪方式", "例假星期"];
     const weekdayLabels = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
 
     sheet.addRow(headers);
@@ -433,7 +433,7 @@
         member.role === "manager" ? "主管" : "員工",
         formatDisplayDate(member.hireDate || ""),
         formatDisplayDate(member.leaveDate || ""),
-        member.payByDay ? "按日計薪" : "月薪",
+        member.payByDay ? "日薪" : "月薪",
         weekdayLabels[Math.max(0, Math.min(6, Number(member.fixedRestWeekday) || 0))] || "週日"
       ]);
     });
@@ -638,7 +638,7 @@
         role: roleText === "主管" ? "manager" : "employee",
         hireDate,
         leaveDate,
-        payByDay: salaryType === "按日計薪",
+        payByDay: salaryType === "日薪" || salaryType === "按日計薪",
         fixedRestWeekday: fixedRestWeekdayMap.has(fixedRestWeekdayText) ? fixedRestWeekdayMap.get(fixedRestWeekdayText) : 0
       });
     });

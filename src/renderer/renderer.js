@@ -1041,7 +1041,7 @@ function getPositionName(positionId) {
 }
 
 function getSalaryTypeLabel(member) {
-  return member?.payByDay ? "按日計薪" : "月薪";
+  return member?.payByDay ? "日薪" : "月薪";
 }
 
 function normalizeRestWeekday(value) {
@@ -3695,11 +3695,11 @@ function openMemberSettings() {
           </select>
         </div>
         <div class="form-row">
-          <label for="memberSettingsSalaryTypeFilter">薪資方式</label>
+          <label for="memberSettingsSalaryTypeFilter">計薪方式</label>
           <select id="memberSettingsSalaryTypeFilter" data-member-settings-filter-field="salaryType">
             <option value="all" ${memberSettingsFilters.salaryType === "all" ? "selected" : ""}>全部</option>
             <option value="monthly" ${memberSettingsFilters.salaryType === "monthly" ? "selected" : ""}>月薪</option>
-            <option value="daily" ${memberSettingsFilters.salaryType === "daily" ? "selected" : ""}>按日計薪</option>
+            <option value="daily" ${memberSettingsFilters.salaryType === "daily" ? "selected" : ""}>日薪</option>
           </select>
         </div>
       </div>
@@ -3714,7 +3714,7 @@ function openMemberSettings() {
             <div>權限</div>
             <div>到職日</div>
             <div>離職日</div>
-            <div>薪資方式</div>
+            <div>計薪方式</div>
             <div>例假星期</div>
             <div>月休天數</div>
             <div class="member-table-actions-head">操作</div>
@@ -3785,7 +3785,7 @@ function openMemberForm(mode, memberId = "") {
   modalContext = { mode, category: "member", targetId: memberId, returnTo };
   openEntityListModal({
     title: `${mode === "edit" ? "修改" : "新增"}人員`,
-    modalClass: "modal modal-wide",
+    modalClass: "modal modal-member-form",
     body: `
       <div class="form-grid two-col">
         <div class="form-row">
@@ -3804,19 +3804,19 @@ function openMemberForm(mode, memberId = "") {
           </select>
         </div>
         <div class="form-row">
+          <label for="memberSalaryType">計薪方式</label>
+          <select id="memberSalaryType">
+            <option value="monthly" ${member.payByDay ? "" : "selected"}>月薪</option>
+            <option value="daily" ${member.payByDay ? "selected" : ""}>日薪</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label for="memberHireDate">到職日</label>
           <input id="memberHireDate" type="date" value="${escapeHtml(member.hireDate)}">
         </div>
         <div class="form-row">
           <label for="memberLeaveDate">離職日</label>
           <input id="memberLeaveDate" type="date" value="${escapeHtml(member.leaveDate)}">
-        </div>
-        <div class="form-row form-row-wide">
-          <label for="memberSalaryType">薪資方式</label>
-          <select id="memberSalaryType">
-            <option value="monthly" ${member.payByDay ? "" : "selected"}>月薪</option>
-            <option value="daily" ${member.payByDay ? "selected" : ""}>按日計薪</option>
-          </select>
         </div>
         <div class="form-row">
           <label for="memberFixedRestWeekday">例假星期</label>
@@ -3830,6 +3830,11 @@ function openMemberForm(mode, memberId = "") {
           <label for="memberMonthlyRestDays">月休天數</label>
           <input id="memberMonthlyRestDays" type="number" min="0" max="31" step="1" value="${escapeHtml(String(member.monthlyRestDays ?? 0))}">
         </div>
+        ${mode === "edit" ? `
+          <div class="form-row form-row-wide">
+            <button class="ghost-btn" type="button" data-reset-member-password="${escapeHtml(member.code)}">重設密碼為 0000</button>
+          </div>
+        ` : ""}
         <div class="form-row form-row-wide">
           <label>排班單位</label>
           <div class="schedule-dept-summary-row">
@@ -3838,11 +3843,6 @@ function openMemberForm(mode, memberId = "") {
           </div>
           ${renderScheduleDepartmentSelector(member)}
         </div>
-        ${mode === "edit" ? `
-          <div class="form-row form-row-wide">
-            <button class="ghost-btn" type="button" data-reset-member-password="${escapeHtml(member.code)}">重設密碼為 0000</button>
-          </div>
-        ` : ""}
       </div>
     `,
     headerButtons: `<button class="btn-primary" type="button" data-save-member="${mode}">${mode === "edit" ? "儲存修改" : "新增人員"}</button>`,

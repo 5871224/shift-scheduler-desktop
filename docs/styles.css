@@ -1005,6 +1005,10 @@ thead th.today,
   width: min(860px, 100%);
 }
 
+.modal-member-form {
+  width: min(440px, 100%);
+}
+
 .member-settings-modal {
   width: min(1080px, 100%);
   height: min(78vh, 760px);
