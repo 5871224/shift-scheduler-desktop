@@ -856,6 +856,11 @@ thead th.today,
   background: #fff;
 }
 
+.shift-view-cell.shift-view-shortage,
+.shift-view-cell.shift-view-shortage:hover {
+  background: #f9d8df;
+}
+
 .demand-col {
   text-align: center;
 }

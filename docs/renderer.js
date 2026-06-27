@@ -1921,8 +1921,16 @@ function getShiftViewMembersForDay(shiftId, day) {
   });
 }
 
-function renderShiftViewCell(shiftId, day) {
-  const members = getShiftViewMembersForDay(shiftId, day);
+function getShiftViewCellState(shift, day) {
+  const members = getShiftViewMembersForDay(shift.id, day);
+  const requiredStaffCount = Math.max(0, Number(shift?.requiredStaffCount) || 0);
+  return {
+    members,
+    isShortage: members.length < requiredStaffCount
+  };
+}
+
+function renderShiftViewCell(members) {
   if (!members.length) {
     return '<div class="shift-view-members"></div>';
   }
@@ -2032,7 +2040,8 @@ function renderTable() {
         html += `<td class="person-col demand-col">${escapeHtml(String(shift.requiredStaffCount ?? 0))}</td>`;
         for (let day = 1; day <= days; day += 1) {
           const weekBoundaryClass = getWeekBoundaryClass(day, days);
-          html += `<td class="cell shift-view-cell ${weekBoundaryClass} ${isToday(day) ? "today" : ""}" data-readonly="true" data-shift-id="${shift.id}" data-day="${day}">${renderShiftViewCell(shift.id, day)}</td>`;
+          const shiftViewCellState = getShiftViewCellState(shift, day);
+          html += `<td class="cell shift-view-cell ${shiftViewCellState.isShortage ? "shift-view-shortage" : ""} ${weekBoundaryClass} ${isToday(day) ? "today" : ""}" data-readonly="true" data-shift-id="${shift.id}" data-day="${day}">${renderShiftViewCell(shiftViewCellState.members)}</td>`;
         }
         html += "</tr>";
       });
