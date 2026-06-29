@@ -101,6 +101,7 @@ const DEFAULT_STATE = {
   deptFilter: "all",
   tableView: "member",
   tableDeptScopeFilter: "all",
+  tableStatsVisible: true,
   scheduleStartDate: "",
   departments: [
     { id: "d1", name: "門市", startDate: "", endDate: "" },
@@ -346,6 +347,7 @@ function renderStickyTableHeader(dates) {
 function renderStickyHeaderTitleCells() {
   const deptCell = document.querySelector(".table-sticky-cell-dept");
   const personCell = document.querySelector(".table-sticky-cell-person");
+  const statsCell = document.querySelector(".table-sticky-cell-stats");
   if (!deptCell || !personCell) {
     return;
   }
@@ -358,19 +360,29 @@ function renderStickyHeaderTitleCells() {
   if (state.tableView === "shift") {
     deptCell.innerHTML = renderCell("班別");
     personCell.innerHTML = renderCell("需求人數");
+    if (statsCell) {
+      statsCell.innerHTML = "";
+      statsCell.hidden = true;
+    }
     return;
   }
   deptCell.innerHTML = renderCell("單位", "data-open-department-settings");
   personCell.innerHTML = renderCell("人員", "data-open-member-settings");
+  if (statsCell) {
+    statsCell.innerHTML = renderCell("統計");
+    statsCell.hidden = !state.tableStatsVisible;
+  }
 }
 
 function syncStickyHeaderLayout() {
   const deptCell = document.querySelector(".table-sticky-cell-dept");
   const personCell = document.querySelector(".table-sticky-cell-person");
+  const statsCell = document.querySelector(".table-sticky-cell-stats");
   const dayCells = Array.from(document.querySelectorAll(".table-sticky-cell-day"));
   const rootStyle = getComputedStyle(document.documentElement);
   const deptWidth = parseFloat(rootStyle.getPropertyValue("--dept-col-width")) || 72;
   const personWidth = parseFloat(rootStyle.getPropertyValue("--person-col-width")) || 92;
+  const statsWidth = parseFloat(rootStyle.getPropertyValue("--stats-col-width")) || 86;
   const dayWidth = parseFloat(rootStyle.getPropertyValue("--day-col-width")) || 44;
   if (!deptCell || !personCell) {
     return;
@@ -385,6 +397,15 @@ function syncStickyHeaderLayout() {
 
   setWidth(deptCell, deptWidth);
   setWidth(personCell, personWidth);
+  if (statsCell) {
+    if (state.tableView === "member" && state.tableStatsVisible) {
+      statsCell.hidden = false;
+      setWidth(statsCell, statsWidth);
+    } else {
+      statsCell.hidden = true;
+      setWidth(statsCell, 0);
+    }
+  }
   dayCells.forEach((cell) => setWidth(cell, dayWidth));
 }
 
@@ -476,6 +497,7 @@ function syncScheduleColumnWidths() {
   const managerButtonAllowance = isManager() && state.tableView !== "shift" ? 28 : 0;
   let deptWidth = 72;
   let personWidth = 92;
+  const statsWidth = state.tableView === "member" && state.tableStatsVisible ? 86 : 0;
   if (state.tableView === "shift") {
     const visibleShifts = getVisibleShiftRows();
     const shiftContentWidth = visibleShifts.reduce((max, shift) => Math.max(max, measureTextWidth(shift.name, deptStyle)), 0);
@@ -498,11 +520,12 @@ function syncScheduleColumnWidths() {
   }
   const days = getVisibleDates().length;
   const availableDayWidth = tableWrap
-    ? Math.floor((tableWrap.clientWidth - deptWidth - personWidth - 2) / Math.max(days, 1))
+    ? Math.floor((tableWrap.clientWidth - deptWidth - personWidth - statsWidth - 2) / Math.max(days, 1))
     : 0;
   const dayWidth = clamp(availableDayWidth || 44, 44, 56);
   root.style.setProperty("--dept-col-width", `${deptWidth}px`);
   root.style.setProperty("--person-col-width", `${personWidth}px`);
+  root.style.setProperty("--stats-col-width", `${statsWidth}px`);
   root.style.setProperty("--day-col-width", `${dayWidth}px`);
 }
 
@@ -1202,6 +1225,7 @@ function normalizeState(payload) {
   merged.deptFilter = typeof payload.deptFilter === "string" ? payload.deptFilter : merged.deptFilter;
   merged.tableView = payload.tableView === "shift" ? "shift" : "member";
   merged.tableDeptScopeFilter = typeof payload.tableDeptScopeFilter === "string" ? payload.tableDeptScopeFilter : merged.tableDeptScopeFilter;
+  merged.tableStatsVisible = payload.tableStatsVisible !== false;
   merged.scheduleStartDate = toDateObject(payload.scheduleStartDate) ? payload.scheduleStartDate : merged.scheduleStartDate;
   merged.schedule = cleanupScheduleEntries(payload.schedule && typeof payload.schedule === "object" ? payload.schedule : merged.schedule, merged);
 
@@ -1634,13 +1658,6 @@ function memberHasRestInWeek(scheduleMap, memberId, dates, weekIndex, rangeStart
   ));
 }
 
-function countDepartmentRestOnDate(scheduleMap, departmentId, dateString) {
-  return state.members.filter((member) => (
-    getMemberHomeDeptId(member) === departmentId
-    && isRestLeaveId(getWorkScheduleSlot(scheduleMap, member.id, dateString)?.leave)
-  )).length;
-}
-
 function countMemberAssignedShifts(scheduleMap, memberId, dates) {
   return dates.filter((dateString) => hasAnyShiftOnDate(scheduleMap, memberId, dateString)).length;
 }
@@ -1697,56 +1714,6 @@ function markAutoLeave(scheduleMap, member, dateString, leave, preview, reason) 
     requestSource: "manager"
   };
   return true;
-}
-
-function getAutoScheduleDailySurplus(scheduleMap, dateString) {
-  const activeMembers = getActiveMembersForDate(dateString);
-  const availableMembers = activeMembers.filter((member) => {
-    const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
-    return !slot?.shift && !slot?.leave;
-  });
-  const demand = getVisibleAutoScheduleShifts().reduce((sum, shift) => {
-    const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
-    return sum + Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned);
-  }, 0);
-  return availableMembers.length - demand;
-}
-
-function canAutoPlaceRest(scheduleMap, member, dateString, dates, rangeStartDate, allowRestOvertime = false) {
-  if (!isMemberActiveOnDateString(member, dateString)) {
-    return false;
-  }
-  const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
-  if (slot?.leave) {
-    return false;
-  }
-  if (!allowRestOvertime && slot?.shift) {
-    return false;
-  }
-  if (!member.payByDay && memberHasRestInWeek(scheduleMap, member.id, dates, getWeekBucketIndex(dateString, rangeStartDate), rangeStartDate)) {
-    return false;
-  }
-  return true;
-}
-
-function placeAutoRestDay(scheduleMap, member, dateString, restLeave, preview, reason, allowRestOvertime = false) {
-  if (!canAutoPlaceRest(scheduleMap, member, dateString, preview.dates, preview.startDate, allowRestOvertime)) {
-    return false;
-  }
-  markAutoLeave(scheduleMap, member, dateString, restLeave, preview, reason);
-  return true;
-}
-
-function chooseRestDateForMember(scheduleMap, member, dates, restLeave, preview, reason) {
-  const candidates = dates
-    .filter((dateString) => canAutoPlaceRest(scheduleMap, member, dateString, dates, preview.startDate))
-    .map((dateString) => ({
-      dateString,
-      score: getAutoScheduleDailySurplus(scheduleMap, dateString) * 10 - countDepartmentRestOnDate(scheduleMap, getMemberHomeDeptId(member), dateString)
-    }))
-    .sort((a, b) => b.score - a.score || a.dateString.localeCompare(b.dateString));
-  const candidate = candidates[0];
-  return candidate ? placeAutoRestDay(scheduleMap, member, candidate.dateString, restLeave, preview, reason) : false;
 }
 
 function getAutoShiftCandidateMembers(scheduleMap, shift, dateString, dates) {
@@ -1826,13 +1793,7 @@ function buildAutoSchedulePreview() {
     const fixedRegularCount = countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRegularRestLeaveId);
     const totalHolidayTarget = Math.round((activeDays / 56) * 16);
     const restTarget = Math.max(0, totalHolidayTarget - fixedRegularCount);
-    const existingRestCount = countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRestLeaveId);
-    const firstPhaseTarget = Math.round(restTarget / 2);
     preview.memberTargets[member.id] = { activeDays, fixedRegularCount, totalHolidayTarget, restTarget };
-    let firstPhaseNeed = Math.max(0, firstPhaseTarget - existingRestCount);
-    while (firstPhaseNeed > 0 && chooseRestDateForMember(scheduleMap, member, dates, restLeave, preview, "自動預排休息日")) {
-      firstPhaseNeed -= 1;
-    }
   });
 
   dates.forEach((dateString) => {
@@ -1861,27 +1822,6 @@ function buildAutoSchedulePreview() {
       }
     });
 
-    const restCandidates = activeMembers
-      .filter((member) => {
-        const target = preview.memberTargets[member.id]?.restTarget ?? 0;
-        return countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRestLeaveId) < target
-          && canAutoPlaceRest(scheduleMap, member, dateString, dates, startDate);
-      })
-      .sort((a, b) => {
-        if (a.payByDay !== b.payByDay) {
-          return a.payByDay ? -1 : 1;
-        }
-        return countMemberLeaveByPredicate(scheduleMap, a.id, dates, isRestLeaveId) - countMemberLeaveByPredicate(scheduleMap, b.id, dates, isRestLeaveId);
-      });
-    let surplus = Math.max(0, getAutoScheduleDailySurplus(scheduleMap, dateString));
-    restCandidates.forEach((member) => {
-      if (surplus <= 0) {
-        return;
-      }
-      if (placeAutoRestDay(scheduleMap, member, dateString, restLeave, preview, "多餘人力預排休息日")) {
-        surplus -= 1;
-      }
-    });
   });
 
   state.members.forEach((member) => {
@@ -2818,6 +2758,15 @@ function renderTableViewSelect() {
   select.value = state.tableView === "shift" ? "shift" : "member";
 }
 
+function renderTableStatsSelect() {
+  const select = document.getElementById("tableStatsSelect");
+  if (!select) {
+    return;
+  }
+  select.value = state.tableStatsVisible ? "show" : "hide";
+  select.disabled = state.tableView === "shift";
+}
+
 function renderChips(containerId, category, items) {
   const container = document.getElementById(containerId);
   const chips = items.map((item) => {
@@ -2836,6 +2785,7 @@ function renderToolbar() {
   renderDeptFilter();
   renderTableViewSelect();
   renderTableDeptScopeFilter();
+  renderTableStatsSelect();
   const visibleShifts = state.deptFilter === "all"
     ? state.shifts
     : state.shifts.filter((shift) => shiftAllowsDepartment(shift, state.deptFilter));
@@ -2847,6 +2797,43 @@ function renderToolbar() {
 
 function memberLabel(member) {
   return `<div class="member-main">${escapeHtml(member.name)}</div>`;
+}
+
+function getMemberEightWeekStats(member) {
+  return getVisibleDates().reduce((stats, dateString) => {
+    if (!isMemberActiveOnDateString(member, dateString)) {
+      return stats;
+    }
+    const slot = getDisplayedSlot(member.id, dateString);
+    const leave = getItem("leave", slot?.leave);
+    const hasShift = Boolean(slot?.shift);
+    if (leave?.code === "0036") {
+      stats.regular += 1;
+    }
+    if (leave?.code === "0047") {
+      if (hasShift) {
+        stats.restWork += 1;
+      } else {
+        stats.rest += 1;
+      }
+    }
+    if (!slot?.shift && !slot?.leave) {
+      stats.unassigned += 1;
+    }
+    return stats;
+  }, { regular: 0, rest: 0, restWork: 0, unassigned: 0 });
+}
+
+function renderMemberStats(member) {
+  const stats = getMemberEightWeekStats(member);
+  return `
+    <div class="member-stats">
+      <span>例:${stats.regular}</span>
+      <span>休:${stats.rest}</span>
+      <span>休加:${stats.restWork}</span>
+      <span>未排:${stats.unassigned}</span>
+    </div>
+  `;
 }
 
 function memberHasScheduledShiftInDepartment(member, departmentId) {
@@ -3002,6 +2989,9 @@ function renderTable() {
   const today = getTodayDateString();
 
   let html = '<colgroup><col class="col-dept"><col class="col-person">';
+  if (state.tableView === "member" && state.tableStatsVisible) {
+    html += '<col class="col-stats">';
+  }
   visibleDates.forEach(() => {
     html += '<col class="col-day">';
   });
@@ -3028,7 +3018,7 @@ function renderTable() {
     const groups = getVisibleTableGroups();
     let rowIndex = 0;
     if (!groups.length) {
-      html += `<tr><td class="empty-table" colspan="${days + 2}">${state.tableDeptScopeFilter === "all" ? "目前還沒有人員" : "目前週期沒有排到此單位班別的人員"}</td></tr>`;
+      html += `<tr><td class="empty-table" colspan="${days + 2 + (state.tableStatsVisible ? 1 : 0)}">${state.tableDeptScopeFilter === "all" ? "目前還沒有人員" : "目前週期沒有排到此單位班別的人員"}</td></tr>`;
     } else {
       groups.forEach(({ department, members }) => {
         members.forEach((member, index) => {
@@ -3037,6 +3027,9 @@ function renderTable() {
             html += `<td class="dept-col" rowspan="${members.length}">${escapeHtml(department.name)}</td>`;
           }
           html += `<td class="person-col"><div class="member-label">${memberLabel(member)}</div></td>`;
+          if (state.tableStatsVisible) {
+            html += `<td class="stats-col">${renderMemberStats(member)}</td>`;
+          }
           visibleDates.forEach((dateString, dateIndex) => {
             const active = isMemberActiveOnDateString(member, dateString);
             const weekBoundaryClass = getWeekBoundaryClassForDate(dateString, dateIndex, days);
@@ -6661,6 +6654,15 @@ function bindEvents() {
   if (tableDeptScopeFilter) {
     tableDeptScopeFilter.addEventListener("change", (event) => {
       state.tableDeptScopeFilter = event.target.value;
+      renderToolbar();
+      renderTable();
+      queueSave();
+    });
+  }
+  const tableStatsSelect = document.getElementById("tableStatsSelect");
+  if (tableStatsSelect) {
+    tableStatsSelect.addEventListener("change", (event) => {
+      state.tableStatsVisible = event.target.value !== "hide";
       renderToolbar();
       renderTable();
       queueSave();

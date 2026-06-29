@@ -15,6 +15,7 @@
   --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
   --dept-col-width: 72px;
   --person-col-width: 92px;
+  --stats-col-width: 86px;
   --day-col-width: 44px;
 }
 
@@ -640,6 +641,11 @@ button {
   min-width: var(--person-col-width);
 }
 
+.table-sticky-cell-stats {
+  width: var(--stats-col-width);
+  min-width: var(--stats-col-width);
+}
+
 .table-sticky-cell-day {
   flex-direction: column;
   gap: 2px;
@@ -726,6 +732,10 @@ table {
   width: var(--person-col-width);
 }
 
+.col-stats {
+  width: var(--stats-col-width);
+}
+
 .col-day {
   width: var(--day-col-width);
 }
@@ -774,7 +784,8 @@ thead th small {
 }
 
 .dept-col,
-.person-col {
+.person-col,
+.stats-col {
   position: sticky;
   z-index: 4;
   padding: 6px 8px;
@@ -792,15 +803,28 @@ thead th small {
   vertical-align: middle;
 }
 
-.person-col {
+.person-col,
+.stats-col {
   left: var(--dept-col-width);
   min-width: var(--person-col-width);
   width: var(--person-col-width);
   max-width: var(--person-col-width);
 }
 
+.stats-col {
+  left: calc(var(--dept-col-width) + var(--person-col-width));
+  min-width: var(--stats-col-width);
+  width: var(--stats-col-width);
+  max-width: var(--stats-col-width);
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
 thead th.dept-col,
-thead th.person-col {
+thead th.person-col,
+thead th.stats-col {
   background: #fbf8f1;
   z-index: 7;
 }
@@ -816,6 +840,15 @@ thead th.person-col {
   font-weight: 600;
   line-height: 1.35;
   word-break: break-all;
+}
+
+.member-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 4px;
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .cell {
@@ -2447,7 +2480,8 @@ thead th.today,
   }
 
   .dept-col,
-  .person-col {
+  .person-col,
+  .stats-col {
     padding: 4px 6px;
     font-size: 12px;
   }
