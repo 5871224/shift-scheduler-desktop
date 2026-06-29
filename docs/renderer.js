@@ -1728,19 +1728,55 @@ function getDailyShiftNeedOptions(scheduleMap, dateString) {
   });
   return shifts
     .map((shift) => {
-      const remaining = Math.max(0, (Number(shift.requiredStaffCount) || 0) - (assignedCountByShiftId.get(shift.id) || 0));
+      const assignedCount = assignedCountByShiftId.get(shift.id) || 0;
+      const remaining = Math.max(0, (Number(shift.requiredStaffCount) || 0) - assignedCount);
       const shiftDeptIds = Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
       const candidates = remaining > 0
         ? availableMembers.filter((member) => (
           !shiftDeptIds.length || shiftDeptIds.some((deptId) => memberDeptIdsById.get(member.id)?.includes(deptId))
         ))
         : [];
-      return { shift, remaining, candidates };
+      return { shift, assignedCount, remaining, candidates };
     })
     .filter((item) => item.remaining > 0);
 }
 
-function findMaximumFlowAssignments(options) {
+function getShiftDepartmentIds(shift) {
+  return Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
+}
+
+function countMemberRemainingDemandUnits(options, member) {
+  const memberDeptIds = getMemberScheduleDeptIds(member);
+  const units = new Set();
+  options.forEach((option) => {
+    const shiftDeptIds = getShiftDepartmentIds(option.shift);
+    if (!shiftDeptIds.length) {
+      units.add(`shift:${option.shift.id}`);
+      return;
+    }
+    shiftDeptIds.forEach((deptId) => {
+      if (memberDeptIds.includes(deptId)) {
+        units.add(deptId);
+      }
+    });
+  });
+  return units.size;
+}
+
+function getDailyAssignmentCost(scheduleMap, options, option, member, dateString, dates, demandUnitCountByMemberId) {
+  const shiftDeptIds = getShiftDepartmentIds(option.shift);
+  const homeDeptMatch = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(member)) : true;
+  const weekIndex = getWeekBucketIndex(dateString, dates[0] || dateString);
+  const mustWorkThisWeek = !member.payByDay && memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, dates[0] || dateString);
+  const salaryGroup = !member.payByDay && homeDeptMatch ? 0 : !member.payByDay ? 1 : 2;
+  return (demandUnitCountByMemberId.get(member.id) || 0) * 10000
+    + (mustWorkThisWeek ? 0 : 1) * 1000
+    + salaryGroup * 100;
+}
+
+function findMinimumCostFlowAssignments(scheduleMap, options, dateString, dates) {
+  const FIRST_COVERAGE_COST = 0;
+  const EXTRA_COVERAGE_COST = 1000000;
   const members = [];
   const memberIndexById = new Map();
   options.forEach((option) => {
@@ -1751,72 +1787,86 @@ function findMaximumFlowAssignments(options) {
       }
     });
   });
+  const demandUnitCountByMemberId = new Map(members.map((member) => [
+    member.id,
+    countMemberRemainingDemandUnits(options, member)
+  ]));
+  const shiftSlots = [];
+  options.forEach((option) => {
+    for (let index = 0; index < option.remaining; index += 1) {
+      shiftSlots.push({
+        ...option,
+        slotCost: option.assignedCount === 0 && index === 0 ? FIRST_COVERAGE_COST : EXTRA_COVERAGE_COST
+      });
+    }
+  });
   const source = 0;
   const shiftStart = 1;
-  const memberStart = shiftStart + options.length;
+  const memberStart = shiftStart + shiftSlots.length;
   const sink = memberStart + members.length;
   const graph = Array.from({ length: sink + 1 }, () => []);
   const assignmentEdges = [];
-  const addEdge = (from, to, capacity) => {
-    const forward = { to, rev: graph[to].length, capacity };
-    const backward = { to: from, rev: graph[from].length, capacity: 0 };
+  const addEdge = (from, to, capacity, cost = 0) => {
+    const forward = { to, rev: graph[to].length, capacity, cost };
+    const backward = { to: from, rev: graph[from].length, capacity: 0, cost: -cost };
     graph[from].push(forward);
     graph[to].push(backward);
     return forward;
   };
-  options.forEach((option, optionIndex) => {
+  shiftSlots.forEach((option, optionIndex) => {
     const shiftNode = shiftStart + optionIndex;
-    addEdge(source, shiftNode, option.remaining);
+    addEdge(source, shiftNode, 1, option.slotCost);
     option.candidates.forEach((member) => {
       const memberNode = memberStart + memberIndexById.get(member.id);
-      const edge = addEdge(shiftNode, memberNode, 1);
+      const edge = addEdge(
+        shiftNode,
+        memberNode,
+        1,
+        getDailyAssignmentCost(scheduleMap, options, option, member, dateString, dates, demandUnitCountByMemberId)
+      );
       assignmentEdges.push({ edge, shift: option.shift, member });
     });
   });
   members.forEach((member, memberIndex) => {
     addEdge(memberStart + memberIndex, sink, 1);
   });
-  const level = Array(graph.length).fill(-1);
-  const bfs = () => {
-    level.fill(-1);
-    level[source] = 0;
+  const findShortestPath = () => {
+    const distances = Array(graph.length).fill(Infinity);
+    const inQueue = Array(graph.length).fill(false);
+    const previous = Array(graph.length).fill(null);
+    distances[source] = 0;
     const queue = [source];
-    for (let index = 0; index < queue.length; index += 1) {
-      const node = queue[index];
-      graph[node].forEach((edge) => {
-        if (edge.capacity > 0 && level[edge.to] < 0) {
-          level[edge.to] = level[node] + 1;
-          queue.push(edge.to);
+    inQueue[source] = true;
+    while (queue.length) {
+      const node = queue.shift();
+      inQueue[node] = false;
+      graph[node].forEach((edge, edgeIndex) => {
+        const nextCost = distances[node] + edge.cost;
+        if (edge.capacity > 0 && nextCost < distances[edge.to]) {
+          distances[edge.to] = nextCost;
+          previous[edge.to] = { node, edgeIndex };
+          if (!inQueue[edge.to]) {
+            inQueue[edge.to] = true;
+            queue.push(edge.to);
+          }
         }
       });
     }
-    return level[sink] >= 0;
+    return distances[sink] < Infinity ? previous : null;
   };
-  const pointer = Array(graph.length).fill(0);
-  const dfs = (node, pushed) => {
-    if (node === sink) {
-      return pushed;
+  // ponytail: daily graph is tiny; min-cost max-flow keeps full coverage while honoring priority costs.
+  while (true) {
+    const previous = findShortestPath();
+    if (!previous) {
+      break;
     }
-    for (; pointer[node] < graph[node].length; pointer[node] += 1) {
-      const edge = graph[node][pointer[node]];
-      if (edge.capacity <= 0 || level[edge.to] !== level[node] + 1) {
-        continue;
-      }
-      const flow = dfs(edge.to, Math.min(pushed, edge.capacity));
-      if (!flow) {
-        continue;
-      }
-      edge.capacity -= flow;
-      graph[edge.to][edge.rev].capacity += flow;
-      return flow;
-    }
-    return 0;
-  };
-  // ponytail: daily graph is tiny; Dinic gives complete matching without bringing in a dependency.
-  while (bfs()) {
-    pointer.fill(0);
-    while (dfs(source, Number.MAX_SAFE_INTEGER)) {
-      // Keep augmenting this level graph.
+    let cursor = sink;
+    while (cursor !== source) {
+      const step = previous[cursor];
+      const edge = graph[step.node][step.edgeIndex];
+      edge.capacity -= 1;
+      graph[edge.to][edge.rev].capacity += 1;
+      cursor = step.node;
     }
   }
   return assignmentEdges
@@ -1831,7 +1881,7 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, preview) {
       || b.remaining - a.remaining
       || a.shift.name.localeCompare(b.shift.name)
     ));
-  const assignments = findMaximumFlowAssignments(options);
+  const assignments = findMinimumCostFlowAssignments(scheduleMap, options, dateString, preview.dates || [dateString]);
   assignments.forEach(({ shift, member }) => {
     const slot = ensureWorkScheduleSlot(scheduleMap, member.id, dateString);
     if (slot) {

@@ -8,7 +8,9 @@ function memberCanWorkShift(memberDeptIds, shiftDeptIds) {
   return !shiftDeptIds.length || shiftDeptIds.some((deptId) => memberDeptIds.includes(deptId));
 }
 
-function findMaximumFlowAssignments(options) {
+function findMinimumCostFlowAssignments(options) {
+  const FIRST_COVERAGE_COST = 0;
+  const EXTRA_COVERAGE_COST = 1000000;
   const members = [];
   const memberIndexById = new Map();
   options.forEach((option) => {
@@ -19,65 +21,78 @@ function findMaximumFlowAssignments(options) {
       }
     });
   });
+  const shiftSlots = [];
+  options.forEach((option) => {
+    for (let index = 0; index < option.remaining; index += 1) {
+      shiftSlots.push({
+        ...option,
+        slotCost: option.assignedCount === 0 && index === 0 ? FIRST_COVERAGE_COST : EXTRA_COVERAGE_COST
+      });
+    }
+  });
   const source = 0;
   const shiftStart = 1;
-  const memberStart = shiftStart + options.length;
+  const memberStart = shiftStart + shiftSlots.length;
   const sink = memberStart + members.length;
   const graph = Array.from({ length: sink + 1 }, () => []);
   const assignmentEdges = [];
-  const addEdge = (from, to, capacity) => {
-    const forward = { to, rev: graph[to].length, capacity };
-    const backward = { to: from, rev: graph[from].length, capacity: 0 };
+  const addEdge = (from, to, capacity, cost = 0) => {
+    const forward = { to, rev: graph[to].length, capacity, cost };
+    const backward = { to: from, rev: graph[from].length, capacity: 0, cost: -cost };
     graph[from].push(forward);
     graph[to].push(backward);
     return forward;
   };
-  options.forEach((option, optionIndex) => {
+  shiftSlots.forEach((option, optionIndex) => {
     const shiftNode = shiftStart + optionIndex;
-    addEdge(source, shiftNode, option.remaining);
+    addEdge(source, shiftNode, 1, option.slotCost);
     option.candidates.forEach((member) => {
       const memberNode = memberStart + memberIndexById.get(member.id);
-      const edge = addEdge(shiftNode, memberNode, 1);
+      const edge = addEdge(shiftNode, memberNode, 1, Number(member.cost) || 0);
       assignmentEdges.push({ edge, shift: option.shift, member });
     });
   });
   members.forEach((member, memberIndex) => {
     addEdge(memberStart + memberIndex, sink, 1);
   });
-  const level = Array(graph.length).fill(-1);
-  const bfs = () => {
-    level.fill(-1);
-    level[source] = 0;
+  const findShortestPath = () => {
+    const distances = Array(graph.length).fill(Infinity);
+    const inQueue = Array(graph.length).fill(false);
+    const previous = Array(graph.length).fill(null);
+    distances[source] = 0;
     const queue = [source];
-    for (let index = 0; index < queue.length; index += 1) {
-      const node = queue[index];
-      graph[node].forEach((edge) => {
-        if (edge.capacity > 0 && level[edge.to] < 0) {
-          level[edge.to] = level[node] + 1;
-          queue.push(edge.to);
+    inQueue[source] = true;
+    while (queue.length) {
+      const node = queue.shift();
+      inQueue[node] = false;
+      graph[node].forEach((edge, edgeIndex) => {
+        const nextCost = distances[node] + edge.cost;
+        if (edge.capacity > 0 && nextCost < distances[edge.to]) {
+          distances[edge.to] = nextCost;
+          previous[edge.to] = { node, edgeIndex };
+          if (!inQueue[edge.to]) {
+            inQueue[edge.to] = true;
+            queue.push(edge.to);
+          }
         }
       });
     }
-    return level[sink] >= 0;
+    return distances[sink] < Infinity ? previous : null;
   };
-  const pointer = Array(graph.length).fill(0);
-  const dfs = (node, pushed) => {
-    if (node === sink) return pushed;
-    for (; pointer[node] < graph[node].length; pointer[node] += 1) {
-      const edge = graph[node][pointer[node]];
-      if (edge.capacity <= 0 || level[edge.to] !== level[node] + 1) continue;
-      const flow = dfs(edge.to, Math.min(pushed, edge.capacity));
-      if (!flow) continue;
-      edge.capacity -= flow;
-      graph[edge.to][edge.rev].capacity += flow;
-      return flow;
+  // ponytail: mirrors renderer.js daily min-cost flow without browser state.
+  while (true) {
+    const previous = findShortestPath();
+    if (!previous) {
+      break;
     }
-    return 0;
-  };
-  // ponytail: mirrors renderer.js daily max-flow without browser state.
-  while (bfs()) {
-    pointer.fill(0);
-    while (dfs(source, Number.MAX_SAFE_INTEGER)) {}
+    let cursor = sink;
+    while (cursor !== source) {
+      const step = previous[cursor];
+      const edge = graph[step.node][step.edgeIndex];
+      edge.capacity -= 1;
+      graph[edge.to][edge.rev].capacity += 1;
+      cursor = step.node;
+    }
   }
   return assignmentEdges
     .filter(({ edge }) => edge.capacity === 0)
@@ -95,7 +110,7 @@ function chooseDailyAssignments(rawOptions) {
       || b.remaining - a.remaining
       || a.shift.localeCompare(b.shift)
     ));
-  return findMaximumFlowAssignments(options);
+  return findMinimumCostFlowAssignments(options);
 }
 
 assert.equal(holidayTarget(56), 16);
@@ -120,12 +135,22 @@ assert.deepEqual(chooseDailyAssignments([
   { shift: "second", member: "b" }
 ]);
 assert.deepEqual(chooseDailyAssignments([
-  { shift: "critical_two", remaining: 2, candidates: [{ id: "a" }, { id: "b" }] },
-  { shift: "open", remaining: 1, candidates: [{ id: "a" }, { id: "b" }, { id: "c" }] }
+  { shift: "need_two", assignedCount: 0, remaining: 2, candidates: [{ id: "a" }, { id: "b" }] },
+  { shift: "open", assignedCount: 0, remaining: 1, candidates: [{ id: "a" }, { id: "b" }] }
 ]), [
-  { shift: "critical_two", member: "a" },
-  { shift: "critical_two", member: "b" },
-  { shift: "open", member: "c" }
+  { shift: "need_two", member: "a" },
+  { shift: "open", member: "b" }
+]);
+assert.deepEqual(chooseDailyAssignments([
+  { shift: "covered_extra", assignedCount: 1, remaining: 1, candidates: [{ id: "a" }] },
+  { shift: "uncovered", assignedCount: 0, remaining: 1, candidates: [{ id: "a" }] }
+]), [
+  { shift: "uncovered", member: "a" }
+]);
+assert.deepEqual(chooseDailyAssignments([
+  { shift: "unit", assignedCount: 0, remaining: 1, candidates: [{ id: "higher", cost: 10 }, { id: "lower", cost: 1 }] }
+]), [
+  { shift: "unit", member: "lower" }
 ]);
 assert.deepEqual(chooseDailyAssignments([
   { shift: "impossible", remaining: 1, candidates: [] },
