@@ -1,10 +1,13 @@
 {
   "name": "shift-scheduler-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Codex",
   "scripts": {
     "web": "node src/web-server.js",
     "web:check": "node scripts/check-public-supabase.js",
     "web:publish": "node scripts/publish-static-web.js"
+  },
+  "dependencies": {
+    "@supabase/server": "^1.2.0"
   }
 }

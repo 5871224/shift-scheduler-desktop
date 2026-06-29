@@ -18,6 +18,9 @@
   let currentProfile = null;
 
   function makeFileName(prefix, payload, extension) {
+    if (payload.viewStartDate && payload.viewEndDate) {
+      return `${prefix}_${payload.viewStartDate}_${payload.viewEndDate}.${extension}`;
+    }
     return `${prefix}_${payload.year}_${String(payload.month + 1).padStart(2, "0")}.${extension}`;
   }
 

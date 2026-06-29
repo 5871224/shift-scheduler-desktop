@@ -30,6 +30,41 @@
     return addDays(startOfWeek(date, weekStart), 6);
   }
 
+  function parseIsoDate(dateString) {
+    const [year, month, day] = String(dateString || "").split("-").map(Number);
+    if (!year || !month || !day) {
+      return null;
+    }
+    return createDate(year, month - 1, day);
+  }
+
+  function buildCalendarWeeksForRange(rangeStartDate, rangeEndDate, weekStart = DEFAULT_WEEK_START) {
+    const start = parseIsoDate(rangeStartDate);
+    const end = parseIsoDate(rangeEndDate);
+    if (!start || !end || start > end) {
+      return [];
+    }
+    const alignedStart = startOfWeek(start, weekStart);
+    const alignedEnd = endOfWeek(end, weekStart);
+    const weeks = [];
+    let cursor = new Date(alignedStart);
+
+    while (cursor <= alignedEnd) {
+      const dates = [];
+      for (let index = 0; index < 7; index += 1) {
+        dates.push(toDateString(addDays(cursor, index)));
+      }
+      weeks.push({
+        startDate: dates[0],
+        endDate: dates[6],
+        dates
+      });
+      cursor = addDays(cursor, 7);
+    }
+
+    return weeks;
+  }
+
   function buildCalendarWeeks(year, month, weekStart = DEFAULT_WEEK_START) {
     const monthStart = createDate(year, month, 1);
     const monthEnd = createDate(year, month + 1, 0);
@@ -151,7 +186,9 @@
   }
 
   function checkRestCompliance(config) {
-    const weeks = buildCalendarWeeks(config.year, config.month, config.weekStart);
+    const weeks = config.viewStartDate && config.viewEndDate
+      ? buildCalendarWeeksForRange(config.viewStartDate, config.viewEndDate, config.weekStart)
+      : buildCalendarWeeks(config.year, config.month, config.weekStart);
     const issues = [];
     const maxConsecutiveWorkDays = Math.max(1, Number(config.maxConsecutiveWorkDays) || 6);
     const reportStartDate = config.reportStartDate || weeks[0]?.startDate || "";
@@ -248,6 +285,7 @@
     REST_DAY_CODE,
     DEFAULT_WEEK_START,
     buildCalendarWeeks,
+    buildCalendarWeeksForRange,
     checkRestCompliance
   };
 

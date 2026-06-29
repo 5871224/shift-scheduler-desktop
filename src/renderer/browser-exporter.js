@@ -126,8 +126,41 @@
     return names.join("\n");
   }
 
+  function enumerateIsoDates(startDate, endDate) {
+    const [startYear, startMonth, startDay] = String(startDate || "").split("-").map(Number);
+    const [endYear, endMonth, endDay] = String(endDate || "").split("-").map(Number);
+    if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+      return [];
+    }
+    const dates = [];
+    const cursor = new Date(startYear, startMonth - 1, startDay);
+    const end = new Date(endYear, endMonth - 1, endDay);
+    while (cursor <= end) {
+      dates.push({
+        year: cursor.getFullYear(),
+        month: cursor.getMonth(),
+        day: cursor.getDate(),
+        iso: formatIsoDate(cursor.getFullYear(), cursor.getMonth(), cursor.getDate())
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return dates;
+  }
+
+  function resolveExportDates(payload) {
+    if (payload.viewStartDate && payload.viewEndDate) {
+      return enumerateIsoDates(payload.viewStartDate, payload.viewEndDate);
+    }
+    const { year, month } = payload;
+    const dates = [];
+    for (let day = 1; day <= daysInMonth(year, month); day += 1) {
+      dates.push({ year, month, day, iso: formatIsoDate(year, month, day) });
+    }
+    return dates;
+  }
+
   function buildSapLeaveCsvContent(payload) {
-    const { state, year, month } = payload;
+    const { state } = payload;
     const leaveMap = getItemMap(state.leaves);
     const sapCodeMap = new Map([
       ["休息日", "REST"],
@@ -140,18 +173,18 @@
       if (member.payByDay) {
         continue;
       }
-      for (let day = 1; day <= daysInMonth(year, month); day += 1) {
-        if (!isMemberActiveOnDate(member, year, month, day)) {
+      for (const date of resolveExportDates(payload)) {
+        if (!isMemberActiveOnDate(member, date.year, date.month, date.day)) {
           continue;
         }
-        const slot = state.schedule[getScheduleKey(member.id, year, month, day)];
+        const slot = state.schedule[getScheduleKey(member.id, date.year, date.month, date.day)];
         const leave = leaveMap.get(slot?.leave);
         const sapCode = sapCodeMap.get(leave?.name);
         if (!sapCode) {
           continue;
         }
-        const date = formatYmd(year, month, day);
-        rows.push([member.name, member.code, date, date, sapCode]);
+        const ymd = formatYmd(date.year, date.month, date.day);
+        rows.push([member.name, member.code, ymd, ymd, sapCode]);
       }
     }
 
@@ -160,23 +193,23 @@
   }
 
   function getOvertimeExportRows(payload) {
-    const { state, year, month } = payload;
+    const { state } = payload;
     const overtimeMap = getItemMap(state.overtime);
     const rows = [];
 
     for (const member of state.members) {
-      for (let day = 1; day <= daysInMonth(year, month); day += 1) {
-        if (!isMemberActiveOnDate(member, year, month, day)) {
+      for (const date of resolveExportDates(payload)) {
+        if (!isMemberActiveOnDate(member, date.year, date.month, date.day)) {
           continue;
         }
-        const slot = state.schedule[getScheduleKey(member.id, year, month, day)];
+        const slot = state.schedule[getScheduleKey(member.id, date.year, date.month, date.day)];
         const overtime = slot?.overtimeMeta || overtimeMap.get(slot?.overtime);
         if (!overtime) {
           continue;
         }
         rows.push([
           member.code,
-          formatYmd(year, month, day),
+          formatYmd(date.year, date.month, date.day),
           formatCompactTime(overtime.startTime),
           formatCompactTime(overtime.endTime),
           0,
@@ -195,7 +228,7 @@
   }
 
   function getLeaveExportRows(payload) {
-    const { state, year, month } = payload;
+    const { state } = payload;
     const leaveMap = getItemMap(state.leaves);
     const excludedLeaveCodes = new Set(["0036", "0047"]);
     const rows = [];
@@ -209,11 +242,11 @@
       if (hiddenDepartmentIds.has(member.deptId)) {
         continue;
       }
-      for (let day = 1; day <= daysInMonth(year, month); day += 1) {
-        if (!isMemberActiveOnDate(member, year, month, day)) {
+      for (const date of resolveExportDates(payload)) {
+        if (!isMemberActiveOnDate(member, date.year, date.month, date.day)) {
           continue;
         }
-        const slot = state.schedule[getScheduleKey(member.id, year, month, day)];
+        const slot = state.schedule[getScheduleKey(member.id, date.year, date.month, date.day)];
         const leave = leaveMap.get(slot?.leave);
         if (!leave || excludedLeaveCodes.has(leave.code)) {
           continue;
@@ -222,8 +255,8 @@
         const allDay = leaveMeta?.allDay !== false;
         rows.push([
           member.code,
-          formatYmd(year, month, day),
-          formatYmd(year, month, day),
+          formatYmd(date.year, date.month, date.day),
+          formatYmd(date.year, date.month, date.day),
           allDay ? "" : formatCompactTime(leaveMeta?.startTime || ""),
           allDay ? "" : formatCompactTime(leaveMeta?.endTime || ""),
           leave.code || "",
@@ -258,19 +291,22 @@
     const sheet = workbook.addWorksheet("排班表", {
       views: [{ state: "frozen", xSplit: 2, ySplit: 2 }]
     });
-    const { state, year, month } = payload;
+    const { state } = payload;
     const maps = {
       departments: getItemMap(state.departments),
       shifts: getItemMap(state.shifts),
       leaves: getItemMap(state.leaves),
       overtime: getItemMap(state.overtime)
     };
-    const days = daysInMonth(year, month);
+    const exportDates = resolveExportDates(payload);
     const weekLabels = ["日", "一", "二", "三", "四", "五", "六"];
+    const titleText = payload.viewStartDate && payload.viewEndDate
+      ? `${payload.viewStartDate.replaceAll("-", "/")} - ${payload.viewEndDate.replaceAll("-", "/")}`
+      : `${payload.year} 年 ${payload.month + 1} 月`;
 
-    sheet.mergeCells(1, 1, 1, days + 2);
+    sheet.mergeCells(1, 1, 1, exportDates.length + 2);
     const titleCell = sheet.getCell(1, 1);
-    titleCell.value = `${year} 年 ${month + 1} 月`;
+    titleCell.value = titleText;
     titleCell.font = { name: "Microsoft JhengHei UI", bold: true, size: 16 };
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
     titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
@@ -283,10 +319,11 @@
     headerRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8F6F0" } };
     headerRow.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8F6F0" } };
 
-    for (let day = 1; day <= days; day += 1) {
-      const weekday = new Date(year, month, day).getDay();
-      const cell = sheet.getCell(2, day + 2);
-      cell.value = `${day}\n${weekLabels[weekday]}`;
+    for (let index = 0; index < exportDates.length; index += 1) {
+      const date = exportDates[index];
+      const weekday = new Date(date.year, date.month, date.day).getDay();
+      const cell = sheet.getCell(2, index + 3);
+      cell.value = `${date.month + 1}/${date.day}\n${weekLabels[weekday]}`;
       cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       cell.font = {
         bold: true,
@@ -308,9 +345,10 @@
         row.getCell(1).alignment = { vertical: "middle", wrapText: true };
         row.getCell(2).alignment = { vertical: "middle", wrapText: true };
 
-        for (let day = 1; day <= days; day += 1) {
-          const cell = row.getCell(day + 2);
-          if (!isMemberActiveOnDate(member, year, month, day)) {
+        for (let index = 0; index < exportDates.length; index += 1) {
+          const date = exportDates[index];
+          const cell = row.getCell(index + 3);
+          if (!isMemberActiveOnDate(member, date.year, date.month, date.day)) {
             cell.value = "";
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF9B9B9B" } };
             cell.font = { color: { argb: "FFFFFFFF" }, size: 10 };
@@ -318,7 +356,7 @@
             continue;
           }
 
-          const slot = state.schedule[getScheduleKey(member.id, year, month, day)];
+          const slot = state.schedule[getScheduleKey(member.id, date.year, date.month, date.day)];
           cell.value = getScheduleCellText(slot, maps);
           cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
 
@@ -352,7 +390,7 @@
     sheet.columns = [
       { width: 18 },
       { width: 16 },
-      ...Array.from({ length: days }, () => ({ width: 12 }))
+      ...Array.from({ length: exportDates.length }, () => ({ width: 12 }))
     ];
     applySheetBorder(sheet);
     return workbook;
