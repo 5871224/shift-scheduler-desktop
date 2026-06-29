@@ -88,9 +88,7 @@ function chooseDailyAssignments(rawOptions) {
   const options = rawOptions
     .map((option) => ({
       ...option,
-      candidates: option.candidates
-        .map((candidate) => ({ ...candidate }))
-        .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id))
+      candidates: option.candidates.map((candidate) => ({ ...candidate }))
     }))
     .sort((a, b) => (
       a.candidates.length - b.candidates.length
@@ -108,27 +106,22 @@ assert.equal(memberCanWorkShift(["d2"], ["d1", "d2"]), true);
 assert.equal(memberCanWorkShift(["d3"], ["d1", "d2"]), false);
 assert.equal(memberCanWorkShift(["d3"], []), true);
 assert.deepEqual(chooseDailyAssignments([
-  { shift: "critical", remaining: 1, candidates: [{ id: "only", priority: 5 }] },
-  { shift: "open", remaining: 1, candidates: [{ id: "only", priority: 5 }, { id: "flex", priority: 1 }] }
+  { shift: "critical", remaining: 1, candidates: [{ id: "only" }] },
+  { shift: "open", remaining: 1, candidates: [{ id: "only" }, { id: "flex" }] }
 ]), [
   { shift: "critical", member: "only" },
   { shift: "open", member: "flex" }
 ]);
 assert.deepEqual(chooseDailyAssignments([
-  { shift: "unit", remaining: 1, candidates: [{ id: "many_units", priority: 10 }, { id: "few_units", priority: 1 }] }
-]), [
-  { shift: "unit", member: "few_units" }
-]);
-assert.deepEqual(chooseDailyAssignments([
-  { shift: "first", remaining: 1, candidates: [{ id: "a", priority: 1 }] },
-  { shift: "second", remaining: 1, candidates: [{ id: "a", priority: 1 }, { id: "b", priority: 2 }] }
+  { shift: "first", remaining: 1, candidates: [{ id: "a" }] },
+  { shift: "second", remaining: 1, candidates: [{ id: "a" }, { id: "b" }] }
 ]), [
   { shift: "first", member: "a" },
   { shift: "second", member: "b" }
 ]);
 assert.deepEqual(chooseDailyAssignments([
-  { shift: "critical_two", remaining: 2, candidates: [{ id: "a", priority: 1 }, { id: "b", priority: 2 }] },
-  { shift: "open", remaining: 1, candidates: [{ id: "a", priority: 1 }, { id: "b", priority: 2 }, { id: "c", priority: 3 }] }
+  { shift: "critical_two", remaining: 2, candidates: [{ id: "a" }, { id: "b" }] },
+  { shift: "open", remaining: 1, candidates: [{ id: "a" }, { id: "b" }, { id: "c" }] }
 ]), [
   { shift: "critical_two", member: "a" },
   { shift: "critical_two", member: "b" },
@@ -136,7 +129,7 @@ assert.deepEqual(chooseDailyAssignments([
 ]);
 assert.deepEqual(chooseDailyAssignments([
   { shift: "impossible", remaining: 1, candidates: [] },
-  { shift: "fillable", remaining: 1, candidates: [{ id: "home_member", priority: 0 }] }
+  { shift: "fillable", remaining: 1, candidates: [{ id: "home_member" }] }
 ]), [
   { shift: "fillable", member: "home_member" }
 ]);
