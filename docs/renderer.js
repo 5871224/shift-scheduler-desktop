@@ -1749,92 +1749,93 @@ function getAutoShiftCandidateMembers(scheduleMap, shift, dateString, dates) {
     const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
     return !slot?.shift && !slot?.leave;
   }).sort((a, b) => (
-    getAutoShiftCandidateScore(scheduleMap, shift, a, dateString, dates)
-    - getAutoShiftCandidateScore(scheduleMap, shift, b, dateString, dates)
+    getAutoShiftCandidatePriority(scheduleMap, shift, a, dateString, dates)
+    - getAutoShiftCandidatePriority(scheduleMap, shift, b, dateString, dates)
   ));
 }
 
-function getAutoShiftCandidateScore(scheduleMap, shift, member, dateString, dates) {
+function getRemainingShiftDemand(scheduleMap, shift, dateString) {
+  const assigned = getActiveMembersForDate(dateString)
+    .filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id)
+    .length;
+  return Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned);
+}
+
+function getMemberRemainingDemandUnitCount(scheduleMap, member, dateString) {
+  const units = new Set();
+  getVisibleAutoScheduleShifts().forEach((shift) => {
+    if (!memberCanWorkShift(member, shift) || getRemainingShiftDemand(scheduleMap, shift, dateString) <= 0) {
+      return;
+    }
+    const shiftDeptIds = Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
+    if (!shiftDeptIds.length) {
+      units.add(`shift:${shift.id}`);
+      return;
+    }
+    shiftDeptIds.forEach((deptId) => {
+      if (memberCanScheduleDepartment(member, deptId)) {
+        units.add(deptId);
+      }
+    });
+  });
+  return units.size;
+}
+
+function getAutoShiftCandidatePriority(scheduleMap, shift, member, dateString, dates) {
   const shiftDeptIds = Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
   const homeDeptMatch = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(member)) : true;
-  const group = homeDeptMatch && !member.payByDay ? 0 : !member.payByDay ? 1 : homeDeptMatch ? 2 : 3;
   const weekIndex = getWeekBucketIndex(dateString, dates[0] || dateString);
   const mustWorkThisWeek = !member.payByDay && memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, dates[0] || dateString);
-  return (mustWorkThisWeek ? -10000 : 0)
-    + group * 1000
+  const salaryGroup = !member.payByDay && homeDeptMatch ? 0 : !member.payByDay ? 1 : 2;
+  return getMemberRemainingDemandUnitCount(scheduleMap, member, dateString) * 100000
+    + (mustWorkThisWeek ? 0 : 1) * 10000
+    + salaryGroup * 1000
     + countMemberAssignedShifts(scheduleMap, member.id, dates) * 20
     + countConsecutiveWorkBefore(scheduleMap, member.id, dateString) * 3
     + countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRestLeaveId) * 10;
 }
 
-function getDailyShiftNeedSlots(scheduleMap, dateString, dates) {
-  const activeMembers = getActiveMembersForDate(dateString);
+function getDailyShiftNeedOptions(scheduleMap, dateString, dates) {
   return getVisibleAutoScheduleShifts()
     .map((shift) => {
-      const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
-      const remaining = Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned);
+      const remaining = getRemainingShiftDemand(scheduleMap, shift, dateString);
       const candidates = getAutoShiftCandidateMembers(scheduleMap, shift, dateString, dates);
       return { shift, remaining, candidates };
     })
-    .sort((a, b) => a.candidates.length - b.candidates.length || a.shift.name.localeCompare(b.shift.name))
-    .flatMap(({ shift, remaining, candidates }) => (
-      Array.from({ length: remaining }, () => ({ shift, candidateCount: candidates.length }))
-    ))
-    .sort((a, b) => a.candidateCount - b.candidateCount || a.shift.name.localeCompare(b.shift.name));
+    .filter((item) => item.remaining > 0);
 }
 
 function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) {
-  const slots = getDailyShiftNeedSlots(scheduleMap, dateString, dates)
-    .map((slot, index) => ({
-      ...slot,
-      index,
-      candidates: getAutoShiftCandidateMembers(scheduleMap, slot.shift, dateString, dates)
-    }));
-  if (!slots.length) {
-    return [];
+  const assignments = [];
+  let guard = 0;
+  // ponytail: re-evaluate every fill; this is faster and follows the user's deterministic priority rules.
+  while (guard < 200) {
+    guard += 1;
+    const options = getDailyShiftNeedOptions(scheduleMap, dateString, dates)
+      .filter((option) => option.candidates.length > 0);
+    if (!options.length) {
+      break;
+    }
+    const critical = options.filter((option) => option.candidates.length <= option.remaining);
+    const pool = critical.length ? critical : options;
+    pool.sort((a, b) => (
+      a.candidates.length - b.candidates.length
+      || b.remaining - a.remaining
+      || a.shift.name.localeCompare(b.shift.name)
+    ));
+    const target = pool[0];
+    const member = target.candidates[0];
+    const slot = ensureWorkScheduleSlot(scheduleMap, member.id, dateString);
+    if (!slot) {
+      break;
+    }
+    slot.shift = target.shift.id;
+    assignments.push({ shift: target.shift, member });
   }
-  const slotToMember = new Map();
-  const memberToSlotIndex = new Map();
-  const maxExchangeDepth = 6;
-  // ponytail: limited augmenting-path exchange fills holes fast; upgrade path is a worker-backed optimizer if needed.
-  const tryFillSlot = (slotIndex, visitedMemberIds, depth = 0) => {
-    if (depth > maxExchangeDepth) {
-      return false;
-    }
-    const slot = slots[slotIndex];
-    for (const member of slot.candidates) {
-      if (visitedMemberIds.has(member.id)) {
-        continue;
-      }
-      visitedMemberIds.add(member.id);
-      const occupiedSlotIndex = memberToSlotIndex.get(member.id);
-      if (occupiedSlotIndex === undefined || tryFillSlot(occupiedSlotIndex, visitedMemberIds, depth + 1)) {
-        slotToMember.set(slotIndex, member);
-        memberToSlotIndex.set(member.id, slotIndex);
-        return true;
-      }
-    }
-    return false;
-  };
-  slots.forEach((slot) => {
-    if (!slotToMember.has(slot.index)) {
-      tryFillSlot(slot.index, new Set());
-    }
-  });
-  const assignments = Array.from(slotToMember.entries()).map(([slotIndex, member]) => ({
-    shift: slots[slotIndex].shift,
-    member
-  }));
-  const missing = slots.length - assignments.length;
-  if (missing > 0) {
-    const testMap = deepClone(scheduleMap);
-    assignments.forEach(({ shift, member }) => {
-      const slot = ensureWorkScheduleSlot(testMap, member.id, dateString);
-      if (slot) {
-        slot.shift = shift.id;
-      }
-    });
-    const detailText = getRemainingDailyShiftDemandDetails(testMap, dateString)
+  const missingDetails = getRemainingDailyShiftDemandDetails(scheduleMap, dateString);
+  if (missingDetails.length) {
+    const missing = missingDetails.reduce((sum, item) => sum + item.missing, 0);
+    const detailText = missingDetails
       .map(({ shift, missing: missingCount }) => `${shift.name}缺${missingCount}`)
       .join("、");
     preview.warnings.push(`${dateString} 仍缺 ${missing} 個班別人力${detailText ? `（${detailText}）` : ""}`);
@@ -1843,21 +1844,16 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) 
 }
 
 function getRemainingDailyShiftDemand(scheduleMap, dateString) {
-  const activeMembers = getActiveMembersForDate(dateString);
-  return getVisibleAutoScheduleShifts().reduce((sum, shift) => {
-    const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
-    return sum + Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned);
-  }, 0);
+  return getVisibleAutoScheduleShifts()
+    .reduce((sum, shift) => sum + getRemainingShiftDemand(scheduleMap, shift, dateString), 0);
 }
 
 function getRemainingDailyShiftDemandDetails(scheduleMap, dateString) {
-  const activeMembers = getActiveMembersForDate(dateString);
   return getVisibleAutoScheduleShifts()
     .map((shift) => {
-      const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
       return {
         shift,
-        missing: Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned)
+        missing: getRemainingShiftDemand(scheduleMap, shift, dateString)
       };
     })
     .filter((item) => item.missing > 0);
