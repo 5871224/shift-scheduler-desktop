@@ -370,7 +370,7 @@ function syncStickyHeaderLayout() {
   const rootStyle = getComputedStyle(document.documentElement);
   const deptWidth = parseFloat(rootStyle.getPropertyValue("--dept-col-width")) || 72;
   const personWidth = parseFloat(rootStyle.getPropertyValue("--person-col-width")) || 92;
-  const dayWidth = parseFloat(rootStyle.getPropertyValue("--day-col-width")) || 36;
+  const dayWidth = parseFloat(rootStyle.getPropertyValue("--day-col-width")) || 44;
   if (!deptCell || !personCell) {
     return;
   }
@@ -499,7 +499,7 @@ function syncScheduleColumnWidths() {
   const availableDayWidth = tableWrap
     ? Math.floor((tableWrap.clientWidth - deptWidth - personWidth - 2) / Math.max(days, 1))
     : 0;
-  const dayWidth = clamp(availableDayWidth || 37, 33, 50);
+  const dayWidth = clamp(availableDayWidth || 44, 44, 56);
   root.style.setProperty("--dept-col-width", `${deptWidth}px`);
   root.style.setProperty("--person-col-width", `${personWidth}px`);
   root.style.setProperty("--day-col-width", `${dayWidth}px`);

@@ -15,7 +15,7 @@
   --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
   --dept-col-width: 72px;
   --person-col-width: 92px;
-  --day-col-width: 36px;
+  --day-col-width: 44px;
 }
 
 * {
@@ -954,7 +954,8 @@ thead th.today,
   line-height: 1.25;
   text-align: center;
   overflow: hidden;
-  word-break: break-all;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 @keyframes pending-shimmer-sweep {
