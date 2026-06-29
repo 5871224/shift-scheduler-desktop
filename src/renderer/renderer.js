@@ -364,12 +364,14 @@ function renderStickyHeaderTitleCells() {
 }
 
 function syncStickyHeaderLayout() {
-  const table = document.getElementById("mainTable");
   const deptCell = document.querySelector(".table-sticky-cell-dept");
   const personCell = document.querySelector(".table-sticky-cell-person");
   const dayCells = Array.from(document.querySelectorAll(".table-sticky-cell-day"));
-  const headerCells = Array.from(table?.querySelectorAll("thead th") || []);
-  if (!deptCell || !personCell || headerCells.length < 2) {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const deptWidth = parseFloat(rootStyle.getPropertyValue("--dept-col-width")) || 72;
+  const personWidth = parseFloat(rootStyle.getPropertyValue("--person-col-width")) || 92;
+  const dayWidth = parseFloat(rootStyle.getPropertyValue("--day-col-width")) || 36;
+  if (!deptCell || !personCell) {
     return;
   }
 
@@ -380,15 +382,9 @@ function syncStickyHeaderLayout() {
     element.style.maxWidth = px;
   };
 
-  setWidth(deptCell, headerCells[0].getBoundingClientRect().width);
-  setWidth(personCell, headerCells[1].getBoundingClientRect().width);
-  dayCells.forEach((cell, index) => {
-    const headerCell = headerCells[index + 2];
-    if (!headerCell) {
-      return;
-    }
-    setWidth(cell, headerCell.getBoundingClientRect().width);
-  });
+  setWidth(deptCell, deptWidth);
+  setWidth(personCell, personWidth);
+  dayCells.forEach((cell) => setWidth(cell, dayWidth));
 }
 
 function syncStickyHeaderScroll() {
