@@ -851,6 +851,12 @@ thead th.stats-col {
   white-space: nowrap;
 }
 
+.pay-daily-row .person-col,
+.pay-daily-row .stats-col,
+.pay-daily-row .cell {
+  background: #fff4d6;
+}
+
 .cell {
   min-width: var(--day-col-width);
   width: var(--day-col-width);
@@ -893,6 +899,10 @@ thead th.today,
 .cell.auto-schedule-preview {
   background: #dff3d7;
   box-shadow: inset 0 0 0 2px #68a84f;
+}
+
+.pay-daily-row .cell.auto-schedule-preview {
+  background: #dff3d7;
 }
 
 .cell.inactive-cell {

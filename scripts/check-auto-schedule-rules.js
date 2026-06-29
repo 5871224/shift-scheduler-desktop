@@ -142,6 +142,14 @@ assert.deepEqual(chooseDailyAssignments([
   { shift: "open", member: "b" }
 ]);
 assert.deepEqual(chooseDailyAssignments([
+  { shift: "need_two", assignedCount: 0, remaining: 2, candidates: [{ id: "a" }, { id: "b" }] },
+  { shift: "open", assignedCount: 0, remaining: 1, candidates: [{ id: "a" }, { id: "b" }, { id: "c" }] }
+]), [
+  { shift: "need_two", member: "a" },
+  { shift: "need_two", member: "b" },
+  { shift: "open", member: "c" }
+]);
+assert.deepEqual(chooseDailyAssignments([
   { shift: "covered_extra", assignedCount: 1, remaining: 1, candidates: [{ id: "a" }] },
   { shift: "uncovered", assignedCount: 0, remaining: 1, candidates: [{ id: "a" }] }
 ]), [

@@ -1745,33 +1745,24 @@ function getShiftDepartmentIds(shift) {
   return Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
 }
 
-function countMemberRemainingDemandUnits(options, member) {
-  const memberDeptIds = getMemberScheduleDeptIds(member);
-  const units = new Set();
-  options.forEach((option) => {
-    const shiftDeptIds = getShiftDepartmentIds(option.shift);
-    if (!shiftDeptIds.length) {
-      units.add(`shift:${option.shift.id}`);
-      return;
-    }
-    shiftDeptIds.forEach((deptId) => {
-      if (memberDeptIds.includes(deptId)) {
-        units.add(deptId);
-      }
-    });
-  });
-  return units.size;
-}
-
-function getDailyAssignmentCost(scheduleMap, options, option, member, dateString, dates, demandUnitCountByMemberId) {
+function getDailyAssignmentCost(scheduleMap, option, member, dateString, dates) {
   const shiftDeptIds = getShiftDepartmentIds(option.shift);
   const homeDeptMatch = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(member)) : true;
   const weekIndex = getWeekBucketIndex(dateString, dates[0] || dateString);
-  const mustWorkThisWeek = !member.payByDay && memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, dates[0] || dateString);
-  const salaryGroup = !member.payByDay && homeDeptMatch ? 0 : !member.payByDay ? 1 : 2;
-  return (demandUnitCountByMemberId.get(member.id) || 0) * 10000
-    + (mustWorkThisWeek ? 0 : 1) * 1000
-    + salaryGroup * 100;
+  const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
+  const mustWork = !member.payByDay
+    && !isRegularRestLeaveId(slot?.leave)
+    && memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, dates[0] || dateString);
+  if (mustWork) {
+    return 0;
+  }
+  if (!member.payByDay && homeDeptMatch) {
+    return 100;
+  }
+  if (!member.payByDay) {
+    return 200;
+  }
+  return 300;
 }
 
 function findMinimumCostFlowAssignments(scheduleMap, options, dateString, dates) {
@@ -1787,10 +1778,6 @@ function findMinimumCostFlowAssignments(scheduleMap, options, dateString, dates)
       }
     });
   });
-  const demandUnitCountByMemberId = new Map(members.map((member) => [
-    member.id,
-    countMemberRemainingDemandUnits(options, member)
-  ]));
   const shiftSlots = [];
   options.forEach((option) => {
     for (let index = 0; index < option.remaining; index += 1) {
@@ -1822,7 +1809,7 @@ function findMinimumCostFlowAssignments(scheduleMap, options, dateString, dates)
         shiftNode,
         memberNode,
         1,
-        getDailyAssignmentCost(scheduleMap, options, option, member, dateString, dates, demandUnitCountByMemberId)
+        getDailyAssignmentCost(scheduleMap, option, member, dateString, dates)
       );
       assignmentEdges.push({ edge, shift: option.shift, member });
     });
@@ -1935,14 +1922,10 @@ function canAutoPlaceDailyRest(scheduleMap, member, dateString, dates, rangeStar
     return false;
   }
   const weekIndex = getWeekBucketIndex(dateString, rangeStartDate);
-  return member.payByDay || countMemberRestInWeek(scheduleMap, member.id, dates, weekIndex, rangeStartDate) === 0;
+  return countMemberRestInWeek(scheduleMap, member.id, dates, weekIndex, rangeStartDate) === 0;
 }
 
 function placeDailySurplusRestDays(scheduleMap, dateString, dates, rangeStartDate, restLeave, preview) {
-  const remainingDemand = getRemainingDailyShiftDemand(scheduleMap, dateString);
-  if (remainingDemand > 0) {
-    return;
-  }
   const candidates = getActiveMembersForDate(dateString)
     .filter((member) => canAutoPlaceDailyRest(scheduleMap, member, dateString, dates, rangeStartDate))
     .sort((a, b) => {
@@ -3207,7 +3190,7 @@ function renderTable() {
     } else {
       groups.forEach(({ department, members }) => {
         members.forEach((member, index) => {
-          html += "<tr>";
+          html += `<tr class="${member.payByDay ? "pay-daily-row" : ""}">`;
           if (index === 0) {
             html += `<td class="dept-col" rowspan="${members.length}">${escapeHtml(department.name)}</td>`;
           }
