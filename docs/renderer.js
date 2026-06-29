@@ -2082,40 +2082,58 @@ function renderAuthBar() {
   }
 }
 
+function shouldShowAuthGate() {
+  return !isLoggedIn() && authModalOpen;
+}
+
 function renderAuthGate() {
   const root = document.getElementById("authRoot");
   if (!root) {
     return;
   }
-  if (!authModalOpen) {
+  if (!shouldShowAuthGate()) {
     root.innerHTML = "";
+    document.body.classList.remove("auth-gate-open");
     return;
   }
-  if (!isLoggedIn()) {
-    root.innerHTML = `
-      <div class="auth-overlay">
-        <div class="auth-card">
-          <h3>登入</h3>
-          ${authPromptMessage ? `<p class="modal-description">${escapeHtml(authPromptMessage)}</p>` : ""}
-          <div class="form-row">
-            <label for="loginAccount">工號</label>
-            <input id="loginAccount" type="text" autocomplete="username" placeholder="請輸入工號">
-          </div>
-          <div class="form-row">
-            <label for="loginPassword">密碼</label>
-            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="請輸入密碼">
-          </div>
-          ${authErrorMessage ? `<div class="auth-error">${escapeHtml(authErrorMessage)}</div>` : ""}
-          <div class="modal-footer auth-footer">
-            <button class="btn-cancel" type="button" data-close-auth-gate="true">取消</button>
-            <button class="btn-primary" type="button" data-auth-sign-in="true">登入</button>
+  document.body.classList.add("auth-gate-open");
+  const showCancel = Boolean(authPromptMessage);
+  root.innerHTML = `
+    <div class="auth-overlay auth-overlay--welcome">
+      <div class="auth-shell">
+        <aside class="auth-brand">
+          <span class="auth-brand-badge">Workforce</span>
+          <h2 class="auth-brand-title">排班系統</h2>
+          <p class="auth-brand-desc">登入後即可檢視班表、送出請假與加班申請</p>
+          <a class="auth-guide-link" href="./guide/index.html" target="_blank" rel="noopener noreferrer">操作指南</a>
+        </aside>
+        <div class="auth-card auth-card--elevated">
+          <div class="auth-card-accent" aria-hidden="true"></div>
+          <div class="auth-card-body">
+            <h3 class="auth-card-title">登入</h3>
+            ${authPromptMessage ? `<p class="auth-prompt">${escapeHtml(authPromptMessage)}</p>` : ""}
+            <div class="auth-field">
+              <label for="loginAccount">工號</label>
+              <input id="loginAccount" type="text" autocomplete="username" placeholder="請輸入工號">
+            </div>
+            <div class="auth-field">
+              <label for="loginPassword">密碼</label>
+              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="請輸入密碼">
+            </div>
+            ${authErrorMessage ? `<div class="auth-error">${escapeHtml(authErrorMessage)}</div>` : ""}
+            <div class="auth-actions${showCancel ? "" : " auth-actions--single"}">
+              ${showCancel ? `<button class="btn-cancel auth-btn-secondary" type="button" data-close-auth-gate="true">取消</button>` : ""}
+              <button class="btn-primary auth-submit" type="button" data-auth-sign-in="true">登入</button>
+            </div>
+            <p class="auth-hint">使用工號登入 · 新帳號預設密碼為 0000</p>
           </div>
         </div>
       </div>
-    `;
-    return;
-  }
-  root.innerHTML = "";
+    </div>
+  `;
+  requestAnimationFrame(() => {
+    document.getElementById("loginAccount")?.focus();
+  });
 }
 
 function openChangePasswordModal() {
@@ -6047,7 +6065,7 @@ async function handleSignOut() {
   await window.schedulerApi.signOut();
   authErrorMessage = "";
   authPromptMessage = "";
-  authModalOpen = false;
+  authModalOpen = true;
   currentSession = null;
   currentProfile = null;
   currentMember = null;
@@ -6148,6 +6166,22 @@ function bindEvents() {
     return;
   }
   eventsBound = true;
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !shouldShowAuthGate()) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    if (target.id !== "loginAccount" && target.id !== "loginPassword") {
+      return;
+    }
+    event.preventDefault();
+    handleSignIn();
+  });
+
   const bindClick = (id, handler) => {
     const element = document.getElementById(id);
     if (element) {
@@ -6209,6 +6243,13 @@ function bindEvents() {
     closeCoreActionsMenu();
     openRestComplianceModal();
   });
+
+  const userGuideLink = document.getElementById("userGuideLink");
+  if (userGuideLink) {
+    userGuideLink.addEventListener("click", () => {
+      closeCoreActionsMenu();
+    });
+  }
 
   const tableWrap = document.getElementById("tableWrap");
   if (tableWrap) {
@@ -6780,6 +6821,98 @@ function bindEvents() {
   });
 }
 
+async function applyDeepLink() {
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash.startsWith("open=")) {
+    return;
+  }
+  const action = decodeURIComponent(hash.slice(5));
+  const actions = {
+    signIn: () => openSignInDialog(),
+    leaveRequest: () => openLeaveRequestModal(),
+    overtimeRequest: () => openOvertimeRequestModal(),
+    changePassword: () => openChangePasswordModal(),
+    leaveApproval: async () => {
+      requestReviewFilters.leave = { memberCode: "", date: "", status: "pending" };
+      await openLeaveApprovalModal();
+    },
+    overtimeApproval: async () => {
+      requestReviewFilters.overtime = { memberCode: "", date: "", status: "pending" };
+      await openOvertimeApprovalModal();
+    },
+    weekStart: () => openWeekStartSettingModal(),
+    restCompliance: () => openRestComplianceModal(),
+    shiftSettings: () => {
+      if (promptManagerAccess()) {
+        openListSettings("shift");
+      }
+    },
+    leaveSettings: () => {
+      if (promptManagerAccess()) {
+        openListSettings("leave");
+      }
+    },
+    overtimeSettings: () => {
+      if (promptManagerAccess()) {
+        openListSettings("overtime");
+      }
+    },
+    departmentSettings: () => {
+      if (promptManagerAccess()) {
+        openDepartmentSettings();
+      }
+    },
+    memberSettings: () => {
+      if (promptManagerAccess()) {
+        openMemberSettings();
+      }
+    },
+    exportSap: () => {
+      if (promptManagerAccess()) {
+        exportSapCsv();
+      }
+    },
+    exportLeave: () => {
+      if (promptManagerAccess()) {
+        exportLeave();
+      }
+    },
+    exportOvertime: () => {
+      if (promptManagerAccess()) {
+        exportOvertime();
+      }
+    },
+    viewMember: () => {
+      state.tableView = "member";
+      const select = document.getElementById("tableViewSelect");
+      if (select) {
+        select.value = "member";
+      }
+      renderToolbar();
+      renderTable();
+    },
+    viewShift: () => {
+      state.tableView = "shift";
+      const select = document.getElementById("tableViewSelect");
+      if (select) {
+        select.value = "shift";
+      }
+      renderToolbar();
+      renderTable();
+    },
+    schedule: () => {}
+  };
+  const handler = actions[action];
+  if (!handler) {
+    return;
+  }
+  try {
+    await handler();
+  } catch (_error) {
+    // Deep link actions may require login or manager role.
+  }
+}
+
 async function loadApp() {
   bindEvents();
   authErrorMessage = "";
@@ -6787,6 +6920,20 @@ async function loadApp() {
     const authContext = await window.schedulerApi.initializeAuth();
     currentSession = authContext.session;
     currentProfile = authContext.profile;
+    if (!isLoggedIn()) {
+      authModalOpen = true;
+      state = createEmptyState();
+      currentMember = null;
+      leaveRequestRecords = [];
+      overtimeRequestRecords = [];
+      leaveOverlayRecords = [];
+      overtimeOverlayRecords = [];
+      requestOverlaySourceLoaded = false;
+      appInfo = null;
+      renderAll();
+      syncCoreActionsMenu();
+      return;
+    }
     appInfo = await window.schedulerApi.getAppInfo();
     const payload = await window.schedulerApi.loadState();
     state = normalizeState(payload);
@@ -6805,6 +6952,9 @@ async function loadApp() {
     overtimeOverlayRecords = [];
     requestOverlaySourceLoaded = false;
     appInfo = null;
+    if (!isLoggedIn()) {
+      authModalOpen = true;
+    }
     renderAll();
     syncCoreActionsMenu();
     return;
@@ -6835,8 +6985,11 @@ async function loadApp() {
       setSaveStatus(`部分同步失敗：${error.message}`);
     }
   }
+  authModalOpen = false;
+  authPromptMessage = "";
   renderAll();
   syncCoreActionsMenu();
+  await applyDeepLink();
 }
 
 loadApp();

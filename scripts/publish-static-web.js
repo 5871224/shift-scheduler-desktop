@@ -69,10 +69,28 @@ async function writeDeployReadme() {
   await fs.writeFile(path.join(outputDir, "README.txt"), content, "utf8");
 }
 
+async function copyUserGuideTo(targetDir) {
+  const source = path.join(rootDir, "src", "user-guide");
+  const target = path.join(targetDir, "guide");
+  try {
+    await fs.access(source);
+  } catch {
+    return;
+  }
+  await fs.rm(target, { recursive: true, force: true });
+  await fs.cp(source, target, { recursive: true });
+}
+
+async function copyUserGuide() {
+  await copyUserGuideTo(outputDir);
+  await copyUserGuideTo(path.join(rootDir, "src", "renderer"));
+}
+
 async function main() {
   await recreateDir(outputDir);
   await Promise.all(files.map(copyFile));
   await rewriteIndexCacheBusters();
+  await copyUserGuide();
   await writeNoJekyll();
   await writeDeployReadme();
   console.log(`static web published to ${outputDir}`);

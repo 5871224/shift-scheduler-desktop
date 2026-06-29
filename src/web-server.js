@@ -5,6 +5,7 @@ const { URL } = require("url");
 
 const PORT = Number(process.env.PORT || 3010);
 const rendererDir = path.join(__dirname, "renderer");
+const userGuideDir = path.join(__dirname, "user-guide");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -20,11 +21,14 @@ function send(response, statusCode, body, contentType = "text/plain; charset=utf
   response.end(body);
 }
 
-async function serveStaticFile(requestPath, response) {
-  const normalized = requestPath === "/" ? "/index.html" : requestPath;
-  const filePath = path.join(rendererDir, normalized.replace(/^\/+/, ""));
+async function serveStaticFile(requestPath, response, rootDir = rendererDir) {
+  let normalized = requestPath === "/" ? "/index.html" : requestPath;
+  if (normalized.endsWith("/")) {
+    normalized += "index.html";
+  }
+  const filePath = path.join(rootDir, normalized.replace(/^\/+/, ""));
   const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(path.resolve(rendererDir))) {
+  if (!resolved.startsWith(path.resolve(rootDir))) {
     send(response, 403, "Forbidden");
     return;
   }
@@ -49,7 +53,12 @@ async function handleRequest(request, response) {
       send(response, 200, JSON.stringify({ ok: true }), "application/json; charset=utf-8");
       return;
     }
-    await serveStaticFile(url.pathname, response);
+    if (url.pathname === "/guide" || url.pathname.startsWith("/guide/")) {
+      const guidePath = url.pathname === "/guide" ? "/index.html" : url.pathname.slice("/guide".length);
+      await serveStaticFile(guidePath, response, userGuideDir);
+      return;
+    }
+    await serveStaticFile(url.pathname, response, rendererDir);
   } catch (error) {
     console.error(error);
     send(response, 500, JSON.stringify({ error: error.message || "Server error" }), "application/json; charset=utf-8");

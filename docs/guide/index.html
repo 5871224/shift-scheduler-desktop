@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>排班系統操作指南</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #efe9dd;
+      --panel: #fffdf8;
+      --panel-strong: #f8f3e7;
+      --line: #ddd4c6;
+      --text: #2b241c;
+      --muted: #76695b;
+      --accent: #9c6b2f;
+      --accent-strong: #7f5422;
+      --accent-soft: #efe2c8;
+      --danger: #ae3c33;
+      --shadow: 0 16px 34px rgba(72, 52, 31, 0.08);
+      --ui-scale: 1.25;
+      --slide-padding: calc(36px * var(--ui-scale));
+      --fs-base: calc(18px * var(--ui-scale));
+      --fs-h1: calc(52px * var(--ui-scale));
+      --fs-h2: calc(36px * var(--ui-scale));
+      --fs-subtitle: calc(22px * var(--ui-scale));
+      --fs-small: calc(15px * var(--ui-scale));
+      --fs-table: calc(16px * var(--ui-scale));
+      --fs-callout: calc(16px * var(--ui-scale));
+      --fs-diagram: calc(15px * var(--ui-scale));
+      --fs-badge: calc(13px * var(--ui-scale));
+      --fs-kbd: calc(13px * var(--ui-scale));
+      --fs-ctrl: calc(15px * var(--ui-scale));
+      --panel-max-width: min(calc(1040px * var(--ui-scale)), 94vw);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Microsoft JhengHei UI", "PingFang TC", sans-serif;
+      font-size: var(--fs-base);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.8), transparent 28%),
+        linear-gradient(180deg, #f5f1e7 0%, var(--bg) 100%);
+    }
+
+    .deck {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .progress-track {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(166, 143, 111, 0.2);
+      z-index: 100;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+      transition: width 0.25s ease;
+    }
+
+    .slides-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: calc(var(--slide-padding) + 12px) var(--slide-padding) calc(var(--slide-padding) + 72px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(24px);
+      transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+      z-index: 1;
+    }
+
+    .slide.prev {
+      transform: translateX(-24px);
+    }
+
+    .slide-panel {
+      max-width: var(--panel-max-width);
+      width: 100%;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1px solid rgba(166, 143, 111, 0.22);
+      box-shadow: var(--shadow);
+      border-radius: calc(20px * var(--ui-scale));
+      padding: calc(32px * var(--ui-scale)) calc(40px * var(--ui-scale));
+      max-height: calc(100vh - var(--slide-padding) * 2 - 80px);
+      overflow-y: auto;
+    }
+
+    .slide-cover .slide-panel {
+      text-align: center;
+      padding: calc(48px * var(--ui-scale)) calc(56px * var(--ui-scale));
+    }
+
+    .section-badge {
+      display: inline-block;
+      font-size: var(--fs-badge);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: var(--fs-h1);
+      line-height: 1.2;
+      color: var(--text);
+    }
+
+    h2 {
+      margin: 0 0 20px;
+      font-size: var(--fs-h2);
+      line-height: 1.25;
+      color: var(--text);
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      font-size: var(--fs-subtitle);
+      color: var(--muted);
+    }
+
+    p { margin: 0 0 12px; line-height: 1.65; font-size: var(--fs-base); }
+
+    ul, ol {
+      margin: 0 0 16px;
+      padding-left: 1.4em;
+      line-height: 1.65;
+      font-size: var(--fs-base);
+    }
+
+    li { margin-bottom: 6px; }
+    li:last-child { margin-bottom: 0; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 720px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-table);
+      margin: 12px 0;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+      text-align: left;
+    }
+
+    th {
+      background: var(--panel-strong);
+      color: var(--accent-strong);
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) td { background: rgba(248, 243, 231, 0.5); }
+
+    .check { color: var(--accent-strong); font-weight: 700; }
+    .cross { color: var(--muted); }
+
+    .callout {
+      border-radius: 12px;
+      padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+      margin: 16px 0;
+      font-size: var(--fs-callout);
+      line-height: 1.55;
+    }
+
+    .callout-tip {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+    }
+
+    .callout-warn {
+      background: rgba(174, 60, 51, 0.08);
+      border-left: 4px solid var(--danger);
+      color: #6b2a24;
+    }
+
+    .callout-info {
+      background: var(--panel-strong);
+      border-left: 4px solid var(--line);
+    }
+
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+    }
+
+    .steps li {
+      counter-increment: step;
+      position: relative;
+      padding-left: calc(52px * var(--ui-scale));
+      margin-bottom: 14px;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: calc(32px * var(--ui-scale));
+      height: calc(32px * var(--ui-scale));
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: calc(14px * var(--ui-scale));
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .diagram {
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: var(--fs-diagram);
+      line-height: 1.5;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: calc(16px * var(--ui-scale)) calc(20px * var(--ui-scale));
+      overflow-x: auto;
+      white-space: pre;
+      color: var(--muted);
+    }
+
+    .nav-jump {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 28px;
+    }
+
+    .nav-jump button {
+      border: 1px solid rgba(166, 143, 111, 0.35);
+      background: var(--panel-strong);
+      color: var(--accent-strong);
+      border-radius: 999px;
+      padding: calc(10px * var(--ui-scale)) calc(20px * var(--ui-scale));
+      font: inherit;
+      font-size: var(--fs-base);
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .nav-jump button:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(12px * var(--ui-scale)) calc(20px * var(--ui-scale));
+      background: rgba(255, 253, 248, 0.92);
+      border-top: 1px solid rgba(166, 143, 111, 0.22);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+    }
+
+    .controls-left, .controls-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ctrl-btn {
+      border: 1px solid rgba(166, 143, 111, 0.35);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale));
+      font: inherit;
+      font-size: var(--fs-ctrl);
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .ctrl-btn:hover:not(:disabled) {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .ctrl-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .ctrl-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .ctrl-btn.primary:hover:not(:disabled) {
+      background: var(--accent-strong);
+    }
+
+    .page-indicator {
+      font-size: var(--fs-ctrl);
+      color: var(--muted);
+      min-width: calc(80px * var(--ui-scale));
+      text-align: center;
+    }
+
+    .kbd {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+      font-family: inherit;
+      font-size: var(--fs-kbd);
+    }
+
+    .help-hint {
+      font-size: var(--fs-small);
+      color: var(--muted);
+    }
+
+    a.feature-link {
+      color: var(--accent-strong);
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    a.feature-link:hover {
+      color: var(--accent);
+    }
+
+    a.feature-link::after {
+      content: " ↗";
+      font-size: 0.82em;
+      font-weight: 400;
+    }
+
+    body.fullscreen .controls {
+      background: rgba(255, 253, 248, 0.85);
+    }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="slides-viewport" id="slidesViewport">
+
+      <!-- 第 0 章：系統導覽 -->
+      <section class="slide slide-cover active" data-section="intro">
+        <div class="slide-panel">
+          <span class="section-badge">操作指南</span>
+          <h1>排班系統</h1>
+          <p class="subtitle">角色操作指南 · HTML 投影片</p>
+          <p style="color:var(--muted);font-size:14px;">2026 年 6 月 · 依使用者角色分段說明</p>
+          <div class="nav-jump">
+            <button type="button" data-goto="5">員工</button>
+            <button type="button" data-goto="13">主管</button>
+          </div>
+          <p class="help-hint" style="margin-top:24px;">
+            使用 <span class="kbd">←</span> <span class="kbd">→</span> 或底部按鈕切換 · 按 <span class="kbd">F</span> 全螢幕
+          </p>
+        </div>
+      </section>
+
+      <section class="slide" data-section="intro">
+        <div class="slide-panel">
+          <span class="section-badge">第 0 章 · 系統導覽</span>
+          <h2>系統簡介</h2>
+          <p>排班系統是網頁版班表管理工具，<strong>排班、請假、加班皆需登入帳號</strong>後才能使用。主要功能包含：</p>
+          <ul>
+            <li><strong><span data-app="schedule">班表編輯</span></strong> — 八週週期排班，支援人員與班別兩種檢視</li>
+            <li><strong><span data-app="shiftSettings">班別</span> / <span data-app="leaveSettings">假別</span> / <span data-app="overtimeSettings">加班設定</span></strong> — 型錄維護與工具列 chip 快速填入</li>
+            <li><strong><span data-app="departmentSettings">人員與單位管理</span></strong> — 主檔維護、排班單位優先序</li>
+            <li><strong><span data-app="leaveRequest">休假</span>與<span data-app="overtimeRequest">加班申請</span></strong> — 員工送件、主管審核</li>
+            <li><strong><span data-app="restCompliance">例休檢查</span></strong> — 例假、休息日、連續出勤合規驗證</li>
+            <li><strong>匯入 / 匯出</strong> — Excel 主檔、<span data-app="exportSap">SAP 休例假 CSV</span></li>
+          </ul>
+          <div class="callout callout-info">
+            自動排班演算法<strong>尚未上線</strong>，目前僅完成前置設定欄位，供日後擴充使用。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="intro">
+        <div class="slide-panel">
+          <span class="section-badge">第 0 章 · 系統導覽</span>
+          <h2>角色與權限總覽</h2>
+          <div class="callout callout-warn">
+            本系統<strong>需登入後才能使用</strong>，不提供匿名瀏覽。
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>功能</th>
+                <th>員工</th>
+                <th>主管</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><span data-app="schedule">檢視班表</span></td><td class="check">✓</td><td class="check">✓</td></tr>
+              <tr><td>編輯排班格</td><td class="cross">—</td><td class="check">✓</td></tr>
+              <tr><td>工具列 chip 編輯</td><td class="cross">唯讀</td><td class="check">✓</td></tr>
+              <tr><td><span data-app="leaveRequest">請假</span> / <span data-app="overtimeRequest">加班申請</span></td><td class="check">✓</td><td class="check">✓</td></tr>
+              <tr><td><span data-app="leaveApproval">審核申請</span></td><td class="cross">—</td><td class="check">✓</td></tr>
+              <tr><td>各項設定（<span data-app="departmentSettings">單位</span>、<span data-app="memberSettings">人員</span>、型錄）</td><td class="cross">—</td><td class="check">✓</td></tr>
+              <tr><td><span data-app="restCompliance">例休檢查</span></td><td class="cross">—</td><td class="check">✓</td></tr>
+              <tr><td><span data-app="exportLeave">匯出報表</span></td><td class="cross">—</td><td class="check">✓</td></tr>
+              <tr><td><span data-app="changePassword">修改密碼</span></td><td class="check">✓</td><td class="check">✓</td></tr>
+            </tbody>
+          </table>
+          <div class="callout callout-tip">
+            系統角色分為 <strong>employee（員工）</strong> 與 <strong>manager（主管）</strong>，由<span data-app="memberSettings">人員主檔</span>中的「權限」欄位決定。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="intro">
+        <div class="slide-panel">
+          <span class="section-badge">第 0 章 · 系統導覽</span>
+          <h2>介面地圖</h2>
+          <div class="diagram">┌─────────────────────────────────────────────────────────┐
+│  頂部列：登入狀態 · 請假/加班申請 · 修改密碼 · [功能]選單  │
+├─────────────────────────────────────────────────────────┤
+│  工具列（主管）：班別 chip │ 假別 chip │ 加班 chip       │
+│              例休檢查 · 各型錄設定按鈕                    │
+├─────────────────────────────────────────────────────────┤
+│  班表主格：單位 × 人員 × 日期（或 班別 × 需求 × 日期）    │
+│  表頭「單位」「人員」欄 → 單位設定 / 人員設定              │
+│  週期導航：±1 週、±8 週 · 人員/班別檢視切換              │
+└─────────────────────────────────────────────────────────┘</div>
+          <p style="margin-top:16px;">所有設定與審核功能皆以<strong>彈窗（modal）</strong>呈現，無多頁路由。主管專用「功能」選單包含：<span data-app="leaveApproval">請假審核</span>、<span data-app="overtimeApproval">加班審核</span>、<span data-app="weekStart">週期設定</span>、匯出。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-section="intro">
+        <div class="slide-panel">
+          <span class="section-badge">第 0 章 · 系統導覽</span>
+          <h2>登入與帳號</h2>
+          <p>開啟<span data-app="schedule">班表</span>網址後，系統會先顯示<strong>登入畫面</strong>，完成登入後才能進入班表與各項功能。</p>
+          <ol class="steps">
+            <li>輸入<strong>工號</strong>與<strong>密碼</strong></li>
+            <li>登入成功後進入班表，頂部列顯示姓名與對應功能按鈕</li>
+            <li>依帳號權限顯示<strong>員工</strong>或<strong>主管</strong>功能</li>
+          </ol>
+          <div class="callout callout-info">
+            登入使用工號，非 email 地址。新建立帳號的預設密碼為 <strong>0000</strong>，首次登入後建議立即<span data-app="changePassword">修改密碼</span>。
+          </div>
+          <div class="callout callout-tip">
+            若忘記密碼，請聯繫主管透過「<span data-app="memberSettings">人員設定</span>」重設為預設密碼 <strong>0000</strong>。
+          </div>
+        </div>
+      </section>
+
+      <!-- 第 1 章：員工 -->
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>登入與登出</h2>
+          <ol class="steps">
+            <li>開啟網址後在登入畫面輸入工號（例如 A001）與密碼</li>
+            <li>登入後頂部顯示姓名，並出現員工功能按鈕</li>
+          </ol>
+          <div class="callout callout-warn">
+            新帳號預設密碼為 <strong>0000</strong>。登入後請儘快使用「<span data-app="changePassword">修改密碼</span>」變更。
+          </div>
+          <p><strong>登出：</strong>點選頂部列「登出」，系統清除 session，需重新登入才能繼續使用。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>檢視個人班表</h2>
+          <p>員工登入後進入<strong>唯讀模式</strong>（<span data-app="schedule">班表主頁</span>）：</p>
+          <ul>
+            <li>可瀏覽班表、切換週期與檢視模式</li>
+            <li>工具列 chip 為唯讀，無法點選編輯格</li>
+            <li>無「功能」選單與各項設定入口</li>
+          </ul>
+          <p><strong>申請狀態 overlay：</strong></p>
+          <ul>
+            <li>待審核申請 — 以特殊配色顯示在對應日期格</li>
+            <li>已核准申請 — 自動寫入班表並顯示假別 / 加班標記</li>
+            <li>已退回申請 — 不顯示於班表，可重新送件</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>請假申請</h2>
+          <ol class="steps">
+            <li>點選頂部列「<span data-app="leaveRequest">請假申請</span>」</li>
+            <li>選擇假別（例假、休息日、特休等）</li>
+            <li>設定日期區間、整天或時段、原因（若該假別需要）</li>
+            <li>按「送出」提交申請</li>
+          </ol>
+          <div class="callout callout-tip">
+            送出後申請狀態為「待審核」，對應班表格會被鎖定，需等主管審核或自行刪除待審核申請後才能變更。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>管理我的請假</h2>
+          <p>在「<span data-app="leaveRequest">請假申請</span>」視窗中可查看所有個人申請：</p>
+          <ul>
+            <li><strong>待審核</strong> — 可刪除後重新送件</li>
+            <li><strong>已核准</strong> — 已寫入班表，無法自行刪除</li>
+            <li><strong>已退回</strong> — 可查看主管備註，必要時重新申請</li>
+          </ul>
+          <div class="callout callout-info">
+            僅<strong>待審核</strong>狀態的申請可由員工自行刪除。已核准或已退回需聯繫主管處理。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>加班申請</h2>
+          <ol class="steps">
+            <li>點選頂部列「<span data-app="overtimeRequest">加班申請</span>」</li>
+            <li>選擇加班類型</li>
+            <li>設定日期、起迄時段</li>
+            <li>填寫休息 1、休息 2 時段（若適用）</li>
+            <li>填寫原因並送出</li>
+          </ol>
+          <p>審核流程與請假相同：待審核 → 主管<span data-app="overtimeApproval">核准</span> / 退回 → 核准後寫入班表。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>管理我的加班</h2>
+          <p>在「<span data-app="overtimeRequest">加班申請</span>」視窗中管理個人加班紀錄，操作方式與請假相同：</p>
+          <ul>
+            <li>查看各筆申請的審核狀態與主管備註</li>
+            <li>刪除<strong>待審核</strong>的申請</li>
+            <li>已核准的加班會顯示在班表對應日期格</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>修改密碼</h2>
+          <ol class="steps">
+            <li>點選頂部列「<span data-app="changePassword">修改密碼</span>」</li>
+            <li>輸入目前密碼與新密碼</li>
+            <li>確認新密碼後儲存</li>
+          </ol>
+          <div class="callout callout-warn">
+            若忘記密碼，請聯繫主管透過「<span data-app="memberSettings">人員設定</span>」重設為預設密碼 <strong>0000</strong>。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="employee">
+        <div class="slide-panel">
+          <span class="section-badge">第 1 章 · 員工</span>
+          <h2>員工注意事項</h2>
+          <ul>
+            <li>員工<strong>無法</strong>直接編輯班表格，所有排班變更需透過申請由主管審核</li>
+            <li>有待審核申請的日期格會被<strong>鎖定</strong>，需先刪除或等審核完成</li>
+            <li>主管核准後，假別 / 加班會<strong>自動寫入</strong>班表</li>
+            <li>一人一天最多一班（系統規則，自動排班時亦適用）</li>
+            <li>空白未排班<strong>不會</strong>自動視為例假或休息日</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 第 2 章：主管 -->
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2>主管功能總覽</h2>
+          <div class="two-col">
+            <div>
+              <p><strong>頂部「功能」選單</strong></p>
+              <ul>
+                <li><span data-app="leaveApproval">請假審核</span></li>
+                <li><span data-app="overtimeApproval">加班審核</span></li>
+                <li><span data-app="weekStart">週期設定</span></li>
+                <li><span data-app="exportSap">匯出休例假</span> / <span data-app="exportLeave">請假</span> / <span data-app="exportOvertime">加班</span></li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>工具列與表頭</strong></p>
+              <ul>
+                <li><span data-app="shiftSettings">班別</span> / <span data-app="leaveSettings">假別</span> / <span data-app="overtimeSettings">加班</span> chip 編輯</li>
+                <li><span data-app="restCompliance">例休檢查</span></li>
+                <li>各型錄設定</li>
+                <li>表頭 → <span data-app="departmentSettings">單位設定</span> / <span data-app="memberSettings">人員設定</span></li>
+              </ul>
+            </div>
+          </div>
+          <div class="callout callout-tip">
+            主管登入後工具列完整展開，可直接編輯排班格與所有主檔設定。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2>排班編輯基礎</h2>
+          <ol class="steps">
+            <li>在工具列選取班別 / 假別 / 加班 chip（chip 會高亮）</li>
+            <li>點選班表上的目標格，內容即寫入</li>
+            <li>框選多格：拖曳選取範圍，批次套用目前 chip</li>
+            <li>再次點選已選 chip 或按清除，可取消選取</li>
+            <li>假別 / 加班可能需要填寫時段與原因（彈窗）</li>
+          </ol>
+          <div class="callout callout-warn">
+            若該格有員工<strong>待審核申請</strong>，需先<span data-app="leaveApproval">審核</span>或退回後才能修改。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2>檢視模式</h2>
+          <div class="two-col">
+            <div>
+              <p><strong><span data-app="viewMember">人員檢視</span></strong></p>
+              <ul>
+                <li>單位 × 人員 × 日期</li>
+                <li>適合逐人排班</li>
+                <li>可拖曳調整人員單位歸屬</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong><span data-app="viewShift">班別檢視</span></strong></p>
+              <ul>
+                <li>班別 × 需求人數 × 日期</li>
+                <li>顯示當日已排人員</li>
+                <li>缺額以標示提醒（依「需求人數」）</li>
+              </ul>
+            </div>
+          </div>
+          <div class="callout callout-info">
+            「需求人數」在<span data-app="shiftSettings">班別設定</span>中維護，是日後自動排班補人的基礎資料。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2>直接在班表指定假 / 加班</h2>
+          <p>主管在<span data-app="schedule">班表</span>上直接填入假別或加班時：</p>
+          <ul>
+            <li>系統自動建立<strong>已核准</strong>紀錄（source = manager）</li>
+            <li>無需再進審核流程</li>
+            <li>填寫時段、原因等明細後即寫入班表</li>
+          </ul>
+          <div class="callout callout-tip">
+            手動指定的班與假，在自動排班規劃中視為<strong>鎖定</strong>，演算法不會覆蓋。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2><span data-app="departmentSettings">單位設定</span></h2>
+          <p><strong>入口：</strong>班表表頭「單位」欄的設定圖示（<span data-app="schedule">班表主頁</span>）</p>
+          <ul>
+            <li><strong>單位檢視</strong> — 各單位的所屬人員、可排人員</li>
+            <li><strong>人員檢視</strong> — 各人員的排班單位排序</li>
+            <li>新增 / 修改 / 刪除單位（名稱、有效期間）</li>
+            <li>拖曳調整人員單位歸屬</li>
+            <li>Excel 匯出 / 匯入單位主檔</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2><span data-app="memberSettings">人員設定</span></h2>
+          <p><strong>入口：</strong>班表表頭「人員」欄的設定圖示（<span data-app="schedule">班表主頁</span>）</p>
+          <ul>
+            <li>工號、姓名、權限（員工 / 主管）</li>
+            <li>到職日、離職日、計薪方式</li>
+            <li><strong>排班單位</strong> — 可勾選多單位並拖曳排序，第 1 個為主要單位</li>
+            <li><strong>月休天數</strong> — 該月例假 + 休息日的目標天數</li>
+            <li><strong>例假星期</strong> — 固定例假偏好</li>
+            <li>重設密碼為 <strong>0000</strong>（建立新登入帳號時亦使用預設密碼）</li>
+            <li>Excel 匯出 / 匯入人員主檔</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2><span data-app="shiftSettings">班別</span> / <span data-app="leaveSettings">假別</span> / <span data-app="overtimeSettings">加班設定</span></h2>
+          <p>各工具列區塊的設定按鈕（鉛筆圖示）進入型錄維護（<span data-app="schedule">班表主頁</span>）：</p>
+          <table>
+            <thead>
+              <tr><th>型錄</th><th>重點欄位</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span data-app="shiftSettings">班別</span></td><td>顏色、適用單位、時段、<strong>需求人數</strong>、拖曳排序</td></tr>
+              <tr><td><span data-app="leaveSettings">假別</span></td><td>顏色、SAP 代碼、是否需填時間/原因、申請顯示色</td></tr>
+              <tr><td><span data-app="overtimeSettings">加班</span></td><td>顏色、預設時段、休息 1/2、申請顯示色</td></tr>
+            </tbody>
+          </table>
+          <p>各型錄均支援 Excel 匯出 / 匯入。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2><span data-app="weekStart">週期設定</span></h2>
+          <p><strong>入口：</strong>功能選單 → 週期設定</p>
+          <ul>
+            <li><strong>八週起算日</strong> — 班表預設顯示的 56 天週期錨點</li>
+            <li><strong>每週起算日</strong> — 週界線著色、例休檢查的週切分基準</li>
+            <li><strong>每月起算日</strong> — 月休天數計算與自動排班月區間基準</li>
+          </ul>
+          <div class="callout callout-info">
+            修改週期設定後，班表格線與例休檢查結果會即時連動更新。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2><span data-app="leaveApproval">請假審核</span></h2>
+          <p><strong>入口：</strong>功能選單 → 請假審核（或格 tooltip 的「審核」捷徑）</p>
+          <ol class="steps">
+            <li>依申請人、日期、狀態篩選待審清單</li>
+            <li>選擇「核准」或「退回」，可填寫主管備註</li>
+            <li>核准後系統自動將假別寫入班表</li>
+          </ol>
+          <div class="callout callout-tip">
+            員工申請（source = employee）需經此審核；主管直接在班表指定的假別則已視為核准。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2><span data-app="overtimeApproval">加班審核</span></h2>
+          <p>操作方式與請假審核相同：</p>
+          <ol class="steps">
+            <li>功能選單 → 加班審核</li>
+            <li>篩選並檢視待審加班申請</li>
+            <li>核准或退回，填寫備註</li>
+            <li>核准後寫入班表對應格的加班標記</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2><span data-app="restCompliance">例休檢查</span></h2>
+          <p><strong>入口：</strong>工具列假別區 → 例休檢查</p>
+          <ul>
+            <li><strong>每 7 天至少 1 天例假</strong>（SAP 0036）</li>
+            <li><strong>每 7 天至少 1 天休息日</strong>（SAP 0047）</li>
+            <li><strong>連續出勤不得超過 6 天</strong> — 任意滑動視窗，含上月銜接</li>
+            <li>到職 / 離職週有特殊略過或改檢查規則</li>
+            <li>例假日有排班或加班會產生<strong>警告</strong></li>
+          </ul>
+          <div class="callout callout-warn">
+            檢查以已標記的例假 / 休息日為準；<strong>空白格不自動視為例假或休息日</strong>。
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">第 2 章 · 主管</span>
+          <h2>匯出作業</h2>
+          <p><strong>入口：</strong>功能選單</p>
+          <table>
+            <thead>
+              <tr><th>匯出項目</th><th>格式</th><th>說明</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span data-app="exportSap">匯出休例假</span></td><td>CSV（SAP）</td><td>例假 → OFF、休息日 → REST；排除日薪人員</td></tr>
+              <tr><td><span data-app="exportLeave">匯出請假</span></td><td>Excel</td><td>當月請假紀錄</td></tr>
+              <tr><td><span data-app="exportOvertime">匯出加班</span></td><td>Excel</td><td>當月加班時段與休息</td></tr>
+            </tbody>
+          </table>
+          <p>各設定 modal 內亦可個別匯出 / 匯入 Excel 主檔（<span data-app="memberSettings">人員</span>、<span data-app="departmentSettings">單位</span>、<span data-app="shiftSettings">班別</span>、<span data-app="leaveSettings">假別</span>、<span data-app="overtimeSettings">加班</span>）。</p>
+        </div>
+      </section>
+
+      <section class="slide" data-section="manager">
+        <div class="slide-panel">
+          <span class="section-badge">附錄</span>
+          <h2>自動排班（規劃中）與 FAQ</h2>
+          <p><strong>已就緒的前置欄位（演算法尚未上線）：</strong></p>
+          <ul>
+            <li>班別「需求人數」、人員「排班單位優先序」（<span data-app="memberSettings">人員設定</span>）</li>
+            <li>人員「月休天數」、週期「每週 / 每月起算日」（<span data-app="weekStart">週期設定</span>）</li>
+          </ul>
+          <p><strong>常見 FAQ：</strong></p>
+          <ul>
+            <li><strong>為何無法儲存？</strong> — 儲存班表需主管權限</li>
+            <li><strong>格被鎖定？</strong> — 該日有待審核員工申請</li>
+            <li><strong>忘記密碼？</strong> — 請主管在<span data-app="memberSettings">人員設定</span>重設為 0000</li>
+            <li><strong>新進人員如何登入？</strong> — 主管<span data-app="memberSettings">新增人員</span>後自動建立帳號，預設密碼 0000</li>
+          </ul>
+          <p style="margin-top:20px;color:var(--muted);font-size:14px;text-align:center;">— 完 —</p>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="controls">
+      <div class="controls-left">
+        <button class="ctrl-btn" id="btnFullscreen" type="button" title="全螢幕 (F)">全螢幕</button>
+        <span class="help-hint">← → 切換</span>
+      </div>
+      <div class="controls-right">
+        <button class="ctrl-btn" id="btnPrev" type="button" disabled>上一頁</button>
+        <span class="page-indicator" id="pageIndicator">1 / 28</span>
+        <button class="ctrl-btn primary" id="btnNext" type="button">下一頁</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const APP_BASE = "../index.html";
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const total = slides.length;
+      let current = 0;
+      let touchStartX = 0;
+
+      const progressFill = document.getElementById("progressFill");
+      const pageIndicator = document.getElementById("pageIndicator");
+      const btnPrev = document.getElementById("btnPrev");
+      const btnNext = document.getElementById("btnNext");
+      const btnFullscreen = document.getElementById("btnFullscreen");
+      const viewport = document.getElementById("slidesViewport");
+
+      function updateUiScale() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const scaleW = w / 1280;
+        const scaleH = h / 720;
+        let scale = Math.min(scaleW, scaleH) * 1.22;
+        if (document.fullscreenElement) {
+          scale = Math.min(scaleW, scaleH) * 1.42;
+        }
+        scale = Math.max(1.2, Math.min(scale, 2.8));
+        document.documentElement.style.setProperty("--ui-scale", scale.toFixed(3));
+      }
+
+      function wireAppLinks() {
+        document.querySelectorAll("[data-app]").forEach(function (el) {
+          const action = el.getAttribute("data-app");
+          if (!action) {
+            return;
+          }
+          const link = document.createElement("a");
+          link.className = "feature-link";
+          link.href = APP_BASE + "#open=" + encodeURIComponent(action);
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = el.textContent;
+          el.replaceWith(link);
+        });
+      }
+
+      function goTo(index) {
+        if (index < 0 || index >= total) return;
+        slides[current].classList.remove("active", "prev");
+        if (index < current) {
+          slides[index].classList.add("prev");
+        }
+        current = index;
+        slides[current].classList.add("active");
+        slides[current].classList.remove("prev");
+
+        const pct = ((current + 1) / total) * 100;
+        progressFill.style.width = pct + "%";
+        pageIndicator.textContent = (current + 1) + " / " + total;
+        btnPrev.disabled = current === 0;
+        btnNext.disabled = current === total - 1;
+      }
+
+      function next() { goTo(current + 1); }
+      function prev() { goTo(current - 1); }
+
+      btnPrev.addEventListener("click", prev);
+      btnNext.addEventListener("click", next);
+
+      btnFullscreen.addEventListener("click", function () {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(function () {});
+        } else {
+          document.exitFullscreen();
+        }
+      });
+
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+          e.preventDefault();
+          next();
+        } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+          e.preventDefault();
+          prev();
+        } else if (e.key === "Home") {
+          e.preventDefault();
+          goTo(0);
+        } else if (e.key === "End") {
+          e.preventDefault();
+          goTo(total - 1);
+        } else if (e.key === "f" || e.key === "F") {
+          btnFullscreen.click();
+        }
+      });
+
+      document.querySelectorAll("[data-goto]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          goTo(parseInt(btn.getAttribute("data-goto"), 10));
+        });
+      });
+
+      viewport.addEventListener("touchstart", function (e) {
+        touchStartX = e.changedTouches[0].screenX;
+      }, { passive: true });
+
+      viewport.addEventListener("touchend", function (e) {
+        const diff = e.changedTouches[0].screenX - touchStartX;
+        if (Math.abs(diff) < 50) return;
+        if (diff < 0) next();
+        else prev();
+      }, { passive: true });
+
+      document.addEventListener("fullscreenchange", function () {
+        document.body.classList.toggle("fullscreen", !!document.fullscreenElement);
+        updateUiScale();
+      });
+
+      window.addEventListener("resize", updateUiScale);
+
+      wireAppLinks();
+      updateUiScale();
+      goTo(0);
+    })();
+  </script>
+</body>
+</html>
