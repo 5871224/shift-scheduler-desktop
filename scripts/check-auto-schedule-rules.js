@@ -9,25 +9,24 @@ function memberCanWorkShift(memberDeptIds, shiftDeptIds) {
 }
 
 function chooseDailyAssignments(slots) {
-  let best = { score: Number.POSITIVE_INFINITY, assignments: [] };
-  const search = (index, used, assignments, score) => {
-    if (score >= best.score) return;
+  let complete = null;
+  const search = (index, used, assignments) => {
+    if (complete) return;
     if (index >= slots.length) {
-      best = { score, assignments: [...assignments] };
+      complete = [...assignments];
       return;
     }
     const slot = slots[index];
     slot.candidates.filter((candidate) => !used.has(candidate.id)).forEach((candidate) => {
       used.add(candidate.id);
       assignments.push({ shift: slot.shift, member: candidate.id });
-      search(index + 1, used, assignments, score + candidate.score);
+      search(index + 1, used, assignments);
       assignments.pop();
       used.delete(candidate.id);
     });
-    search(index + 1, used, assignments, score + 1000000);
   };
-  search(0, new Set(), [], 0);
-  return best.assignments;
+  search(0, new Set(), []);
+  return complete || [];
 }
 
 assert.equal(holidayTarget(56), 16);
@@ -43,6 +42,13 @@ assert.deepEqual(chooseDailyAssignments([
 ]), [
   { shift: "scarce", member: "must_work" },
   { shift: "open", member: "flex" }
+]);
+assert.deepEqual(chooseDailyAssignments([
+  { shift: "first", candidates: [{ id: "a", score: 99 }, { id: "b", score: 1 }] },
+  { shift: "second", candidates: [{ id: "b", score: 1 }, { id: "a", score: 99 }] }
+]), [
+  { shift: "first", member: "a" },
+  { shift: "second", member: "b" }
 ]);
 
 console.log("auto schedule rules check ok");

@@ -1788,17 +1788,21 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) 
   if (!slots.length) {
     return [];
   }
-  let best = { score: Number.POSITIVE_INFINITY, assignments: [], missing: slots.length };
+  let bestPartial = { assignments: [], assignedCount: 0 };
+  let completeAssignments = null;
   let visited = 0;
   const maxVisited = 500000;
-  // ponytail: daily exhaustive search is capped to keep the browser responsive; upgrade path is a worker-backed CP-SAT solver.
-  const search = (index, usedMemberIds, assignments, score, missing) => {
+  // ponytail: stop at the first complete daily fill; cap is only a safety valve for huge candidate sets.
+  const search = (index, usedMemberIds, assignments) => {
     visited += 1;
-    if (visited > maxVisited || score >= best.score) {
+    if (visited > maxVisited || completeAssignments) {
       return;
     }
+    if (assignments.length > bestPartial.assignedCount) {
+      bestPartial = { assignments: [...assignments], assignedCount: assignments.length };
+    }
     if (index >= slots.length) {
-      best = { score, assignments: [...assignments], missing };
+      completeAssignments = [...assignments];
       return;
     }
     const slot = slots[index];
@@ -1807,26 +1811,21 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) 
     candidates.forEach((member) => {
       usedMemberIds.add(member.id);
       assignments.push({ shift: slot.shift, member });
-      search(
-        index + 1,
-        usedMemberIds,
-        assignments,
-        score + getAutoShiftCandidateScore(scheduleMap, slot.shift, member, dateString, dates),
-        missing
-      );
+      search(index + 1, usedMemberIds, assignments);
       assignments.pop();
       usedMemberIds.delete(member.id);
     });
-    search(index + 1, usedMemberIds, assignments, score + 1000000, missing + 1);
   };
-  search(0, new Set(), [], 0, 0);
+  search(0, new Set(), []);
   if (visited > maxVisited) {
-    preview.warnings.push(`${dateString} 排班組合過多，已在 ${maxVisited} 次搜尋後採用目前最佳結果`);
+    preview.warnings.push(`${dateString} 排班組合過多，已在 ${maxVisited} 次搜尋後採用目前可行結果`);
   }
-  if (best.missing > 0) {
-    preview.warnings.push(`${dateString} 仍缺 ${best.missing} 個班別人力`);
+  const assignments = completeAssignments || bestPartial.assignments;
+  const missing = slots.length - assignments.length;
+  if (missing > 0) {
+    preview.warnings.push(`${dateString} 仍缺 ${missing} 個班別人力`);
   }
-  return best.assignments;
+  return assignments;
 }
 
 function getRemainingDailyShiftDemand(scheduleMap, dateString) {
