@@ -1805,33 +1805,104 @@ function getDailyShiftNeedOptions(scheduleMap, dateString, dates) {
     .filter((item) => item.remaining > 0);
 }
 
-function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) {
-  const assignments = [];
-  let guard = 0;
-  // ponytail: re-evaluate every fill; this is faster and follows the user's deterministic priority rules.
-  while (guard < 200) {
-    guard += 1;
-    const options = getDailyShiftNeedOptions(scheduleMap, dateString, dates)
-      .filter((option) => option.candidates.length > 0);
-    if (!options.length) {
-      break;
+function findMaximumFlowAssignments(options) {
+  const members = [];
+  const memberIndexById = new Map();
+  options.forEach((option) => {
+    option.candidates.forEach((member) => {
+      if (!memberIndexById.has(member.id)) {
+        memberIndexById.set(member.id, members.length);
+        members.push(member);
+      }
+    });
+  });
+  const source = 0;
+  const shiftStart = 1;
+  const memberStart = shiftStart + options.length;
+  const sink = memberStart + members.length;
+  const graph = Array.from({ length: sink + 1 }, () => []);
+  const assignmentEdges = [];
+  const addEdge = (from, to, capacity) => {
+    const forward = { to, rev: graph[to].length, capacity };
+    const backward = { to: from, rev: graph[from].length, capacity: 0 };
+    graph[from].push(forward);
+    graph[to].push(backward);
+    return forward;
+  };
+  options.forEach((option, optionIndex) => {
+    const shiftNode = shiftStart + optionIndex;
+    addEdge(source, shiftNode, option.remaining);
+    option.candidates.forEach((member) => {
+      const memberNode = memberStart + memberIndexById.get(member.id);
+      const edge = addEdge(shiftNode, memberNode, 1);
+      assignmentEdges.push({ edge, shift: option.shift, member });
+    });
+  });
+  members.forEach((member, memberIndex) => {
+    addEdge(memberStart + memberIndex, sink, 1);
+  });
+  const level = Array(graph.length).fill(-1);
+  const bfs = () => {
+    level.fill(-1);
+    level[source] = 0;
+    const queue = [source];
+    for (let index = 0; index < queue.length; index += 1) {
+      const node = queue[index];
+      graph[node].forEach((edge) => {
+        if (edge.capacity > 0 && level[edge.to] < 0) {
+          level[edge.to] = level[node] + 1;
+          queue.push(edge.to);
+        }
+      });
     }
-    const critical = options.filter((option) => option.candidates.length <= option.remaining);
-    const pool = critical.length ? critical : options;
-    pool.sort((a, b) => (
+    return level[sink] >= 0;
+  };
+  const pointer = Array(graph.length).fill(0);
+  const dfs = (node, pushed) => {
+    if (node === sink) {
+      return pushed;
+    }
+    for (; pointer[node] < graph[node].length; pointer[node] += 1) {
+      const edge = graph[node][pointer[node]];
+      if (edge.capacity <= 0 || level[edge.to] !== level[node] + 1) {
+        continue;
+      }
+      const flow = dfs(edge.to, Math.min(pushed, edge.capacity));
+      if (!flow) {
+        continue;
+      }
+      edge.capacity -= flow;
+      graph[edge.to][edge.rev].capacity += flow;
+      return flow;
+    }
+    return 0;
+  };
+  // ponytail: daily graph is tiny; Dinic gives complete matching without bringing in a dependency.
+  while (bfs()) {
+    pointer.fill(0);
+    while (dfs(source, Number.MAX_SAFE_INTEGER)) {
+      // Keep augmenting this level graph.
+    }
+  }
+  return assignmentEdges
+    .filter(({ edge }) => edge.capacity === 0)
+    .map(({ shift, member }) => ({ shift, member }));
+}
+
+function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) {
+  const options = getDailyShiftNeedOptions(scheduleMap, dateString, dates)
+    .sort((a, b) => (
       a.candidates.length - b.candidates.length
       || b.remaining - a.remaining
       || a.shift.name.localeCompare(b.shift.name)
     ));
-    const target = pool[0];
-    const member = target.candidates[0];
+  const assignments = findMaximumFlowAssignments(options);
+  assignments.forEach(({ shift, member }) => {
     const slot = ensureWorkScheduleSlot(scheduleMap, member.id, dateString);
-    if (!slot) {
-      break;
+    if (slot) {
+      slot.shift = shift.id;
     }
-    slot.shift = target.shift.id;
-    assignments.push({ shift: target.shift, member });
-  }
+  });
   const missingDetails = getRemainingDailyShiftDemandDetails(scheduleMap, dateString);
   if (missingDetails.length) {
     const missing = missingDetails.reduce((sum, item) => sum + item.missing, 0);
