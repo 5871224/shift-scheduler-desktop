@@ -10,10 +10,12 @@ function memberCanWorkShift(memberDeptIds, shiftDeptIds) {
 
 function chooseDailyAssignments(slots) {
   let complete = null;
+  let bestPartial = [];
   const search = (index, used, assignments) => {
     if (complete) return;
+    if (assignments.length > bestPartial.length) bestPartial = [...assignments];
     if (index >= slots.length) {
-      complete = [...assignments];
+      if (assignments.length === slots.length) complete = [...assignments];
       return;
     }
     const slot = slots[index];
@@ -24,9 +26,10 @@ function chooseDailyAssignments(slots) {
       assignments.pop();
       used.delete(candidate.id);
     });
+    search(index + 1, used, assignments);
   };
   search(0, new Set(), []);
-  return complete || [];
+  return complete || bestPartial;
 }
 
 assert.equal(holidayTarget(56), 16);
@@ -49,6 +52,12 @@ assert.deepEqual(chooseDailyAssignments([
 ]), [
   { shift: "first", member: "a" },
   { shift: "second", member: "b" }
+]);
+assert.deepEqual(chooseDailyAssignments([
+  { shift: "impossible", candidates: [] },
+  { shift: "fillable", candidates: [{ id: "home_member", score: 0 }] }
+]), [
+  { shift: "fillable", member: "home_member" }
 ]);
 
 console.log("auto schedule rules check ok");

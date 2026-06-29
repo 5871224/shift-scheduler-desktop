@@ -1802,7 +1802,9 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) 
       bestPartial = { assignments: [...assignments], assignedCount: assignments.length };
     }
     if (index >= slots.length) {
-      completeAssignments = [...assignments];
+      if (assignments.length === slots.length) {
+        completeAssignments = [...assignments];
+      }
       return;
     }
     const slot = slots[index];
@@ -1815,6 +1817,7 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) 
       assignments.pop();
       usedMemberIds.delete(member.id);
     });
+    search(index + 1, usedMemberIds, assignments);
   };
   search(0, new Set(), []);
   if (visited > maxVisited) {
@@ -1823,7 +1826,17 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) 
   const assignments = completeAssignments || bestPartial.assignments;
   const missing = slots.length - assignments.length;
   if (missing > 0) {
-    preview.warnings.push(`${dateString} 仍缺 ${missing} 個班別人力`);
+    const testMap = deepClone(scheduleMap);
+    assignments.forEach(({ shift, member }) => {
+      const slot = ensureWorkScheduleSlot(testMap, member.id, dateString);
+      if (slot) {
+        slot.shift = shift.id;
+      }
+    });
+    const detailText = getRemainingDailyShiftDemandDetails(testMap, dateString)
+      .map(({ shift, missing: missingCount }) => `${shift.name}缺${missingCount}`)
+      .join("、");
+    preview.warnings.push(`${dateString} 仍缺 ${missing} 個班別人力${detailText ? `（${detailText}）` : ""}`);
   }
   return assignments;
 }
@@ -1834,6 +1847,19 @@ function getRemainingDailyShiftDemand(scheduleMap, dateString) {
     const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
     return sum + Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned);
   }, 0);
+}
+
+function getRemainingDailyShiftDemandDetails(scheduleMap, dateString) {
+  const activeMembers = getActiveMembersForDate(dateString);
+  return getVisibleAutoScheduleShifts()
+    .map((shift) => {
+      const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
+      return {
+        shift,
+        missing: Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned)
+      };
+    })
+    .filter((item) => item.missing > 0);
 }
 
 function canAutoPlaceDailyRest(scheduleMap, member, dateString, dates, rangeStartDate) {
