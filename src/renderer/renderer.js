@@ -1784,46 +1784,47 @@ function getDailyShiftNeedSlots(scheduleMap, dateString, dates) {
 }
 
 function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) {
-  const slots = getDailyShiftNeedSlots(scheduleMap, dateString, dates);
+  const slots = getDailyShiftNeedSlots(scheduleMap, dateString, dates)
+    .map((slot, index) => ({
+      ...slot,
+      index,
+      candidates: getAutoShiftCandidateMembers(scheduleMap, slot.shift, dateString, dates)
+    }));
   if (!slots.length) {
     return [];
   }
-  let bestPartial = { assignments: [], assignedCount: 0 };
-  let completeAssignments = null;
-  let visited = 0;
-  const maxVisited = 500000;
-  // ponytail: stop at the first complete daily fill; cap is only a safety valve for huge candidate sets.
-  const search = (index, usedMemberIds, assignments) => {
-    visited += 1;
-    if (visited > maxVisited || completeAssignments) {
-      return;
+  const slotToMember = new Map();
+  const memberToSlotIndex = new Map();
+  const maxExchangeDepth = 6;
+  // ponytail: limited augmenting-path exchange fills holes fast; upgrade path is a worker-backed optimizer if needed.
+  const tryFillSlot = (slotIndex, visitedMemberIds, depth = 0) => {
+    if (depth > maxExchangeDepth) {
+      return false;
     }
-    if (assignments.length > bestPartial.assignedCount) {
-      bestPartial = { assignments: [...assignments], assignedCount: assignments.length };
-    }
-    if (index >= slots.length) {
-      if (assignments.length === slots.length) {
-        completeAssignments = [...assignments];
+    const slot = slots[slotIndex];
+    for (const member of slot.candidates) {
+      if (visitedMemberIds.has(member.id)) {
+        continue;
       }
-      return;
+      visitedMemberIds.add(member.id);
+      const occupiedSlotIndex = memberToSlotIndex.get(member.id);
+      if (occupiedSlotIndex === undefined || tryFillSlot(occupiedSlotIndex, visitedMemberIds, depth + 1)) {
+        slotToMember.set(slotIndex, member);
+        memberToSlotIndex.set(member.id, slotIndex);
+        return true;
+      }
     }
-    const slot = slots[index];
-    const candidates = getAutoShiftCandidateMembers(scheduleMap, slot.shift, dateString, dates)
-      .filter((member) => !usedMemberIds.has(member.id));
-    candidates.forEach((member) => {
-      usedMemberIds.add(member.id);
-      assignments.push({ shift: slot.shift, member });
-      search(index + 1, usedMemberIds, assignments);
-      assignments.pop();
-      usedMemberIds.delete(member.id);
-    });
-    search(index + 1, usedMemberIds, assignments);
+    return false;
   };
-  search(0, new Set(), []);
-  if (visited > maxVisited) {
-    preview.warnings.push(`${dateString} 排班組合過多，已在 ${maxVisited} 次搜尋後採用目前可行結果`);
-  }
-  const assignments = completeAssignments || bestPartial.assignments;
+  slots.forEach((slot) => {
+    if (!slotToMember.has(slot.index)) {
+      tryFillSlot(slot.index, new Set());
+    }
+  });
+  const assignments = Array.from(slotToMember.entries()).map(([slotIndex, member]) => ({
+    shift: slots[slotIndex].shift,
+    member
+  }));
   const missing = slots.length - assignments.length;
   if (missing > 0) {
     const testMap = deepClone(scheduleMap);

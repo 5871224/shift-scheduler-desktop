@@ -9,27 +9,28 @@ function memberCanWorkShift(memberDeptIds, shiftDeptIds) {
 }
 
 function chooseDailyAssignments(slots) {
-  let complete = null;
-  let bestPartial = [];
-  const search = (index, used, assignments) => {
-    if (complete) return;
-    if (assignments.length > bestPartial.length) bestPartial = [...assignments];
-    if (index >= slots.length) {
-      if (assignments.length === slots.length) complete = [...assignments];
-      return;
+  const slotToMember = new Map();
+  const memberToSlot = new Map();
+  const tryFill = (slotIndex, visited, depth = 0) => {
+    if (depth > 6) return false;
+    const slot = slots[slotIndex];
+    for (const candidate of slot.candidates) {
+      if (visited.has(candidate.id)) continue;
+      visited.add(candidate.id);
+      const occupiedSlot = memberToSlot.get(candidate.id);
+      if (occupiedSlot === undefined || tryFill(occupiedSlot, visited, depth + 1)) {
+        slotToMember.set(slotIndex, candidate.id);
+        memberToSlot.set(candidate.id, slotIndex);
+        return true;
+      }
     }
-    const slot = slots[index];
-    slot.candidates.filter((candidate) => !used.has(candidate.id)).forEach((candidate) => {
-      used.add(candidate.id);
-      assignments.push({ shift: slot.shift, member: candidate.id });
-      search(index + 1, used, assignments);
-      assignments.pop();
-      used.delete(candidate.id);
-    });
-    search(index + 1, used, assignments);
+    return false;
   };
-  search(0, new Set(), []);
-  return complete || bestPartial;
+  slots.forEach((_, index) => tryFill(index, new Set()));
+  return Array.from(slotToMember.entries()).map(([slotIndex, member]) => ({
+    shift: slots[slotIndex].shift,
+    member
+  }));
 }
 
 assert.equal(holidayTarget(56), 16);
