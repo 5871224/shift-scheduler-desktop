@@ -1639,6 +1639,21 @@ function memberCanWorkShift(member, shift) {
   return !deptIds.length || deptIds.some((deptId) => memberCanScheduleDepartment(member, deptId));
 }
 
+function getMemberAutoRestTarget(member, scheduleMap, dates) {
+  const activeDays = countMemberActiveDays(member, dates);
+  if (!activeDays) {
+    return { activeDays: 0, fixedRegularCount: 0, totalHolidayTarget: 0, restTarget: 0 };
+  }
+  const fixedRegularCount = countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRegularRestLeaveId);
+  const totalHolidayTarget = Math.round((activeDays / 56) * 16);
+  return {
+    activeDays,
+    fixedRegularCount,
+    totalHolidayTarget,
+    restTarget: Math.max(0, totalHolidayTarget - fixedRegularCount)
+  };
+}
+
 function getActiveMembersForDate(dateString) {
   return state.members.filter((member) => isMemberActiveOnDateString(member, dateString));
 }
@@ -1656,6 +1671,13 @@ function memberHasRestInWeek(scheduleMap, memberId, dates, weekIndex, rangeStart
     getWeekBucketIndex(dateString, rangeStartDate) === weekIndex
     && isRestLeaveId(getWorkScheduleSlot(scheduleMap, memberId, dateString)?.leave)
   ));
+}
+
+function countMemberRestInWeek(scheduleMap, memberId, dates, weekIndex, rangeStartDate) {
+  return dates.filter((dateString) => (
+    getWeekBucketIndex(dateString, rangeStartDate) === weekIndex
+    && isRestLeaveId(getWorkScheduleSlot(scheduleMap, memberId, dateString)?.leave)
+  )).length;
 }
 
 function countMemberAssignedShifts(scheduleMap, memberId, dates) {
@@ -1726,24 +1748,128 @@ function getAutoShiftCandidateMembers(scheduleMap, shift, dateString, dates) {
     }
     const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
     return !slot?.shift && !slot?.leave;
-  }).sort((a, b) => {
-    const shiftDeptIds = Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
-    const aHome = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(a)) : true;
-    const bHome = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(b)) : true;
-    const aGroup = aHome && !a.payByDay ? 0 : !a.payByDay ? 1 : aHome ? 2 : 3;
-    const bGroup = bHome && !b.payByDay ? 0 : !b.payByDay ? 1 : bHome ? 2 : 3;
-    if (aGroup !== bGroup) {
-      return aGroup - bGroup;
+  }).sort((a, b) => (
+    getAutoShiftCandidateScore(scheduleMap, shift, a, dateString, dates)
+    - getAutoShiftCandidateScore(scheduleMap, shift, b, dateString, dates)
+  ));
+}
+
+function getAutoShiftCandidateScore(scheduleMap, shift, member, dateString, dates) {
+  const shiftDeptIds = Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
+  const homeDeptMatch = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(member)) : true;
+  const group = homeDeptMatch && !member.payByDay ? 0 : !member.payByDay ? 1 : homeDeptMatch ? 2 : 3;
+  const weekIndex = getWeekBucketIndex(dateString, dates[0] || dateString);
+  const mustWorkThisWeek = !member.payByDay && memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, dates[0] || dateString);
+  return (mustWorkThisWeek ? -10000 : 0)
+    + group * 1000
+    + countMemberAssignedShifts(scheduleMap, member.id, dates) * 20
+    + countConsecutiveWorkBefore(scheduleMap, member.id, dateString) * 3
+    + countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRestLeaveId) * 10;
+}
+
+function getDailyShiftNeedSlots(scheduleMap, dateString, dates) {
+  const activeMembers = getActiveMembersForDate(dateString);
+  return getVisibleAutoScheduleShifts()
+    .map((shift) => {
+      const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
+      const remaining = Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned);
+      const candidates = getAutoShiftCandidateMembers(scheduleMap, shift, dateString, dates);
+      return { shift, remaining, candidates };
+    })
+    .sort((a, b) => a.candidates.length - b.candidates.length || a.shift.name.localeCompare(b.shift.name))
+    .flatMap(({ shift, remaining, candidates }) => (
+      Array.from({ length: remaining }, () => ({ shift, candidateCount: candidates.length }))
+    ))
+    .sort((a, b) => a.candidateCount - b.candidateCount || a.shift.name.localeCompare(b.shift.name));
+}
+
+function findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview) {
+  const slots = getDailyShiftNeedSlots(scheduleMap, dateString, dates);
+  if (!slots.length) {
+    return [];
+  }
+  let best = { score: Number.POSITIVE_INFINITY, assignments: [], missing: slots.length };
+  let visited = 0;
+  const maxVisited = 500000;
+  // ponytail: daily exhaustive search is capped to keep the browser responsive; upgrade path is a worker-backed CP-SAT solver.
+  const search = (index, usedMemberIds, assignments, score, missing) => {
+    visited += 1;
+    if (visited > maxVisited || score >= best.score) {
+      return;
     }
-    const assignedDiff = countMemberAssignedShifts(scheduleMap, a.id, dates) - countMemberAssignedShifts(scheduleMap, b.id, dates);
-    if (assignedDiff) {
-      return assignedDiff;
+    if (index >= slots.length) {
+      best = { score, assignments: [...assignments], missing };
+      return;
     }
-    const consecutiveDiff = countConsecutiveWorkBefore(scheduleMap, a.id, dateString) - countConsecutiveWorkBefore(scheduleMap, b.id, dateString);
-    if (consecutiveDiff) {
-      return consecutiveDiff;
-    }
-    return countMemberLeaveByPredicate(scheduleMap, a.id, dates, isRestLeaveId) - countMemberLeaveByPredicate(scheduleMap, b.id, dates, isRestLeaveId);
+    const slot = slots[index];
+    const candidates = getAutoShiftCandidateMembers(scheduleMap, slot.shift, dateString, dates)
+      .filter((member) => !usedMemberIds.has(member.id));
+    candidates.forEach((member) => {
+      usedMemberIds.add(member.id);
+      assignments.push({ shift: slot.shift, member });
+      search(
+        index + 1,
+        usedMemberIds,
+        assignments,
+        score + getAutoShiftCandidateScore(scheduleMap, slot.shift, member, dateString, dates),
+        missing
+      );
+      assignments.pop();
+      usedMemberIds.delete(member.id);
+    });
+    search(index + 1, usedMemberIds, assignments, score + 1000000, missing + 1);
+  };
+  search(0, new Set(), [], 0, 0);
+  if (visited > maxVisited) {
+    preview.warnings.push(`${dateString} 排班組合過多，已在 ${maxVisited} 次搜尋後採用目前最佳結果`);
+  }
+  if (best.missing > 0) {
+    preview.warnings.push(`${dateString} 仍缺 ${best.missing} 個班別人力`);
+  }
+  return best.assignments;
+}
+
+function getRemainingDailyShiftDemand(scheduleMap, dateString) {
+  const activeMembers = getActiveMembersForDate(dateString);
+  return getVisibleAutoScheduleShifts().reduce((sum, shift) => {
+    const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
+    return sum + Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned);
+  }, 0);
+}
+
+function canAutoPlaceDailyRest(scheduleMap, member, dateString, dates, rangeStartDate) {
+  if (!isMemberActiveOnDateString(member, dateString)) {
+    return false;
+  }
+  const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
+  if (slot?.shift || slot?.leave) {
+    return false;
+  }
+  const target = getMemberAutoRestTarget(member, scheduleMap, dates).restTarget;
+  if (countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRestLeaveId) >= target) {
+    return false;
+  }
+  const weekIndex = getWeekBucketIndex(dateString, rangeStartDate);
+  return member.payByDay || countMemberRestInWeek(scheduleMap, member.id, dates, weekIndex, rangeStartDate) === 0;
+}
+
+function placeDailySurplusRestDays(scheduleMap, dateString, dates, rangeStartDate, restLeave, preview) {
+  const remainingDemand = getRemainingDailyShiftDemand(scheduleMap, dateString);
+  if (remainingDemand > 0) {
+    return;
+  }
+  const candidates = getActiveMembersForDate(dateString)
+    .filter((member) => canAutoPlaceDailyRest(scheduleMap, member, dateString, dates, rangeStartDate))
+    .sort((a, b) => {
+      if (a.payByDay !== b.payByDay) {
+        return a.payByDay ? -1 : 1;
+      }
+      const restDiff = countMemberLeaveByPredicate(scheduleMap, a.id, dates, isRestLeaveId)
+        - countMemberLeaveByPredicate(scheduleMap, b.id, dates, isRestLeaveId);
+      return restDiff || getMemberHomeDeptId(a).localeCompare(getMemberHomeDeptId(b)) || a.name.localeCompare(b.name);
+    });
+  candidates.forEach((member) => {
+    markAutoLeave(scheduleMap, member, dateString, restLeave, preview, "多餘人力預排休息日");
   });
 }
 
@@ -1786,42 +1912,22 @@ function buildAutoSchedulePreview() {
   });
 
   state.members.forEach((member) => {
-    const activeDays = countMemberActiveDays(member, dates);
-    if (!activeDays) {
+    const target = getMemberAutoRestTarget(member, scheduleMap, dates);
+    if (!target.activeDays) {
       return;
     }
-    const fixedRegularCount = countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRegularRestLeaveId);
-    const totalHolidayTarget = Math.round((activeDays / 56) * 16);
-    const restTarget = Math.max(0, totalHolidayTarget - fixedRegularCount);
-    preview.memberTargets[member.id] = { activeDays, fixedRegularCount, totalHolidayTarget, restTarget };
+    preview.memberTargets[member.id] = target;
   });
 
   dates.forEach((dateString) => {
-    const activeMembers = getActiveMembersForDate(dateString);
-    const shiftDemands = getVisibleAutoScheduleShifts().map((shift) => {
-      const assigned = activeMembers.filter((member) => getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shift.id).length;
-      const candidates = getAutoShiftCandidateMembers(scheduleMap, shift, dateString, dates);
-      return {
-        shift,
-        remaining: Math.max(0, (Number(shift.requiredStaffCount) || 0) - assigned),
-        available: candidates.length
-      };
-    }).sort((a, b) => a.available - b.available || a.shift.name.localeCompare(b.shift.name));
-
-    shiftDemands.forEach(({ shift, remaining }) => {
-      let need = remaining;
-      while (need > 0) {
-        const candidate = getAutoShiftCandidateMembers(scheduleMap, shift, dateString, dates)[0];
-        if (!candidate) {
-          preview.warnings.push(`${dateString} ${shift.name} 缺 ${need} 人`);
-          break;
-        }
-        const slot = ensureWorkScheduleSlot(scheduleMap, candidate.id, dateString);
+    const assignments = findBestDailyShiftAssignments(scheduleMap, dateString, dates, preview);
+    assignments.forEach(({ shift, member }) => {
+      const slot = ensureWorkScheduleSlot(scheduleMap, member.id, dateString);
+      if (slot) {
         slot.shift = shift.id;
-        need -= 1;
       }
     });
-
+    placeDailySurplusRestDays(scheduleMap, dateString, dates, startDate, restLeave, preview);
   });
 
   state.members.forEach((member) => {
