@@ -857,6 +857,11 @@ thead th.today,
   box-shadow: inset 0 0 0 3px #7f5422;
 }
 
+.cell.auto-schedule-preview {
+  background: #dff3d7;
+  box-shadow: inset 0 0 0 2px #68a84f;
+}
+
 .cell.inactive-cell {
   background: #9b9b9b;
   cursor: not-allowed;
