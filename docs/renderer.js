@@ -1750,19 +1750,26 @@ function getDailyAssignmentCost(scheduleMap, option, member, dateString, dates) 
   const homeDeptMatch = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(member)) : true;
   const weekIndex = getWeekBucketIndex(dateString, dates[0] || dateString);
   const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
+  const restTarget = getMemberAutoRestTarget(member, scheduleMap, dates).restTarget;
+  const restCount = countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRestLeaveId);
+  const hasRestThisWeek = memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, dates[0] || dateString);
   const mustWork = !member.payByDay
     && !isRegularRestLeaveId(slot?.leave)
-    && memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, dates[0] || dateString);
+    && hasRestThisWeek;
+  const monthlyCanStillRest = !member.payByDay && restCount < restTarget && !hasRestThisWeek;
   if (mustWork) {
     return 0;
   }
   if (!member.payByDay && homeDeptMatch) {
     return 100;
   }
-  if (!member.payByDay) {
+  if (!member.payByDay && !monthlyCanStillRest) {
     return 200;
   }
-  return 300;
+  if (monthlyCanStillRest) {
+    return 300;
+  }
+  return 400;
 }
 
 function findMinimumCostFlowAssignments(scheduleMap, options, dateString, dates) {

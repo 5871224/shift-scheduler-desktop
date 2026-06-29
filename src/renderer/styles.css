@@ -851,10 +851,12 @@ thead th.stats-col {
   white-space: nowrap;
 }
 
-.pay-daily-row .person-col,
-.pay-daily-row .stats-col,
-.pay-daily-row .cell {
+.pay-daily-row .member-main {
+  display: inline-block;
   background: #fff4d6;
+  border-radius: 6px;
+  padding: 1px 5px;
+  margin: -1px -5px;
 }
 
 .cell {
@@ -899,10 +901,6 @@ thead th.today,
 .cell.auto-schedule-preview {
   background: #dff3d7;
   box-shadow: inset 0 0 0 2px #68a84f;
-}
-
-.pay-daily-row .cell.auto-schedule-preview {
-  background: #dff3d7;
 }
 
 .cell.inactive-cell {
