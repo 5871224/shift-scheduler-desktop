@@ -13,16 +13,6 @@ function memberCanWorkShift(memberDeptIds, shiftDeptIds) {
   return !shiftDeptIds.length || shiftDeptIds.some((deptId) => memberDeptIds.includes(deptId));
 }
 
-function canAssignWithinDemand(currentAssignedCount, demand, alreadyAssigned = false) {
-  if (alreadyAssigned) {
-    return true;
-  }
-  if (demand <= 0) {
-    return false;
-  }
-  return currentAssignedCount < demand;
-}
-
 function findMinimumCostFlowAssignments(options) {
   const FIRST_COVERAGE_COST = 0;
   const EXTRA_COVERAGE_COST = 1000000;
@@ -135,11 +125,6 @@ assert.equal(Math.max(0, holidayTarget(28) - 4), 4);
 assert.equal(memberCanWorkShift(["d2"], ["d1", "d2"]), true);
 assert.equal(memberCanWorkShift(["d3"], ["d1", "d2"]), false);
 assert.equal(memberCanWorkShift(["d3"], []), true);
-assert.equal(canAssignWithinDemand(0, 1), true);
-assert.equal(canAssignWithinDemand(1, 1), false);
-assert.equal(canAssignWithinDemand(2, 1), false);
-assert.equal(canAssignWithinDemand(1, 1, true), true);
-assert.equal(canAssignWithinDemand(0, 0), false);
 assert.deepEqual(chooseDailyAssignments([
   { shift: "critical", remaining: 1, candidates: [{ id: "only" }] },
   { shift: "open", remaining: 1, candidates: [{ id: "only" }, { id: "flex" }] }
@@ -187,10 +172,8 @@ assert.deepEqual(chooseDailyAssignments([
   { shift: "fillable", member: "home_member" }
 ]);
 
-assert(renderer.includes("function canAssignShiftWithinDemand"), "renderer should centralize shift demand cap checks");
-assert(renderer.includes("canAssignShiftWithinDemand(scheduleMap, member.id, dateString, shift.id)"), "auto schedule writes should enforce demand cap");
-assert(renderer.includes("canAssignShiftWithinDemand(state.schedule, memberId, dateString, nextShiftId)"), "manual and paste shift writes should enforce demand cap");
-assert(renderer.includes("showInfoMessage(getShiftDemandLimitMessage(nextShiftId, dateString))"), "manual over-demand shift writes should explain why they were blocked");
+assert(!renderer.includes("function canAssignShiftWithinDemand"), "renderer should not block over-demand shift assignments");
+assert(!renderer.includes("getShiftDemandLimitMessage"), "manual over-demand shift writes should not be blocked");
 assert(renderer.includes("function buildAutoSchedulePreview(dates = getVisibleDates())"), "auto schedule preview should accept an explicit date range");
 assert(renderer.includes('title: "自動排班期間"'), "auto schedule should ask for a period before previewing");
 assert(renderer.includes("const dates = enumerateDateRange(startDate, endDate);"), "auto schedule period modal should build a date range from user input");

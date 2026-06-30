@@ -1498,10 +1498,6 @@ function applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot) {
     return false;
   }
   const nextShiftId = clipboardSlot?.shift || null;
-  if (nextShiftId && !canAssignShiftWithinDemand(state.schedule, memberId, dateString, nextShiftId)) {
-    pruneEmptySchedule();
-    return false;
-  }
   slot.shift = nextShiftId;
   if (!slotHasBlockingRequest(slot, "leave")) {
     slot.leave = clipboardSlot?.leave || null;
@@ -1819,33 +1815,6 @@ function isShiftOperatingOnDate(shift, dateString) {
   return !shiftDeptIds.length || getOperatingShiftDepartmentIds(shift, dateString).length > 0;
 }
 
-function canAssignShiftWithinDemand(scheduleMap, memberId, dateString, shiftId) {
-  if (!shiftId) {
-    return true;
-  }
-  const slot = getWorkScheduleSlot(scheduleMap, memberId, dateString);
-  if (slot?.shift === shiftId) {
-    return true;
-  }
-  const shift = getItem("shift", shiftId);
-  const demand = getShiftDemandForDate(shift, dateString);
-  if (demand <= 0) {
-    return false;
-  }
-  return countAssignedShiftMembers(scheduleMap, shiftId, dateString, memberId) < demand;
-}
-
-function getShiftDemandLimitMessage(shiftId, dateString) {
-  const shift = getItem("shift", shiftId);
-  if (!shift) {
-    return "找不到班別，無法排班";
-  }
-  if (!isShiftOperatingOnDate(shift, dateString)) {
-    return `${shift.name} ${dateString} 不在適用單位營業期間，不能排班`;
-  }
-  return `${shift.name} ${dateString} 需求人數已滿，不能再排`;
-}
-
 function getDailyAssignmentCost(scheduleMap, option, member, dateString, dates) {
   const shiftDeptIds = getOperatingShiftDepartmentIds(option.shift, dateString);
   const homeDeptMatch = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(member)) : true;
@@ -1979,10 +1948,8 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, preview) {
   const assignments = findMinimumCostFlowAssignments(scheduleMap, options, dateString, preview.dates || [dateString]);
   assignments.forEach(({ shift, member }) => {
     const slot = ensureWorkScheduleSlot(scheduleMap, member.id, dateString);
-    if (slot && canAssignShiftWithinDemand(scheduleMap, member.id, dateString, shift.id)) {
+    if (slot) {
       slot.shift = shift.id;
-    } else {
-      preview.warnings.push(`${member.name} ${dateString} ${shift.name} 超過需求人數，已略過`);
     }
   });
   const missingDetails = getRemainingDailyShiftDemandDetails(scheduleMap, dateString);
@@ -3612,11 +3579,6 @@ async function applySelectionToCell(memberId, day) {
   }
   if (type === "shift") {
     const nextShiftId = slot.shift === id ? null : id;
-    if (nextShiftId && !canAssignShiftWithinDemand(state.schedule, memberId, dateString, nextShiftId)) {
-      pruneEmptySchedule();
-      showInfoMessage(getShiftDemandLimitMessage(nextShiftId, dateString));
-      return;
-    }
     slot.shift = nextShiftId;
   }
   if (type === "overtime") {
