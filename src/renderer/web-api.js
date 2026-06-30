@@ -1103,6 +1103,9 @@
     return { ok: true };
   }
   async function exportSapCsv(payload) {
+    if (!exporter.getSapLeaveExportRows(payload).length) {
+      return { canceled: true, empty: true };
+    }
     const blob = new Blob(
       [exporter.buildSapLeaveCsvContent(payload)],
       { type: "text/csv;charset=utf-8" }
@@ -1113,6 +1116,9 @@
   }
 
   async function exportOvertime(payload) {
+    if (!exporter.getOvertimeExportRows(payload).length) {
+      return { canceled: true, empty: true };
+    }
     const blob = await exporter.workbookToBlob(await exporter.createOvertimeWorkbook(payload));
     const fileName = makeFileName("匯出加班", payload, "xlsx");
     downloadBlob(blob, fileName);
@@ -1120,6 +1126,9 @@
   }
 
   async function exportLeave(payload) {
+    if (!exporter.getLeaveExportRows(payload).length) {
+      return { canceled: true, empty: true };
+    }
     const blob = await exporter.workbookToBlob(await exporter.createLeaveWorkbook(payload));
     const fileName = makeFileName("匯出請假", payload, "xlsx");
     downloadBlob(blob, fileName);

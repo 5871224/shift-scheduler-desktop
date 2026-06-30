@@ -2768,11 +2768,11 @@ function hasSapLeaveRows() {
     if (member.payByDay) {
       return false;
     }
-    for (const dateString of getVisibleDates()) {
-      if (!isMemberActiveOnDateString(member, dateString)) {
+    for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
+      if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
         continue;
       }
-      const leaveId = getSlot(member.id, dateString)?.leave;
+      const leaveId = state.schedule[scheduleKey(member.id, state.year, state.month, day)]?.leave;
       const leave = getItem("leave", leaveId);
       if (leave && sapLeaveCodes.has(leave.code)) {
         return true;
@@ -2784,11 +2784,11 @@ function hasSapLeaveRows() {
 
 function hasOvertimeRows() {
   return state.members.some((member) => {
-    for (const dateString of getVisibleDates()) {
-      if (!isMemberActiveOnDateString(member, dateString)) {
+    for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
+      if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
         continue;
       }
-      if (getSlot(member.id, dateString)?.overtime) {
+      if (state.schedule[scheduleKey(member.id, state.year, state.month, day)]?.overtime) {
         return true;
       }
     }
@@ -2803,11 +2803,11 @@ function hasLeaveRows() {
     if (department?.hiddenFromLeave) {
       return false;
     }
-    for (const dateString of getVisibleDates()) {
-      if (!isMemberActiveOnDateString(member, dateString)) {
+    for (let day = 1; day <= daysInMonth(state.year, state.month); day += 1) {
+      if (!isMemberActiveOnDate(member, state.year, state.month, day)) {
         continue;
       }
-      const leave = getItem("leave", getSlot(member.id, dateString)?.leave);
+      const leave = getItem("leave", state.schedule[scheduleKey(member.id, state.year, state.month, day)]?.leave);
       if (leave && !excludedLeaveCodes.has(leave.code)) {
         return true;
       }
@@ -6771,6 +6771,10 @@ async function exportSapCsv() {
       year: state.year,
       month: state.month
     });
+    if (result.empty) {
+      showInfoMessage("目前沒有可匯出的休例假資料");
+      return;
+    }
     if (result.canceled) {
       return;
     }
@@ -6790,6 +6794,10 @@ async function exportOvertime() {
       year: state.year,
       month: state.month
     });
+    if (result.empty) {
+      showInfoMessage("目前沒有可匯出的加班資料");
+      return;
+    }
     if (result.canceled) {
       return;
     }
@@ -6809,6 +6817,10 @@ async function exportLeave() {
       year: state.year,
       month: state.month
     });
+    if (result.empty) {
+      showInfoMessage("目前沒有可匯出的請假資料");
+      return;
+    }
     if (result.canceled) {
       return;
     }

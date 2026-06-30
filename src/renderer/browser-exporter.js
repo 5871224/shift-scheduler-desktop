@@ -154,10 +154,12 @@
     return names.join("\n");
   }
 
-  function buildSapLeaveCsvContent(payload) {
+  function getSapLeaveExportRows(payload) {
     const { state, year, month } = payload;
     const leaveMap = getItemMap(state.leaves);
     const sapCodeMap = new Map([
+      ["0036", "OFF"],
+      ["0047", "REST"],
       ["休息日", "REST"],
       ["休假", "REST"],
       ["例假", "OFF"]
@@ -174,7 +176,7 @@
         }
         const slot = state.schedule[getScheduleKey(member.id, year, month, day)];
         const leave = leaveMap.get(slot?.leave);
-        const sapCode = sapCodeMap.get(leave?.name);
+        const sapCode = sapCodeMap.get(leave?.code) || sapCodeMap.get(leave?.name);
         if (!sapCode) {
           continue;
         }
@@ -183,6 +185,11 @@
       }
     }
 
+    return rows;
+  }
+
+  function buildSapLeaveCsvContent(payload) {
+    const rows = getSapLeaveExportRows(payload);
     const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\r\n");
     return rows.length ? `\uFEFF${csv}\r\n` : "\uFEFF";
   }
@@ -869,6 +876,9 @@
 
   window.schedulerBrowserExporter = {
     buildSapLeaveCsvContent,
+    getSapLeaveExportRows,
+    getOvertimeExportRows,
+    getLeaveExportRows,
     createScheduleWorkbook,
     createOvertimeWorkbook,
     createLeaveWorkbook,
