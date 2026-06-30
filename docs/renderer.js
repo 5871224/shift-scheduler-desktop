@@ -927,6 +927,19 @@ function isDepartmentActiveInVisibleRange(department) {
   return doesDateRangeOverlapRange(department?.startDate || "", department?.endDate || "", startDate, endDate);
 }
 
+function isDepartmentOperatingOnDate(department, dateString) {
+  if (!department || !dateString) {
+    return false;
+  }
+  if (department.startDate && dateString < department.startDate) {
+    return false;
+  }
+  if (department.endDate && dateString > department.endDate) {
+    return false;
+  }
+  return true;
+}
+
 function isMemberActiveInVisibleRange(member) {
   const { startDate, endDate } = getVisibleDateRange();
   return doesDateRangeOverlapRange(member?.hireDate || "", member?.leaveDate || "", startDate, endDate);
@@ -1630,8 +1643,12 @@ function hasAnyShiftOnDate(scheduleMap, memberId, dateString) {
   return Boolean(getWorkScheduleSlot(scheduleMap, memberId, dateString)?.shift);
 }
 
-function getVisibleAutoScheduleShifts() {
-  return state.shifts.filter((shift) => !shift.hiddenFromToolbar && Math.max(0, Number(shift.requiredStaffCount) || 0) > 0);
+function getVisibleAutoScheduleShifts(dateString = "") {
+  return state.shifts.filter((shift) => (
+    !shift.hiddenFromToolbar
+    && Math.max(0, Number(shift.requiredStaffCount) || 0) > 0
+    && (!dateString || isShiftOperatingOnDate(shift, dateString))
+  ));
 }
 
 function getMemberAutoRestTarget(member, scheduleMap, dates) {
@@ -1716,7 +1733,7 @@ function markAutoLeave(scheduleMap, member, dateString, leave, preview, reason) 
 }
 
 function getDailyShiftNeedOptions(scheduleMap, dateString) {
-  const shifts = getVisibleAutoScheduleShifts();
+  const shifts = getVisibleAutoScheduleShifts(dateString);
   const activeMembers = getActiveMembersForDate(dateString);
   const memberDeptIdsById = new Map(activeMembers.map((member) => [member.id, getMemberScheduleDeptIds(member)]));
   const assignedCountByShiftId = new Map();
@@ -1734,7 +1751,7 @@ function getDailyShiftNeedOptions(scheduleMap, dateString) {
     .map((shift) => {
       const assignedCount = assignedCountByShiftId.get(shift.id) || 0;
       const remaining = Math.max(0, (Number(shift.requiredStaffCount) || 0) - assignedCount);
-      const shiftDeptIds = Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
+      const shiftDeptIds = getOperatingShiftDepartmentIds(shift, dateString);
       const candidates = remaining > 0
         ? availableMembers.filter((member) => (
           !shiftDeptIds.length || shiftDeptIds.some((deptId) => memberDeptIdsById.get(member.id)?.includes(deptId))
@@ -1749,8 +1766,21 @@ function getShiftDepartmentIds(shift) {
   return Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
 }
 
+function getOperatingShiftDepartmentIds(shift, dateString) {
+  const shiftDeptIds = getShiftDepartmentIds(shift);
+  return shiftDeptIds.filter((deptId) => {
+    const department = state.departments.find((item) => item.id === deptId);
+    return isDepartmentOperatingOnDate(department, dateString);
+  });
+}
+
+function isShiftOperatingOnDate(shift, dateString) {
+  const shiftDeptIds = getShiftDepartmentIds(shift);
+  return !shiftDeptIds.length || getOperatingShiftDepartmentIds(shift, dateString).length > 0;
+}
+
 function getDailyAssignmentCost(scheduleMap, option, member, dateString, dates) {
-  const shiftDeptIds = getShiftDepartmentIds(option.shift);
+  const shiftDeptIds = getOperatingShiftDepartmentIds(option.shift, dateString);
   const homeDeptMatch = shiftDeptIds.length ? shiftDeptIds.includes(getMemberHomeDeptId(member)) : true;
   const weekIndex = getWeekBucketIndex(dateString, dates[0] || dateString);
   const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
@@ -1910,7 +1940,7 @@ function getRemainingDailyShiftDemandDetails(scheduleMap, dateString) {
       assignedCountByShiftId.set(shiftId, (assignedCountByShiftId.get(shiftId) || 0) + 1);
     }
   });
-  return getVisibleAutoScheduleShifts()
+  return getVisibleAutoScheduleShifts(dateString)
     .map((shift) => {
       return {
         shift,
@@ -3084,7 +3114,9 @@ function getShiftViewMembersForDay(shiftId, dateString) {
 
 function getShiftViewCellState(shift, dateString) {
   const members = getShiftViewMembersForDay(shift.id, dateString);
-  const requiredStaffCount = Math.max(0, Number(shift?.requiredStaffCount) || 0);
+  const requiredStaffCount = isShiftOperatingOnDate(shift, dateString)
+    ? Math.max(0, Number(shift?.requiredStaffCount) || 0)
+    : 0;
   return {
     members,
     isShortage: members.length < requiredStaffCount

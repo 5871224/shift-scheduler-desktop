@@ -1,0 +1,56 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const rootDir = path.resolve(__dirname, "..");
+const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
+
+function isDepartmentOperatingOnDate(department, dateString) {
+  if (!department || !dateString) {
+    return false;
+  }
+  if (department.startDate && dateString < department.startDate) {
+    return false;
+  }
+  if (department.endDate && dateString > department.endDate) {
+    return false;
+  }
+  return true;
+}
+
+function isShiftOperatingOnDate(shift, departments, dateString) {
+  const shiftDeptIds = Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
+  return !shiftDeptIds.length || shiftDeptIds.some((deptId) => (
+    isDepartmentOperatingOnDate(departments.find((department) => department.id === deptId), dateString)
+  ));
+}
+
+const departments = [
+  { id: "open", startDate: "2026-05-01", endDate: "2026-05-31" },
+  { id: "always", startDate: "", endDate: "" },
+  { id: "from_june", startDate: "2026-06-01", endDate: "" },
+  { id: "until_may", startDate: "", endDate: "2026-05-31" }
+];
+
+assert.equal(isDepartmentOperatingOnDate(departments[0], "2026-04-30"), false);
+assert.equal(isDepartmentOperatingOnDate(departments[0], "2026-05-01"), true);
+assert.equal(isDepartmentOperatingOnDate(departments[0], "2026-05-31"), true);
+assert.equal(isDepartmentOperatingOnDate(departments[0], "2026-06-01"), false);
+assert.equal(isDepartmentOperatingOnDate(departments[1], "2026-06-01"), true);
+assert.equal(isDepartmentOperatingOnDate(departments[2], "2026-05-31"), false);
+assert.equal(isDepartmentOperatingOnDate(departments[2], "2026-06-01"), true);
+assert.equal(isDepartmentOperatingOnDate(departments[2], "2026-06-30"), true);
+assert.equal(isDepartmentOperatingOnDate(departments[3], "2026-05-31"), true);
+assert.equal(isDepartmentOperatingOnDate(departments[3], "2026-06-01"), false);
+assert.equal(isShiftOperatingOnDate({ applicableDeptIds: ["open"] }, departments, "2026-06-01"), false);
+assert.equal(isShiftOperatingOnDate({ applicableDeptIds: ["open", "always"] }, departments, "2026-06-01"), true);
+assert.equal(isShiftOperatingOnDate({ applicableDeptIds: ["from_june"] }, departments, "2026-06-30"), true);
+assert.equal(isShiftOperatingOnDate({ applicableDeptIds: [] }, departments, "2026-06-01"), true);
+
+assert(renderer.includes("function isDepartmentOperatingOnDate"), "renderer should check department operating dates");
+assert(renderer.includes("function isShiftOperatingOnDate"), "renderer should check shift operating dates");
+assert(renderer.includes("getVisibleAutoScheduleShifts(dateString)"), "daily auto schedule demand should filter by date");
+assert(renderer.includes("getOperatingShiftDepartmentIds(shift, dateString)"), "daily candidates should use operating shift departments");
+assert(renderer.includes("const requiredStaffCount = isShiftOperatingOnDate(shift, dateString)"), "shift view shortage should ignore non-operating dates");
+
+console.log("auto schedule department date check ok");
