@@ -1969,8 +1969,8 @@ thead th.today,
   display: flex;
   align-items: center;
   gap: 4px;
-  min-height: 40px;
-  padding: 4px;
+  min-height: 36px;
+  padding: 3px;
   border: 1px solid #f1dfc5;
   border-radius: 999px;
   background: #fff7ee;
@@ -1980,8 +1980,8 @@ thead th.today,
 }
 
 .settings-view-option {
-  min-height: 32px;
-  padding: 6px 14px;
+  min-height: 28px;
+  padding: 5px 13px;
   border: none;
   border-radius: 999px;
   background: transparent;
@@ -1992,9 +1992,9 @@ thead th.today,
 }
 
 .settings-view-option.active {
-  background: #1f6be3;
+  background: var(--accent);
   color: #fff;
-  box-shadow: 0 6px 12px rgba(31, 107, 227, 0.22);
+  box-shadow: 0 6px 12px rgba(127, 84, 34, 0.18);
 }
 
 .settings-view-option:not(.active):hover {
@@ -2011,19 +2011,30 @@ thead th.today,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: 8px 14px;
+  min-height: 36px;
+  padding: 7px 13px;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .department-settings-table-wrap {
+  position: relative;
   flex: none;
   overflow: visible;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: #fff;
+}
+
+.department-settings-table-wrap::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 3;
+  pointer-events: none;
+  border: 1px solid var(--line);
+  border-radius: 18px;
 }
 
 .department-settings-row {
