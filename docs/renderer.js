@@ -2970,8 +2970,21 @@ function renderToolbar() {
   syncRoleUi();
 }
 
+function memberMatchesSelectedShift(member) {
+  if (state.selected.type !== "shift" || !state.selected.id) {
+    return false;
+  }
+  const shift = getItem("shift", state.selected.id);
+  if (!shift) {
+    return false;
+  }
+  const shiftDeptIds = getShiftDepartmentIds(shift);
+  return !shiftDeptIds.length || shiftDeptIds.some((deptId) => memberCanScheduleDepartment(member, deptId));
+}
+
 function memberLabel(member) {
-  return `<div class="member-main">${escapeHtml(member.name)}</div>`;
+  const selectedShiftClass = memberMatchesSelectedShift(member) ? "shift-eligible-member-name" : "";
+  return `<div class="member-main ${selectedShiftClass}">${escapeHtml(member.name)}</div>`;
 }
 
 function getMemberEightWeekStats(member) {
@@ -3556,6 +3569,7 @@ function selectChip(type, id) {
     state.selected = { type, id };
   }
   renderToolbar();
+  renderTable();
 }
 
 function removeAssignmentsByItem(category, id) {

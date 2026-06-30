@@ -859,6 +859,11 @@ thead th.stats-col {
   margin: -1px -5px;
 }
 
+.member-main.shift-eligible-member-name {
+  color: #b51f62;
+  font-weight: 800;
+}
+
 .cell {
   min-width: var(--day-col-width);
   width: var(--day-col-width);
