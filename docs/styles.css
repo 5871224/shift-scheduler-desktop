@@ -1815,6 +1815,8 @@ thead th.today,
 .settings-table-wrap {
   flex: 1;
   min-height: 0;
+  border: none;
+  box-shadow: 0 0 0 1px var(--line);
   overflow: auto;
 }
 
