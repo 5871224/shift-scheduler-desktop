@@ -66,6 +66,18 @@ assert(
   "browser exporter should support workbook round-trips for all requested settings screens"
 );
 assert(
+  exporter.includes('["工號", "姓名", "所屬單位", "排班單位", "權限", "到職日", "離職日", "計薪方式", "例假星期"]') &&
+    exporter.includes("scheduleDepartmentNames") &&
+    renderer.includes("hasUnknownScheduleDepartment"),
+  "member import/export should include schedule departments and skip rows with unknown schedule departments"
+);
+assert(
+  exporter.includes('["班別", "適用單位", "需求人數", "上班時間", "下班時間", "底色", "字色", "自動字色", "不顯示"]') &&
+    exporter.includes("requiredStaffCountColumn") &&
+    renderer.includes("requiredStaffCount: Math.max(0, Number(row.requiredStaffCount) || 0)"),
+  "shift import/export should include required staff count"
+);
+assert(
   renderer.includes("const EFFECTIVE_REQUEST_STATUSES = new Set([\"pending\", \"approved\"]);") &&
     renderer.includes("function findEffectiveLeaveRequestConflict(") &&
     renderer.includes("function findEffectiveOvertimeRequestConflict("),

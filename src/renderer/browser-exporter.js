@@ -90,6 +90,34 @@
     return String(cell?.text ?? cell?.value ?? "").trim();
   }
 
+  function getHeaderColumnIndex(sheet, names, fallback) {
+    const wanted = new Set(names);
+    const header = sheet?.getRow(1);
+    if (header) {
+      for (let index = 1; index <= header.cellCount; index += 1) {
+        if (wanted.has(getCellDisplayValue(header.getCell(index)))) {
+          return index;
+        }
+      }
+    }
+    return fallback;
+  }
+
+  function getDepartmentNamesForMember(member, departments) {
+    const departmentMap = new Map((departments || []).map((department) => [department.id, department.name]));
+    const ids = Array.isArray(member?.scheduleDeptIds)
+      ? member.scheduleDeptIds
+      : Array.isArray(member?.departmentIds)
+        ? member.departmentIds
+        : [];
+    const normalized = ids
+      .filter((deptId, index, list) => departmentMap.has(deptId) && list.indexOf(deptId) === index);
+    if (member?.deptId && departmentMap.has(member.deptId) && !normalized.includes(member.deptId)) {
+      normalized.unshift(member.deptId);
+    }
+    return normalized.map((deptId) => departmentMap.get(deptId)).filter(Boolean);
+  }
+
   function isMemberActiveOnDate(member, year, month, day) {
     const date = formatIsoDate(year, month, day);
     if (member.hireDate && date < member.hireDate) {
@@ -420,16 +448,18 @@
   async function createMemberWorkbook(payload) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("人員資料");
-    const headers = ["工號", "姓名", "所屬單位", "權限", "到職日", "離職日", "計薪方式", "例假星期"];
+    const headers = ["工號", "姓名", "所屬單位", "排班單位", "權限", "到職日", "離職日", "計薪方式", "例假星期"];
     const weekdayLabels = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+    const departments = payload.state?.departments || [];
 
     sheet.addRow(headers);
     (payload.state?.members || []).forEach((member) => {
-      const department = (payload.state?.departments || []).find((item) => item.id === member.deptId);
+      const scheduleDepartmentNames = getDepartmentNamesForMember(member, departments);
       sheet.addRow([
         member.code || "",
         member.name || "",
-        department?.name || "",
+        scheduleDepartmentNames[0] || "",
+        scheduleDepartmentNames.join("、"),
         member.role === "manager" ? "主管" : "員工",
         formatDisplayDate(member.hireDate || ""),
         formatDisplayDate(member.leaveDate || ""),
@@ -445,6 +475,7 @@
       { width: 14 },
       { width: 14 },
       { width: 16 },
+      { width: 20 },
       { width: 12 },
       { width: 14 },
       { width: 14 },
@@ -486,7 +517,7 @@
   async function createShiftWorkbook(payload) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("班別設定");
-    const headers = ["班別", "適用單位", "上班時間", "下班時間", "底色", "字色", "自動字色", "不顯示"];
+    const headers = ["班別", "適用單位", "需求人數", "上班時間", "下班時間", "底色", "字色", "自動字色", "不顯示"];
     const departmentMap = new Map((payload.state?.departments || []).map((item) => [item.id, item.name]));
 
     sheet.addRow(headers);
@@ -494,6 +525,7 @@
       sheet.addRow([
         shift.name || "",
         departmentMap.get(shift.applicableDeptIds?.[0] || "") || "",
+        Math.max(0, Number(shift.requiredStaffCount) || 0),
         shift.startTime || "",
         shift.endTime || "",
         shift.color || "",
@@ -616,25 +648,36 @@
       ["星期日", 0]
     ]);
     const rows = [];
+    const codeColumn = getHeaderColumnIndex(sheet, ["工號"], 1);
+    const nameColumn = getHeaderColumnIndex(sheet, ["姓名"], 2);
+    const departmentColumn = getHeaderColumnIndex(sheet, ["所屬單位", "單位"], 3);
+    const scheduleDepartmentColumn = getHeaderColumnIndex(sheet, ["排班單位", "可排單位"], 0);
+    const roleColumn = getHeaderColumnIndex(sheet, ["權限"], scheduleDepartmentColumn ? 5 : 4);
+    const hireDateColumn = getHeaderColumnIndex(sheet, ["到職日"], scheduleDepartmentColumn ? 6 : 5);
+    const leaveDateColumn = getHeaderColumnIndex(sheet, ["離職日"], scheduleDepartmentColumn ? 7 : 6);
+    const salaryTypeColumn = getHeaderColumnIndex(sheet, ["計薪方式"], scheduleDepartmentColumn ? 8 : 7);
+    const fixedRestWeekdayColumn = getHeaderColumnIndex(sheet, ["例假星期"], scheduleDepartmentColumn ? 9 : 8);
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) {
         return;
       }
-      const code = getCellDisplayValue(row.getCell(1));
-      const name = getCellDisplayValue(row.getCell(2));
-      const departmentName = getCellDisplayValue(row.getCell(3));
-      const roleText = getCellDisplayValue(row.getCell(4));
-      const hireDate = normalizeImportedDate(row.getCell(5).value);
-      const leaveDate = normalizeImportedDate(row.getCell(6).value);
-      const salaryType = getCellDisplayValue(row.getCell(7));
-      const fixedRestWeekdayText = getCellDisplayValue(row.getCell(8));
-      if (![code, name, departmentName, roleText, hireDate, leaveDate, salaryType, fixedRestWeekdayText].some(Boolean)) {
+      const code = getCellDisplayValue(row.getCell(codeColumn));
+      const name = getCellDisplayValue(row.getCell(nameColumn));
+      const departmentName = getCellDisplayValue(row.getCell(departmentColumn));
+      const scheduleDepartmentNames = scheduleDepartmentColumn ? getCellDisplayValue(row.getCell(scheduleDepartmentColumn)) : "";
+      const roleText = getCellDisplayValue(row.getCell(roleColumn));
+      const hireDate = normalizeImportedDate(row.getCell(hireDateColumn).value);
+      const leaveDate = normalizeImportedDate(row.getCell(leaveDateColumn).value);
+      const salaryType = getCellDisplayValue(row.getCell(salaryTypeColumn));
+      const fixedRestWeekdayText = getCellDisplayValue(row.getCell(fixedRestWeekdayColumn));
+      if (![code, name, departmentName, scheduleDepartmentNames, roleText, hireDate, leaveDate, salaryType, fixedRestWeekdayText].some(Boolean)) {
         return;
       }
       rows.push({
         code,
         name,
         departmentName,
+        scheduleDepartmentNames,
         role: roleText === "主管" ? "manager" : "employee",
         hireDate,
         leaveDate,
@@ -677,22 +720,43 @@
       return [];
     }
     const rows = [];
+    const nameColumn = getHeaderColumnIndex(sheet, ["班別"], 1);
+    const departmentColumn = getHeaderColumnIndex(sheet, ["適用單位"], 2);
+    const requiredStaffCountColumn = getHeaderColumnIndex(sheet, ["需求人數"], 0);
+    const offset = requiredStaffCountColumn ? 1 : 0;
+    const startTimeColumn = getHeaderColumnIndex(sheet, ["上班時間"], 3 + offset);
+    const endTimeColumn = getHeaderColumnIndex(sheet, ["下班時間"], 4 + offset);
+    const colorColumn = getHeaderColumnIndex(sheet, ["底色"], 5 + offset);
+    const textColorColumn = getHeaderColumnIndex(sheet, ["字色"], 6 + offset);
+    const autoTextColorColumn = getHeaderColumnIndex(sheet, ["自動字色"], 7 + offset);
+    const hiddenFromToolbarColumn = getHeaderColumnIndex(sheet, ["不顯示"], 8 + offset);
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) {
         return;
       }
-      const name = getCellDisplayValue(row.getCell(1));
-      const departmentName = getCellDisplayValue(row.getCell(2));
-      const startTime = normalizeImportedTime(row.getCell(3).value);
-      const endTime = normalizeImportedTime(row.getCell(4).value);
-      const color = getCellDisplayValue(row.getCell(5));
-      const textColor = getCellDisplayValue(row.getCell(6));
-      const autoTextColor = normalizeImportedBoolean(getCellDisplayValue(row.getCell(7)));
-      const hiddenFromToolbar = normalizeImportedBoolean(getCellDisplayValue(row.getCell(8)));
-      if (![name, departmentName, startTime, endTime, color, textColor, autoTextColor, hiddenFromToolbar].some(Boolean)) {
+      const name = getCellDisplayValue(row.getCell(nameColumn));
+      const departmentName = getCellDisplayValue(row.getCell(departmentColumn));
+      const requiredStaffCount = requiredStaffCountColumn ? Number(getCellDisplayValue(row.getCell(requiredStaffCountColumn))) : 0;
+      const startTime = normalizeImportedTime(row.getCell(startTimeColumn).value);
+      const endTime = normalizeImportedTime(row.getCell(endTimeColumn).value);
+      const color = getCellDisplayValue(row.getCell(colorColumn));
+      const textColor = getCellDisplayValue(row.getCell(textColorColumn));
+      const autoTextColor = normalizeImportedBoolean(getCellDisplayValue(row.getCell(autoTextColorColumn)));
+      const hiddenFromToolbar = normalizeImportedBoolean(getCellDisplayValue(row.getCell(hiddenFromToolbarColumn)));
+      if (![name, departmentName, requiredStaffCount, startTime, endTime, color, textColor, autoTextColor, hiddenFromToolbar].some(Boolean)) {
         return;
       }
-      rows.push({ name, departmentName, startTime, endTime, color, textColor, autoTextColor, hiddenFromToolbar });
+      rows.push({
+        name,
+        departmentName,
+        requiredStaffCount: Number.isFinite(requiredStaffCount) ? requiredStaffCount : 0,
+        startTime,
+        endTime,
+        color,
+        textColor,
+        autoTextColor,
+        hiddenFromToolbar
+      });
     });
     return rows;
   }

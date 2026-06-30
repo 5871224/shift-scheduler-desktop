@@ -5110,14 +5110,18 @@ async function importMembersFromSettings() {
       const name = String(row.name || "").trim();
       const departmentName = String(row.departmentName || "").trim();
       const deptId = departmentMap.get(departmentName);
-      const scheduleDeptIds = String(row.scheduleDepartmentNames || departmentName || "")
+      const scheduleDepartmentNames = String(row.scheduleDepartmentNames || departmentName || "")
         .split(/[、,，]/)
-        .map((value) => departmentMap.get(value.trim()))
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const hasUnknownScheduleDepartment = scheduleDepartmentNames.some((value) => !departmentMap.has(value));
+      const scheduleDeptIds = scheduleDepartmentNames
+        .map((value) => departmentMap.get(value))
         .filter((deptIdValue, index, list) => deptIdValue && list.indexOf(deptIdValue) === index);
       if (deptId && !scheduleDeptIds.includes(deptId)) {
         scheduleDeptIds.unshift(deptId);
       }
-      if (!code || !name || !deptId) {
+      if (!code || !name || !deptId || hasUnknownScheduleDepartment) {
         skipped += 1;
         continue;
       }
