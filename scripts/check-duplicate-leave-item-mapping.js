@@ -15,10 +15,22 @@ assert(
 );
 
 assert(
+  renderer.includes("function getLeaveRequestCatalogId(code)") &&
+    renderer.includes("function getLeaveRequestDisplayName(record)") &&
+    renderer.includes("id: getLeaveRequestCatalogId(entry.code)") &&
+    renderer.includes("getAllowedLeaveRequestItems().find((item) => item.id === leaveItemId)") &&
+    renderer.includes("leaveItemId: leave.id") &&
+    !renderer.includes("<option value=\"${item.code}\">${escapeHtml(`${item.code} ${item.name}`)}</option>"),
+  "employee leave request form should use catalog leave item ids and catalog names, not code-based matching"
+);
+
+assert(
   webApi.includes("async function getLeaveTypeByReference(payload = {})") &&
     webApi.includes("scheduler_item_id: `eq.${leaveItemId}`") &&
-    webApi.includes("leaveItemId: leaveTypeMap.get(item.leave_type_id)?.scheduler_item_id || \"\""),
-  "web api should resolve and return leave types by scheduler item id"
+    webApi.includes("leaveItemId: leaveTypeMap.get(item.leave_type_id)?.scheduler_item_id || \"\"") &&
+    webApi.includes("const requestLeaveItems = (state.requestLeaveCatalog || [])") &&
+    webApi.includes("const leaveType = await getLeaveTypeByReference(payload);"),
+  "web api should resolve and return leave types by scheduler item id, including employee request catalog ids"
 );
 
 assert(

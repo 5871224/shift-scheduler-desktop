@@ -419,8 +419,19 @@
   async function syncCatalogs(state) {
     ensureManager();
 
+    const requestLeaveItems = (state.requestLeaveCatalog || [])
+      .filter((item) => item?.code && item?.name)
+      .map((item) => ({
+        id: `catalog:${item.code}`,
+        code: item.code,
+        name: item.name,
+        color: null,
+        defaultAllDay: false,
+        requireReason: false
+      }));
     const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code);
-    if (leaveItems.length) {
+    const allLeaveItems = [...requestLeaveItems, ...leaveItems];
+    if (allLeaveItems.length) {
       try {
         const existingLeaveRows = await restSelect("leave_types", {
           select: "id,scheduler_item_id",
@@ -432,7 +443,7 @@
             .map((item) => [item.scheduler_item_id, item])
         );
 
-        for (const item of leaveItems) {
+        for (const item of allLeaveItems) {
           const payload = {
             scheduler_item_id: item.id,
             code: item.code,
@@ -459,7 +470,7 @@
           throw error;
         }
         const leaveMap = new Map();
-        leaveItems.forEach((item) => {
+        allLeaveItems.forEach((item) => {
           leaveMap.set(item.code, {
             code: item.code,
             name: item.name,
@@ -629,7 +640,7 @@
 
   async function createLeaveRequest(payload) {
     ensureSignedIn();
-    const leaveType = await getLeaveTypeByCode(payload.leaveCode);
+    const leaveType = await getLeaveTypeByReference(payload);
     await restInsert("leave_requests", [{
       member_id: currentSession.user.id,
       leave_type_id: leaveType.id,

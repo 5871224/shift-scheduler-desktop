@@ -2426,16 +2426,20 @@ function formatOvertimeRestLines(record) {
   return lines;
 }
 
+function getLeaveRequestCatalogId(code) {
+  return `catalog:${code}`;
+}
+
 function getAllowedLeaveRequestItems() {
-  return LEAVE_CATALOG.filter((entry) => !["0036", "0047"].includes(entry.code)).map((entry) => {
-    const configured = state.leaves.find((item) => item.code === entry.code);
-    return {
+  return LEAVE_CATALOG
+    .filter((entry) => !["0036", "0047"].includes(entry.code))
+    .map((entry) => ({
+      id: getLeaveRequestCatalogId(entry.code),
       code: entry.code,
-      name: configured?.name || entry.name,
-      defaultAllDay: configured?.defaultAllDay ?? false,
-      requireReason: configured?.requireReason ?? false
-    };
-  });
+      name: entry.name,
+      defaultAllDay: false,
+      requireReason: false
+    }));
 }
 
 function leaveRequiresTime(leave) {
@@ -2447,10 +2451,6 @@ function defaultLeaveIsAllDay(leave) {
 }
 
 function getLeaveStyleByCode(leaveCode) {
-  const configured = state.leaves.find((item) => item.code === leaveCode);
-  if (configured) {
-    return configured;
-  }
   const catalogEntry = LEAVE_CATALOG.find((entry) => entry.code === leaveCode);
   if (!catalogEntry) {
     return null;
@@ -2496,6 +2496,14 @@ function getLeaveCatalogDisplayName(item) {
     return "";
   }
   return LEAVE_CATALOG.find((entry) => entry.code === item.code)?.name || item.name || "";
+}
+
+function getLeaveRequestDisplayName(record) {
+  const catalogName = LEAVE_CATALOG.find((entry) => entry.code === record?.leaveCode)?.name || "";
+  if (!isManagerRequestSource(record?.source) && catalogName) {
+    return catalogName;
+  }
+  return record?.leaveName || catalogName || "";
 }
 
 function sanitizeRequestStyle(style, fallback) {
@@ -5743,7 +5751,7 @@ async function syncRequestCatalogs() {
   if (!isManager()) {
     return;
   }
-  await window.schedulerApi.syncCatalogs(state);
+  await window.schedulerApi.syncCatalogs({ ...state, requestLeaveCatalog: LEAVE_CATALOG });
 }
 
 function renderRequestSummaryLines(record, kind) {
@@ -5752,7 +5760,7 @@ function renderRequestSummaryLines(record, kind) {
     lines.push(`${record.memberCode || "-"} · ${record.memberName || "-"}`);
   }
   if (kind === "leave") {
-    lines.push(`${record.leaveCode || ""} ${record.leaveName || ""}`.trim());
+    lines.push(`${record.leaveCode || ""} ${getLeaveRequestDisplayName(record)}`.trim());
     lines.push(`日期：${formatRequestDateText(record.startDate, record.endDate)}`);
     lines.push(`時間：${formatRequestTimeText(record)}`);
   } else {
@@ -5994,7 +6002,7 @@ function openRestComplianceModal() {
 function getCompactManagerRequestMetaLines(record, kind) {
   const lines = [
     kind === "leave"
-      ? `${record.leaveName || ""}｜${formatRequestDateText(record.startDate, record.endDate)}｜${formatRequestTimeText(record)}`
+      ? `${getLeaveRequestDisplayName(record)}｜${formatRequestDateText(record.startDate, record.endDate)}｜${formatRequestTimeText(record)}`
       : `加班｜${record.workDate || ""}｜${formatOvertimeTimeText(record)}`
   ];
   if (kind === "overtime") {
@@ -6025,7 +6033,7 @@ function renderEmployeeRequestList(kind, records) {
   return sortedRecords.map((record) => `
     <div class="request-item request-item-compact">
       <div class="request-head request-head-compact">
-        <div class="request-title request-title-compact">${escapeHtml(kind === "leave" ? `${record.leaveName || ""}`.trim() : "加班")}</div>
+        <div class="request-title request-title-compact">${escapeHtml(kind === "leave" ? getLeaveRequestDisplayName(record) : "加班")}</div>
         <div class="request-head-actions">
         <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
           ${record.status === "pending"
@@ -6145,8 +6153,8 @@ function renderManagerRequestList(kind, records) {
 
 function syncLeaveRequestFormUi(resetAllDay = false) {
   if (resetAllDay) {
-    const leaveCode = document.getElementById("leaveRequestType")?.value || "";
-    const leave = getAllowedLeaveRequestItems().find((item) => item.code === leaveCode) || null;
+    const leaveItemId = document.getElementById("leaveRequestType")?.value || "";
+    const leave = getAllowedLeaveRequestItems().find((item) => item.id === leaveItemId) || null;
     const allDayToggle = document.getElementById("leaveRequestAllDay");
     if (allDayToggle) {
       allDayToggle.checked = defaultLeaveIsAllDay(leave);
@@ -6238,7 +6246,7 @@ async function openLeaveRequestModal() {
         </div>
         <div class="form-row">
           <label for="leaveRequestType">假別</label>
-          <select id="leaveRequestType">${leaveItems.map((item) => `<option value="${item.code}">${escapeHtml(`${item.code} ${item.name}`)}</option>`).join("")}</select>
+          <select id="leaveRequestType">${leaveItems.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(`${item.code} ${item.name}`)}</option>`).join("")}</select>
         </div>
         <div class="form-row">
           <label for="leaveRequestStartDate">開始日期</label>
@@ -6280,8 +6288,8 @@ async function openLeaveRequestModal() {
 }
 
 async function saveLeaveRequestFromModal() {
-  const leaveCode = document.getElementById("leaveRequestType")?.value || "";
-  const leave = getAllowedLeaveRequestItems().find((item) => item.code === leaveCode);
+  const leaveItemId = document.getElementById("leaveRequestType")?.value || "";
+  const leave = getAllowedLeaveRequestItems().find((item) => item.id === leaveItemId);
   const startDate = document.getElementById("leaveRequestStartDate")?.value || "";
   const endDate = document.getElementById("leaveRequestEndDate")?.value || "";
   const isAllDay = document.getElementById("leaveRequestAllDay")?.checked !== false;
@@ -6311,6 +6319,7 @@ async function saveLeaveRequestFromModal() {
   }
   try {
     await window.schedulerApi.createLeaveRequest({
+      leaveItemId: leave.id,
       leaveCode: leave.code,
       startDate,
       endDate,
@@ -6326,7 +6335,7 @@ async function saveLeaveRequestFromModal() {
   await refreshRequestData();
   const nextRecord = getOwnRequestRecords("leave").find((record) => (
     record.memberCode === currentProfile?.employee_code &&
-    record.leaveCode === leave.code &&
+    record.leaveItemId === leave.id &&
     record.startDate === startDate &&
     record.endDate === endDate
   ));
@@ -6582,7 +6591,7 @@ function applyApprovedLeaveRequestToSchedule(record) {
     slot.leave = leave.id;
     slot.leaveMeta = {
       leaveCode: record.leaveCode,
-      displayName: record.leaveName || leave.name,
+      displayName: getLeaveRequestDisplayName(record) || leave.name,
       displayColor: isManagerSource ? (leave.color || "") : requestPalette.color,
       displayTextColor: isManagerSource ? getItemTextColor(leave, leave.color) : requestPalette.textColor,
       allDay: record.isAllDay !== false,
