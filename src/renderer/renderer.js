@@ -4549,10 +4549,10 @@ function openDepartmentSettings() {
       <button class="ghost-btn compact-btn" type="button" data-export-departments="true">匯出</button>
       <button class="ghost-btn compact-btn" type="button" data-import-departments="true">匯入</button>
       <button class="btn-primary" type="button" data-open-add-department="true">新增單位</button>
-      <select class="settings-view-select" data-department-view-select="true" aria-label="單位設定檢視">
-        <option value="department" ${departmentSettingsView === "department" ? "selected" : ""}>單位檢視</option>
-        <option value="member" ${departmentSettingsView === "member" ? "selected" : ""}>人員檢視</option>
-      </select>
+      <div class="settings-view-toggle" role="group" aria-label="單位設定檢視">
+        <button class="settings-view-option ${departmentSettingsView === "department" ? "active" : ""}" type="button" data-set-department-view="department" aria-pressed="${departmentSettingsView === "department" ? "true" : "false"}">單位檢視</button>
+        <button class="settings-view-option ${departmentSettingsView === "member" ? "active" : ""}" type="button" data-set-department-view="member" aria-pressed="${departmentSettingsView === "member" ? "true" : "false"}">人員檢視</button>
+      </div>
     `,
     hideFooterClose: true
   });
