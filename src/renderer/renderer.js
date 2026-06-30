@@ -769,6 +769,15 @@ function isValidDateRange(start, end) {
   return Boolean(start && end && start < end);
 }
 
+function isValidDateTimeRange(startDate, startTime, endDate, endTime) {
+  const normalizedStartTime = normalizeTimeText(startTime);
+  const normalizedEndTime = normalizeTimeText(endTime);
+  if (!startDate || !endDate || !normalizedStartTime || !normalizedEndTime) {
+    return false;
+  }
+  return `${startDate}T${normalizedStartTime}` < `${endDate}T${normalizedEndTime}`;
+}
+
 function reportValidationError(message) {
   setSaveStatus(message);
   if (window.schedulerApi?.showMessage) {
@@ -6235,6 +6244,7 @@ async function openLeaveRequestModal() {
   const ownLeaveRequestRecords = getOwnRequestRecords("leave");
   const leaveItems = getAllowedLeaveRequestItems();
   const defaultLeave = leaveItems[0];
+  const today = getTodayDateString();
   openEntityListModal({
     title: "請假申請",
     modalClass: "modal modal-wide",
@@ -6250,11 +6260,11 @@ async function openLeaveRequestModal() {
         </div>
         <div class="form-row">
           <label for="leaveRequestStartDate">開始日期</label>
-          <input id="leaveRequestStartDate" type="date" value="${toDateString(state.year, state.month, 1)}">
+          <input id="leaveRequestStartDate" type="date" value="${today}">
         </div>
         <div class="form-row">
           <label for="leaveRequestEndDate">結束日期</label>
-          <input id="leaveRequestEndDate" type="date" value="${toDateString(state.year, state.month, 1)}">
+          <input id="leaveRequestEndDate" type="date" value="${today}">
         </div>
       </div>
       <div class="form-row checkbox-row checkbox-row-left">
@@ -6299,8 +6309,8 @@ async function saveLeaveRequestFromModal() {
     reportValidationError("請確認請假日期");
     return;
   }
-  if (!isAllDay && !isValidTimeRange(startTime, endTime)) {
-    reportValidationError("開始時間必須早於結束時間");
+  if (!isAllDay && !isValidDateTimeRange(startDate, startTime, endDate, endTime)) {
+    reportValidationError("開始日期時間必須早於結束日期時間");
     return;
   }
   await refreshRequestData();

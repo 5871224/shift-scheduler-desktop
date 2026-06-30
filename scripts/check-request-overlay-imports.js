@@ -14,6 +14,17 @@ assert(
   "refreshRequestData should supplement manager requests from the public overlay feed"
 );
 assert(
+  renderer.includes("function isValidDateTimeRange(startDate, startTime, endDate, endTime)") &&
+    renderer.includes("!isAllDay && !isValidDateTimeRange(startDate, startTime, endDate, endTime)"),
+  "leave request validation should compare combined start/end date-times"
+);
+assert(
+  renderer.includes("const today = getTodayDateString();") &&
+    renderer.includes('<input id="leaveRequestStartDate" type="date" value="${today}">') &&
+    renderer.includes('<input id="leaveRequestEndDate" type="date" value="${today}">'),
+  "leave request start and end dates should default to today"
+);
+assert(
   renderer.includes('memberCode: record.memberCode || publicLeaveMap.get(record.id)?.memberCode || ""'),
   "leave requests should backfill memberCode from public overlay data"
 );
