@@ -4152,7 +4152,7 @@ function openShiftFormModal(mode, shiftId = "") {
 
   openEntityListModal({
     title: mode === "edit" ? "修改班別" : "新增班別",
-    modalClass: "modal modal-wide modal-form-compact",
+    modalClass: "modal modal-wide modal-form-compact settings-edit-form",
     body: `
       ${renderColorPreviewFields("shift", shift.name || "班別")}
       <div class="form-row">
@@ -4271,7 +4271,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
   openEntityListModal({
       title: `${mode === "edit" ? "修改" : "新增"}${titleMap[category]}`,
     modalClass: category === "leave" || category === "overtime"
-        ? "modal modal-wide modal-form-compact"
+        ? "modal modal-wide modal-form-compact settings-edit-form"
         : "modal modal-wide",
       body: `
       ${renderColorPreviewFields(category, item.name || (category === "overtime" ? "加班" : "名稱"))}
@@ -4577,7 +4577,7 @@ function openDepartmentForm(mode, departmentId = "") {
   modalContext = { mode, category: "department", targetId: departmentId, returnTo };
   openEntityListModal({
     title: `${mode === "edit" ? "修改" : "新增"}單位`,
-    modalClass: "modal modal-form-compact",
+    modalClass: "modal modal-form-compact settings-edit-form",
     body: `
       <div class="form-row">
         <label for="departmentName">單位名稱</label>

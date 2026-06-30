@@ -1315,17 +1315,6 @@ thead th.today,
   color: var(--text);
 }
 
-.leave-toggle-label {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.leave-toggle-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-}
-
 .member-toggle-label,
 .overtime-use-label {
   font-size: 14px;
@@ -1334,6 +1323,17 @@ thead th.today,
 
 .member-toggle-label input[type="checkbox"],
 .overtime-use-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+
+.settings-edit-form .checkbox-row label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-edit-form .checkbox-row input[type="checkbox"] {
   width: 18px;
   height: 18px;
   padding: 0;
@@ -2027,7 +2027,8 @@ thead th.today,
 
 .department-settings-modal .modal-header-actions > button,
 .member-settings-modal .modal-header-actions > button,
-.catalog-settings-modal .modal-header-actions > button {
+.catalog-settings-modal .modal-header-actions > button,
+.settings-edit-form .modal-header-actions > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
