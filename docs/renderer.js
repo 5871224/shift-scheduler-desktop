@@ -3114,11 +3114,13 @@ function getShiftViewMembersForDay(shiftId, dateString) {
 
 function getShiftViewCellState(shift, dateString) {
   const members = getShiftViewMembersForDay(shift.id, dateString);
-  const requiredStaffCount = isShiftOperatingOnDate(shift, dateString)
+  const isOperating = isShiftOperatingOnDate(shift, dateString);
+  const requiredStaffCount = isOperating
     ? Math.max(0, Number(shift?.requiredStaffCount) || 0)
     : 0;
   return {
     members,
+    isOperating,
     isShortage: members.length < requiredStaffCount
   };
 }
@@ -3233,7 +3235,8 @@ function renderTable() {
         visibleDates.forEach((dateString, index) => {
           const weekBoundaryClass = getWeekBoundaryClassForDate(dateString, index, days);
           const shiftViewCellState = getShiftViewCellState(shift, dateString);
-          html += `<td class="cell shift-view-cell ${shiftViewCellState.isShortage ? "shift-view-shortage" : ""} ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-readonly="true" data-shift-id="${shift.id}" data-date="${dateString}">${renderShiftViewCell(shiftViewCellState.members)}</td>`;
+          const inactiveClass = shiftViewCellState.isOperating ? "" : "inactive-cell";
+          html += `<td class="cell shift-view-cell ${inactiveClass} ${shiftViewCellState.isShortage ? "shift-view-shortage" : ""} ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-readonly="true" data-shift-id="${shift.id}" data-date="${dateString}">${renderShiftViewCell(shiftViewCellState.members)}</td>`;
         });
         html += "</tr>";
       });

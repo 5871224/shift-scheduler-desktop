@@ -929,7 +929,7 @@ thead th.today,
   cursor: default;
 }
 
-.shift-view-cell:hover {
+.shift-view-cell:not(.inactive-cell):hover {
   background: #fff;
 }
 

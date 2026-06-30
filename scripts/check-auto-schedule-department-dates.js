@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const rootDir = path.resolve(__dirname, "..");
 const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
+const styles = fs.readFileSync(path.join(rootDir, "src", "renderer", "styles.css"), "utf8");
 
 function isDepartmentOperatingOnDate(department, dateString) {
   if (!department || !dateString) {
@@ -51,6 +52,9 @@ assert(renderer.includes("function isDepartmentOperatingOnDate"), "renderer shou
 assert(renderer.includes("function isShiftOperatingOnDate"), "renderer should check shift operating dates");
 assert(renderer.includes("getVisibleAutoScheduleShifts(dateString)"), "daily auto schedule demand should filter by date");
 assert(renderer.includes("getOperatingShiftDepartmentIds(shift, dateString)"), "daily candidates should use operating shift departments");
-assert(renderer.includes("const requiredStaffCount = isShiftOperatingOnDate(shift, dateString)"), "shift view shortage should ignore non-operating dates");
+assert(renderer.includes("const isOperating = isShiftOperatingOnDate(shift, dateString);"), "shift view should compute operating state");
+assert(renderer.includes("const requiredStaffCount = isOperating"), "shift view shortage should ignore non-operating dates");
+assert(renderer.includes('const inactiveClass = shiftViewCellState.isOperating ? "" : "inactive-cell";'), "shift view should gray out non-operating dates");
+assert(styles.includes(".shift-view-cell:not(.inactive-cell):hover"), "shift view hover should not override inactive gray cells");
 
 console.log("auto schedule department date check ok");
