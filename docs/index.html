@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>班表</title>
-  <link rel="stylesheet" href="./styles.css?v=20260630170044">
+  <link rel="stylesheet" href="./styles.css?v=20260630172945">
 </head>
 <body>
   <div class="app-shell">
@@ -81,46 +81,42 @@
     </section>
 
     <section class="calendar-card">
-      <div class="calendar-scroll-x">
-        <div class="calendar-scroll-content">
-          <div class="calendar-nav">
-            <div class="calendar-nav-left">
-              <select id="tableViewSelect" aria-label="班表檢視">
-                <option value="member">人員檢視</option>
-                <option value="shift">班別檢視</option>
-              </select>
-              <select id="tableDeptScopeFilter" aria-label="班表顯示範圍"></select>
-              <select id="tableStatsSelect" aria-label="統計欄顯示">
-                <option value="show">顯示統計</option>
-                <option value="hide">隱藏統計</option>
-              </select>
-            </div>
-            <div class="month-title-wrap">
-              <h2 id="monthTitle"></h2>
-            </div>
-            <div class="nav-actions">
-              <button class="nav-btn" id="prevPeriodButton" type="button">前八週</button>
-              <button class="nav-btn" id="prevWeekButton" type="button">前一週</button>
-              <button class="nav-btn" id="nextWeekButton" type="button">後一週</button>
-              <button class="nav-btn" id="nextPeriodButton" type="button">後八週</button>
-            </div>
-          </div>
-
-          <div class="table-sticky-header" id="tableStickyHeader">
-            <div class="table-sticky-header-left">
-              <div class="table-sticky-cell table-sticky-cell-dept">單位</div>
-              <div class="table-sticky-cell table-sticky-cell-person">人員</div>
-              <div class="table-sticky-cell table-sticky-cell-stats">統計</div>
-            </div>
-            <div class="table-sticky-header-scroll">
-              <div class="table-sticky-header-days" id="tableStickyHeaderDays"></div>
-            </div>
-          </div>
-
-          <div class="table-wrap" id="tableWrap">
-            <table id="mainTable"></table>
-          </div>
+      <div class="calendar-nav">
+        <div class="calendar-nav-left">
+          <select id="tableViewSelect" aria-label="班表檢視">
+            <option value="member">人員檢視</option>
+            <option value="shift">班別檢視</option>
+          </select>
+          <select id="tableDeptScopeFilter" aria-label="班表顯示範圍"></select>
+          <select id="tableStatsSelect" aria-label="統計欄顯示">
+            <option value="show">顯示統計</option>
+            <option value="hide">隱藏統計</option>
+          </select>
         </div>
+        <div class="month-title-wrap">
+          <h2 id="monthTitle"></h2>
+        </div>
+        <div class="nav-actions">
+          <button class="nav-btn" id="prevPeriodButton" type="button">前八週</button>
+          <button class="nav-btn" id="prevWeekButton" type="button">前一週</button>
+          <button class="nav-btn" id="nextWeekButton" type="button">後一週</button>
+          <button class="nav-btn" id="nextPeriodButton" type="button">後八週</button>
+        </div>
+      </div>
+
+      <div class="table-sticky-header" id="tableStickyHeader">
+        <div class="table-sticky-header-left">
+          <div class="table-sticky-cell table-sticky-cell-dept">單位</div>
+          <div class="table-sticky-cell table-sticky-cell-person">人員</div>
+          <div class="table-sticky-cell table-sticky-cell-stats">統計</div>
+        </div>
+        <div class="table-sticky-header-scroll">
+          <div class="table-sticky-header-days" id="tableStickyHeaderDays"></div>
+        </div>
+      </div>
+
+      <div class="table-wrap" id="tableWrap">
+        <table id="mainTable"></table>
       </div>
     </section>
   </div>
@@ -129,10 +125,10 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260630170044"></script>
-  <script src="./browser-exporter.js?v=20260630170044"></script>
-  <script src="./rest-compliance.js?v=20260630170044"></script>
-  <script src="./web-api.js?v=20260630170044"></script>
-  <script src="./renderer.js?v=20260630170044"></script>
+  <script src="./app-config.js?v=20260630172945"></script>
+  <script src="./browser-exporter.js?v=20260630172945"></script>
+  <script src="./rest-compliance.js?v=20260630172945"></script>
+  <script src="./web-api.js?v=20260630172945"></script>
+  <script src="./renderer.js?v=20260630172945"></script>
 </body>
 </html>

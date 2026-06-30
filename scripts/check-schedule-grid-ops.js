@@ -1,6 +1,4 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
 
 function slotHasBlockingRequest(slot, category) {
   return Boolean(slot?.[`${category}RequestId`] && slot?.[`${category}Meta`]?.requestSource !== "manager");
@@ -69,13 +67,5 @@ undoSnapshot = { a: 2 };
 redoSnapshot = { a: 3 };
 assert.deepEqual(undoSnapshot, { a: 2 });
 assert.deepEqual(redoSnapshot, { a: 3 });
-
-const rootDir = path.resolve(__dirname, "..");
-const indexHtml = fs.readFileSync(path.join(rootDir, "src", "renderer", "index.html"), "utf8");
-const styles = fs.readFileSync(path.join(rootDir, "src", "renderer", "styles.css"), "utf8");
-assert.match(indexHtml, /<div class="calendar-scroll-x">\s*<div class="calendar-scroll-content">\s*<div class="calendar-nav">/);
-assert.match(indexHtml, /<div class="calendar-nav">[\s\S]*<div class="table-wrap" id="tableWrap">/);
-assert.match(styles, /\.calendar-scroll-x\s*\{[\s\S]*overflow-x: auto;/);
-assert.match(styles, /\.calendar-card\s*\{[\s\S]*width: 100%;/);
 
 console.log("schedule grid ops check ok");
