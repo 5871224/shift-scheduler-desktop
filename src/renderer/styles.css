@@ -1201,12 +1201,6 @@ thead th.today,
   flex: 0 0 auto;
 }
 
-.catalog-visibility-toggle {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
 .modal-body {
   overflow: auto;
   display: flex;

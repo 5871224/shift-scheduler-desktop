@@ -4182,7 +4182,7 @@ function openShiftFormModal(mode, shiftId = "") {
       </div>
       </div>
       <div class="form-row checkbox-row checkbox-row-left">
-        <label class="catalog-visibility-toggle">
+        <label>
           <input id="shiftHiddenFromToolbar" type="checkbox" ${shift.hiddenFromToolbar ? "checked" : ""}>
           不顯示
         </label>
@@ -4289,13 +4289,13 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         </div>
         <div class="form-section">
           <div class="form-row checkbox-row checkbox-row-left">
-            <label class="leave-toggle-label">
+            <label>
               <input id="leaveDefaultAllDay" type="checkbox" ${item.defaultAllDay ? "checked" : ""}>
               需填時間
             </label>
           </div>
           <div class="form-row checkbox-row checkbox-row-left">
-            <label class="leave-toggle-label">
+            <label>
               <input id="leaveRequireReason" type="checkbox" ${item.requireReason ? "checked" : ""}>
               需填原因
             </label>
@@ -4353,7 +4353,7 @@ function openNamedColorFormModal(category, mode, targetId = "") {
         </div>
       ` : ""}
       <div class="form-row checkbox-row checkbox-row-left">
-        <label class="catalog-visibility-toggle">
+        <label>
           <input id="${category}HiddenFromToolbar" type="checkbox" ${item.hiddenFromToolbar ? "checked" : ""}>
           不顯示
         </label>
@@ -4594,7 +4594,7 @@ function openDepartmentForm(mode, departmentId = "") {
         </div>
       </div>
       <div class="form-row checkbox-row checkbox-row-left">
-        <label class="catalog-visibility-toggle">
+        <label>
           <input id="departmentHiddenFromLeave" type="checkbox" ${department.hiddenFromLeave ? "checked" : ""}>
           不顯示
         </label>
