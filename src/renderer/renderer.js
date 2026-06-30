@@ -272,8 +272,12 @@ function getSettingsScrollElement(selector = "") {
   }
   const candidates = [
     ".department-settings-modal .modal-body",
+    ".member-settings-modal .member-table-scroll",
+    ".catalog-settings-modal .settings-table-scroll",
     ".member-settings-modal .member-table-wrap",
     ".catalog-settings-modal .settings-table-wrap",
+    ".settings-table-scroll",
+    ".member-table-scroll",
     ".settings-table-wrap",
     ".member-table-wrap",
     ".modal-body"
@@ -291,10 +295,10 @@ function captureSettingsReturnContext(fallback = null) {
     ...(fallback || {}),
     scrollSelector: scrollElement?.matches(".department-settings-modal .modal-body")
       ? ".department-settings-modal .modal-body"
-      : scrollElement?.matches(".member-settings-modal .member-table-wrap")
-        ? ".member-settings-modal .member-table-wrap"
-        : scrollElement?.matches(".catalog-settings-modal .settings-table-wrap")
-          ? ".catalog-settings-modal .settings-table-wrap"
+      : scrollElement?.matches(".member-settings-modal .member-table-scroll")
+        ? ".member-settings-modal .member-table-scroll"
+        : scrollElement?.matches(".catalog-settings-modal .settings-table-scroll")
+          ? ".catalog-settings-modal .settings-table-scroll"
           : "",
     scrollTop: scrollElement?.scrollTop || 0
   };
@@ -3967,52 +3971,54 @@ function openListSettings(category) {
       ? `
         ${requestStyleCard}
         <div class="settings-table-wrap">
-          <div class="settings-table">
-            <div class="settings-table-row settings-table-head settings-table-row-${category}">
-              <div>預覽</div>
-              ${category === "leave" ? "<div>假別代碼</div>" : ""}
-              <div>${category === "shift" ? "班別" : category === "leave" ? "假別" : "加班"}</div>
-              <div>${category === "shift" ? "適用單位" : category === "leave" ? "需填時間" : "時段"}</div>
-              ${category === "shift" ? "<div>需求人數</div>" : ""}
-              ${category === "overtime" ? "<div>休息1</div><div>休息2</div>" : ""}
-              ${category === "shift" ? "<div>時段</div>" : ""}
-              ${category === "leave" ? "<div>需填原因</div>" : ""}
-              <div>不顯示</div>
-              <div class="settings-table-actions-head">操作</div>
-            </div>
-            ${list.map((item) => `
-              <div class="settings-table-row settings-table-row-${category} sortable-settings-item" draggable="true" data-sort-category="${category}" data-sort-item="${item.id}">
-                <div class="settings-table-color">
-                  <div class="settings-table-preview" style="background:${escapeHtml(item.color)};color:${escapeHtml(getItemTextColor(item, item.color))}">${escapeHtml(item.name || item.code || "名稱")}</div>
-                </div>
-                ${category === "leave" ? `<div class="settings-table-code">${escapeHtml(item.code || "")}</div>` : ""}
-                <div class="settings-table-name">${escapeHtml(category === "leave" ? getLeaveCatalogDisplayName(item) : item.name)}</div>
-                <div class="settings-table-meta">${category === "shift"
-                  ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
-                  : category === "leave"
-                    ? (item.defaultAllDay ? "是" : "否")
-                    : escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)
-                }</div>
-                ${category === "shift"
-                  ? `<div class="settings-table-meta">${escapeHtml(String(item.requiredStaffCount ?? 0))}</div>`
-                  : ""}
-                ${category === "overtime"
-                  ? `<div class="settings-table-meta">${item.useRest1 ? escapeHtml(`${item.rest1StartTime || "--:--"} - ${item.rest1EndTime || "--:--"}`) : "-"}</div>
-                     <div class="settings-table-meta">${item.useRest2 ? escapeHtml(`${item.rest2StartTime || "--:--"} - ${item.rest2EndTime || "--:--"}`) : "-"}</div>`
-                  : ""}
-                ${category === "shift"
-                  ? `<div class="settings-table-meta">${escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)}</div>`
-                  : ""}
-                ${category === "leave"
-                  ? `<div class="settings-table-meta">${item.requireReason ? "是" : "否"}</div>`
-                  : ""}
-                <div class="settings-table-meta">${item.hiddenFromToolbar ? "是" : "否"}</div>
-                <div class="settings-table-actions">
-                  ${renderActionIconButton("edit", `data-edit-item="${category}" data-edit-id="${item.id}"`)}
-                  ${renderActionIconButton("delete", `data-delete-category="${category}" data-delete-id="${item.id}"`)}
-                </div>
+          <div class="settings-table-scroll">
+            <div class="settings-table">
+              <div class="settings-table-row settings-table-head settings-table-row-${category}">
+                <div>預覽</div>
+                ${category === "leave" ? "<div>假別代碼</div>" : ""}
+                <div>${category === "shift" ? "班別" : category === "leave" ? "假別" : "加班"}</div>
+                <div>${category === "shift" ? "適用單位" : category === "leave" ? "需填時間" : "時段"}</div>
+                ${category === "shift" ? "<div>需求人數</div>" : ""}
+                ${category === "overtime" ? "<div>休息1</div><div>休息2</div>" : ""}
+                ${category === "shift" ? "<div>時段</div>" : ""}
+                ${category === "leave" ? "<div>需填原因</div>" : ""}
+                <div>不顯示</div>
+                <div class="settings-table-actions-head">操作</div>
               </div>
-            `).join("")}
+              ${list.map((item) => `
+                <div class="settings-table-row settings-table-row-${category} sortable-settings-item" draggable="true" data-sort-category="${category}" data-sort-item="${item.id}">
+                  <div class="settings-table-color">
+                    <div class="settings-table-preview" style="background:${escapeHtml(item.color)};color:${escapeHtml(getItemTextColor(item, item.color))}">${escapeHtml(item.name || item.code || "名稱")}</div>
+                  </div>
+                  ${category === "leave" ? `<div class="settings-table-code">${escapeHtml(item.code || "")}</div>` : ""}
+                  <div class="settings-table-name">${escapeHtml(category === "leave" ? getLeaveCatalogDisplayName(item) : item.name)}</div>
+                  <div class="settings-table-meta">${category === "shift"
+                    ? escapeHtml(getDepartmentSummary(item.applicableDeptIds))
+                    : category === "leave"
+                      ? (item.defaultAllDay ? "是" : "否")
+                      : escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)
+                  }</div>
+                  ${category === "shift"
+                    ? `<div class="settings-table-meta">${escapeHtml(String(item.requiredStaffCount ?? 0))}</div>`
+                    : ""}
+                  ${category === "overtime"
+                    ? `<div class="settings-table-meta">${item.useRest1 ? escapeHtml(`${item.rest1StartTime || "--:--"} - ${item.rest1EndTime || "--:--"}`) : "-"}</div>
+                       <div class="settings-table-meta">${item.useRest2 ? escapeHtml(`${item.rest2StartTime || "--:--"} - ${item.rest2EndTime || "--:--"}`) : "-"}</div>`
+                    : ""}
+                  ${category === "shift"
+                    ? `<div class="settings-table-meta">${escapeHtml(`${item.startTime || "--:--"} - ${item.endTime || "--:--"}`)}</div>`
+                    : ""}
+                  ${category === "leave"
+                    ? `<div class="settings-table-meta">${item.requireReason ? "是" : "否"}</div>`
+                    : ""}
+                  <div class="settings-table-meta">${item.hiddenFromToolbar ? "是" : "否"}</div>
+                  <div class="settings-table-actions">
+                    ${renderActionIconButton("edit", `data-edit-item="${category}" data-edit-id="${item.id}"`)}
+                    ${renderActionIconButton("delete", `data-delete-category="${category}" data-delete-id="${item.id}"`)}
+                  </div>
+                </div>
+              `).join("")}
+            </div>
           </div>
         </div>
       `
@@ -4878,34 +4884,36 @@ function openMemberSettings() {
       ${sourceMembers.length
         ? `
       <div class="member-table-wrap">
-        <div class="member-table">
-          <div class="member-table-row member-table-head">
-            <div>工號</div>
-            <div>姓名</div>
-            <div>排班單位</div>
-            <div>權限</div>
-            <div>到職日</div>
-            <div>離職日</div>
-            <div>計薪方式</div>
-            <div>例假星期</div>
-            <div class="member-table-actions-head">操作</div>
-          </div>
-          ${filteredMembers.map((member) => `
-            <div class="member-table-row">
-              <div class="member-table-code">${escapeHtml(member.code)}</div>
-              <div class="member-table-name">${escapeHtml(member.name)}</div>
-              <div>${escapeHtml(getMemberScheduleDeptNames(member))}</div>
-              <div>${member.role === "manager" ? "主管" : "員工"}</div>
-              <div>${escapeHtml(member.hireDate || "-")}</div>
-              <div>${escapeHtml(member.leaveDate || "-")}</div>
-              <div>${getSalaryTypeLabel(member)}</div>
-              <div>${getRestWeekdayLabel(member.fixedRestWeekday)}</div>
-              <div class="member-table-actions">
-                ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
-                ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
-              </div>
+        <div class="member-table-scroll">
+          <div class="member-table">
+            <div class="member-table-row member-table-head">
+              <div>工號</div>
+              <div>姓名</div>
+              <div>排班單位</div>
+              <div>權限</div>
+              <div>到職日</div>
+              <div>離職日</div>
+              <div>計薪方式</div>
+              <div>例假星期</div>
+              <div class="member-table-actions-head">操作</div>
             </div>
-          `).join("")}
+            ${filteredMembers.map((member) => `
+              <div class="member-table-row">
+                <div class="member-table-code">${escapeHtml(member.code)}</div>
+                <div class="member-table-name">${escapeHtml(member.name)}</div>
+                <div>${escapeHtml(getMemberScheduleDeptNames(member))}</div>
+                <div>${member.role === "manager" ? "主管" : "員工"}</div>
+                <div>${escapeHtml(member.hireDate || "-")}</div>
+                <div>${escapeHtml(member.leaveDate || "-")}</div>
+                <div>${getSalaryTypeLabel(member)}</div>
+                <div>${getRestWeekdayLabel(member.fixedRestWeekday)}</div>
+                <div class="member-table-actions">
+                  ${renderActionIconButton("edit", `data-edit-member="${member.id}"`)}
+                  ${renderActionIconButton("delete", `data-delete-member="${member.id}"`)}
+                </div>
+              </div>
+            `).join("")}
+          </div>
         </div>
       </div>
         `
