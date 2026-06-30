@@ -1130,7 +1130,6 @@ thead th.today,
 
 .member-settings-modal .member-table-wrap,
 .catalog-settings-modal .settings-table-wrap {
-  scrollbar-gutter: stable;
   scrollbar-color: #cdbb9f #fbf8f1;
   scrollbar-width: thin;
 }
@@ -1824,8 +1823,6 @@ thead th.today,
   overflow: visible;
 }
 
-.member-table-wrap::after,
-.settings-table-wrap::after,
 .department-settings-table-wrap::after {
   content: "";
   position: absolute;
