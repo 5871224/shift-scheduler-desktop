@@ -4915,8 +4915,7 @@ function reorderScheduleDepartmentOption(draggedId, targetId) {
   syncScheduleDeptSummary();
 }
 
-function openMemberSettings() {
-  modalContext = { category: "member-settings" };
+function getFilteredMemberSettingsMembers() {
   const normalizedName = memberSettingsFilters.name.trim().toLowerCase();
   const sourceMembers = state.members;
   const filteredMembers = sourceMembers.filter((member) => {
@@ -4942,45 +4941,12 @@ function openMemberSettings() {
         : !member.payByDay;
     return matchesName && matchesDepartment && matchesRole && matchesEmployment && matchesSalaryType;
   });
-  const body = `
-      <div class="member-settings-filters">
-        <div class="form-row">
-          <label for="memberSettingsNameFilter">姓名</label>
-          <input id="memberSettingsNameFilter" type="text" value="${escapeHtml(memberSettingsFilters.name)}" placeholder="輸入姓名" data-member-settings-filter-field="name">
-        </div>
-        <div class="form-row">
-          <label for="memberSettingsDepartmentFilter">單位</label>
-          <select id="memberSettingsDepartmentFilter" data-member-settings-filter-field="department">
-            <option value="all" ${memberSettingsFilters.department === "all" ? "selected" : ""}>全部</option>
-            ${state.departments.map((department) => `<option value="${escapeHtml(department.id)}" ${memberSettingsFilters.department === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("")}
-            <option value="__none__" ${memberSettingsFilters.department === "__none__" ? "selected" : ""}>未指定</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label for="memberSettingsRoleFilter">權限</label>
-          <select id="memberSettingsRoleFilter" data-member-settings-filter-field="role">
-            <option value="all" ${memberSettingsFilters.role === "all" ? "selected" : ""}>全部</option>
-            <option value="manager" ${memberSettingsFilters.role === "manager" ? "selected" : ""}>主管</option>
-            <option value="employee" ${memberSettingsFilters.role === "employee" ? "selected" : ""}>員工</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label for="memberSettingsEmploymentFilter">狀態</label>
-          <select id="memberSettingsEmploymentFilter" data-member-settings-filter-field="employment">
-            <option value="active" ${memberSettingsFilters.employment === "active" ? "selected" : ""}>在職</option>
-            <option value="inactive" ${memberSettingsFilters.employment === "inactive" ? "selected" : ""}>離職</option>
-            <option value="all" ${memberSettingsFilters.employment === "all" ? "selected" : ""}>全部</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label for="memberSettingsSalaryTypeFilter">計薪方式</label>
-          <select id="memberSettingsSalaryTypeFilter" data-member-settings-filter-field="salaryType">
-            <option value="all" ${memberSettingsFilters.salaryType === "all" ? "selected" : ""}>全部</option>
-            <option value="monthly" ${memberSettingsFilters.salaryType === "monthly" ? "selected" : ""}>月薪</option>
-            <option value="daily" ${memberSettingsFilters.salaryType === "daily" ? "selected" : ""}>日薪</option>
-          </select>
-        </div>
-      </div>
+  return { sourceMembers, filteredMembers };
+}
+
+function renderMemberSettingsList() {
+  const { sourceMembers, filteredMembers } = getFilteredMemberSettingsMembers();
+  return `
       ${sourceMembers.length
         ? `
       <div class="member-table-wrap">
@@ -5020,6 +4986,58 @@ function openMemberSettings() {
         : '<div class="empty-state">目前還沒有人員</div>'
       }
       ${sourceMembers.length && !filteredMembers.length ? '<div class="empty-state">沒有符合篩選條件的人員</div>' : ""}
+    `;
+}
+
+function refreshMemberSettingsList() {
+  const list = document.getElementById("memberSettingsList");
+  if (list) {
+    list.innerHTML = renderMemberSettingsList();
+  }
+}
+
+function openMemberSettings() {
+  modalContext = { category: "member-settings" };
+  const body = `
+      <div class="member-settings-filters">
+        <div class="form-row">
+          <label for="memberSettingsNameFilter">姓名</label>
+          <input id="memberSettingsNameFilter" type="text" value="${escapeHtml(memberSettingsFilters.name)}" placeholder="輸入姓名" data-member-settings-filter-field="name">
+        </div>
+        <div class="form-row">
+          <label for="memberSettingsDepartmentFilter">單位</label>
+          <select id="memberSettingsDepartmentFilter" data-member-settings-filter-field="department">
+            <option value="all" ${memberSettingsFilters.department === "all" ? "selected" : ""}>全部</option>
+            ${state.departments.map((department) => `<option value="${escapeHtml(department.id)}" ${memberSettingsFilters.department === department.id ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("")}
+            <option value="__none__" ${memberSettingsFilters.department === "__none__" ? "selected" : ""}>未指定</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="memberSettingsRoleFilter">權限</label>
+          <select id="memberSettingsRoleFilter" data-member-settings-filter-field="role">
+            <option value="all" ${memberSettingsFilters.role === "all" ? "selected" : ""}>全部</option>
+            <option value="manager" ${memberSettingsFilters.role === "manager" ? "selected" : ""}>主管</option>
+            <option value="employee" ${memberSettingsFilters.role === "employee" ? "selected" : ""}>員工</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="memberSettingsEmploymentFilter">狀態</label>
+          <select id="memberSettingsEmploymentFilter" data-member-settings-filter-field="employment">
+            <option value="active" ${memberSettingsFilters.employment === "active" ? "selected" : ""}>在職</option>
+            <option value="inactive" ${memberSettingsFilters.employment === "inactive" ? "selected" : ""}>離職</option>
+            <option value="all" ${memberSettingsFilters.employment === "all" ? "selected" : ""}>全部</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="memberSettingsSalaryTypeFilter">計薪方式</label>
+          <select id="memberSettingsSalaryTypeFilter" data-member-settings-filter-field="salaryType">
+            <option value="all" ${memberSettingsFilters.salaryType === "all" ? "selected" : ""}>全部</option>
+            <option value="monthly" ${memberSettingsFilters.salaryType === "monthly" ? "selected" : ""}>月薪</option>
+            <option value="daily" ${memberSettingsFilters.salaryType === "daily" ? "selected" : ""}>日薪</option>
+          </select>
+        </div>
+      </div>
+      <div class="member-settings-list" id="memberSettingsList">${renderMemberSettingsList()}</div>
     `;
   openEntityListModal({
     title: "人員設定",
@@ -7278,7 +7296,7 @@ function bindEvents() {
     }
     if (target.dataset.memberSettingsFilterField === "name") {
       memberSettingsFilters.name = target.value || "";
-      openMemberSettings();
+      refreshMemberSettingsList();
       return;
     }
     if (target.id === "shiftName") {

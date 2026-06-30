@@ -1815,6 +1815,13 @@ thead th.today,
   gap: 12px;
 }
 
+.member-settings-list {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .member-table-wrap,
 .settings-table-wrap,
 .department-settings-table-wrap {

@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const rootDir = path.resolve(__dirname, "..");
 const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
+const styles = fs.readFileSync(path.join(rootDir, "src", "renderer", "styles.css"), "utf8");
 
 function slotHasBlockingRequest(slot, category) {
   return Boolean(slot?.[`${category}RequestId`] && slot?.[`${category}Meta`]?.requestSource !== "manager");
@@ -81,5 +82,11 @@ const statsOrder = [
 ].map((text) => renderer.indexOf(text));
 assert(statsOrder.every((index) => index >= 0), "member stats labels should exist");
 assert.deepEqual([...statsOrder].sort((left, right) => left - right), statsOrder, "member stats should render in requested order");
+
+const memberNameFilterHandler = renderer.match(/if \(target\.dataset\.memberSettingsFilterField === "name"\) \{[\s\S]*?\n    \}/)?.[0] || "";
+assert(memberNameFilterHandler.includes("refreshMemberSettingsList();"), "member name filter should refresh only the member list");
+assert(!memberNameFilterHandler.includes("openMemberSettings();"), "member name filter should not rebuild the modal while typing");
+assert(renderer.includes('class="member-settings-list" id="memberSettingsList"'), "member settings list should have a stable refresh container");
+assert(styles.includes(".member-settings-list {\n  display: flex;\n  flex: 1;\n  min-height: 0;"), "member settings list should preserve table scrolling");
 
 console.log("schedule grid ops check ok");
