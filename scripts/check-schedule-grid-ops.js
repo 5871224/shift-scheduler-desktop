@@ -1,4 +1,9 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const rootDir = path.resolve(__dirname, "..");
+const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
 
 function slotHasBlockingRequest(slot, category) {
   return Boolean(slot?.[`${category}RequestId`] && slot?.[`${category}Meta`]?.requestSource !== "manager");
@@ -67,5 +72,14 @@ undoSnapshot = { a: 2 };
 redoSnapshot = { a: 3 };
 assert.deepEqual(undoSnapshot, { a: 2 });
 assert.deepEqual(redoSnapshot, { a: 3 });
+
+const statsOrder = [
+  "<span>休:${stats.rest}</span>",
+  "<span>休加:${stats.restWork}</span>",
+  "<span>例:${stats.regular}</span>",
+  "<span>未排:${stats.unassigned}</span>"
+].map((text) => renderer.indexOf(text));
+assert(statsOrder.every((index) => index >= 0), "member stats labels should exist");
+assert.deepEqual([...statsOrder].sort((left, right) => left - right), statsOrder, "member stats should render in requested order");
 
 console.log("schedule grid ops check ok");

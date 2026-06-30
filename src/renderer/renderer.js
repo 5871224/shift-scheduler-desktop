@@ -3109,9 +3109,9 @@ function renderMemberStats(member) {
   const stats = getMemberEightWeekStats(member);
   return `
     <div class="member-stats">
-      <span>例:${stats.regular}</span>
       <span>休:${stats.rest}</span>
       <span>休加:${stats.restWork}</span>
+      <span>例:${stats.regular}</span>
       <span>未排:${stats.unassigned}</span>
     </div>
   `;
