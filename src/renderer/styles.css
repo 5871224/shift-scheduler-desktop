@@ -531,7 +531,11 @@ button {
 }
 
 .calendar-nav {
+  width: min(100%, calc(100vw - 64px));
+  max-width: calc(100vw - 64px);
+  flex-wrap: wrap;
   justify-content: space-between;
+  align-self: flex-start;
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -539,12 +543,16 @@ button {
 .calendar-nav-left {
   display: flex;
   align-items: center;
+  flex: 1 1 360px;
+  min-width: 0;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .month-title-wrap {
   text-align: center;
-  flex: 1;
+  flex: 1 1 220px;
+  min-width: 180px;
   justify-content: center;
 }
 
@@ -557,11 +565,15 @@ button {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  flex: 1 1 280px;
+  min-width: 0;
   gap: 8px;
 }
 
 .calendar-nav-left select {
-  min-width: 124px;
+  min-width: 112px;
+  max-width: 180px;
+  flex: 1 1 124px;
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 8px 30px 8px 12px;
@@ -2452,6 +2464,11 @@ thead th.today,
     top: 8px;
   }
 
+  .calendar-nav {
+    width: min(100%, calc(100vw - 48px));
+    max-width: calc(100vw - 48px);
+  }
+
   .calendar-card {
     padding-left: 8px;
     padding-right: 8px;
@@ -2571,6 +2588,8 @@ thead th.today,
   }
 
   .calendar-nav {
+    width: min(100%, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
     flex-wrap: wrap;
   }
 
