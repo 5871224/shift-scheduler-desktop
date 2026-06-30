@@ -2033,8 +2033,7 @@ function placeDailySurplusRestDays(scheduleMap, dateString, dates, rangeStartDat
   });
 }
 
-function buildAutoSchedulePreview() {
-  const dates = getVisibleDates();
+function buildAutoSchedulePreview(dates = getVisibleDates()) {
   const startDate = dates[0] || getTodayDateString();
   const regularLeave = getLeaveByCode("0036");
   const restLeave = getLeaveByCode("0047");
@@ -2088,7 +2087,8 @@ function buildAutoSchedulePreview() {
     const target = preview.memberTargets[member.id]?.restTarget ?? 0;
     let restCount = countMemberLeaveByPredicate(scheduleMap, member.id, dates, isRestLeaveId);
     while (restCount < target) {
-      const weekIndexes = Array.from({ length: 8 }, (_, index) => index);
+      const weekCount = Math.max(1, Math.ceil(dates.length / 7));
+      const weekIndexes = Array.from({ length: weekCount }, (_, index) => index);
       const targetWeek = weekIndexes.find((weekIndex) => !memberHasRestInWeek(scheduleMap, member.id, dates, weekIndex, startDate));
       const candidateDate = dates.find((dateString) => (
         getWeekBucketIndex(dateString, startDate) === targetWeek
@@ -2121,12 +2121,46 @@ async function previewAutoSchedule() {
   if (!promptManagerAccess("自動排班需先登入主管帳號")) {
     return;
   }
+  const { startDate, endDate } = getVisibleDateRange();
+  modalContext = { category: "auto-schedule-period" };
+  openEntityListModal({
+    title: "自動排班期間",
+    modalClass: "modal modal-member-form",
+    body: `
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="autoScheduleStartDate">開始日期</label>
+          <input id="autoScheduleStartDate" type="date" value="${escapeHtml(startDate)}">
+        </div>
+        <div class="form-row">
+          <label for="autoScheduleEndDate">結束日期</label>
+          <input id="autoScheduleEndDate" type="date" value="${escapeHtml(endDate)}">
+        </div>
+      </div>
+    `,
+    footerButtons: '<button class="btn-primary" type="button" data-generate-auto-schedule="true">產生預覽</button>'
+  });
+}
+
+async function generateAutoSchedulePreviewFromModal() {
+  const startDate = document.getElementById("autoScheduleStartDate")?.value || "";
+  const endDate = document.getElementById("autoScheduleEndDate")?.value || "";
+  if (!startDate || !endDate || (!isValidDateRange(startDate, endDate) && startDate !== endDate)) {
+    reportValidationError("請確認自動排班期間");
+    return;
+  }
+  const dates = enumerateDateRange(startDate, endDate);
+  if (!dates.length) {
+    reportValidationError("請確認自動排班期間");
+    return;
+  }
+  closeModal();
   await refreshRequestData();
-  autoSchedulePreview = buildAutoSchedulePreview();
+  autoSchedulePreview = buildAutoSchedulePreview(dates);
   renderAll();
   const changeCount = Object.keys(autoSchedulePreview.slots || {}).length;
   const warningCount = autoSchedulePreview.warnings.length;
-  showInfoMessage(`已產生自動排班預覽：${changeCount} 格預排${warningCount ? `，${warningCount} 則提醒` : ""}`);
+  showInfoMessage(`已產生自動排班預覽：${startDate} ～ ${endDate}，${changeCount} 格預排${warningCount ? `，${warningCount} 則提醒` : ""}`);
 }
 
 async function applyAutoSchedulePreview() {
@@ -7069,6 +7103,7 @@ function bindEvents() {
       target.id === "autoSchedulePreviewButton" ||
       target.id === "autoScheduleApplyButton" ||
       target.id === "autoScheduleCancelButton" ||
+      target.dataset.generateAutoSchedule ||
       target.dataset.saveOvertimeAssignment ||
       target.dataset.openAddDepartment ||
       target.dataset.setDepartmentView ||
@@ -7173,6 +7208,10 @@ function bindEvents() {
       } else {
         await openOvertimeApprovalModal(false);
       }
+      return;
+    }
+    if (target.dataset.generateAutoSchedule) {
+      await generateAutoSchedulePreviewFromModal();
       return;
     }
     if (target.dataset.openAdd === "shift") openShiftFormModal("add");

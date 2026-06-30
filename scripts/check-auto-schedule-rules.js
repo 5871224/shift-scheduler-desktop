@@ -191,5 +191,9 @@ assert(renderer.includes("function canAssignShiftWithinDemand"), "renderer shoul
 assert(renderer.includes("canAssignShiftWithinDemand(scheduleMap, member.id, dateString, shift.id)"), "auto schedule writes should enforce demand cap");
 assert(renderer.includes("canAssignShiftWithinDemand(state.schedule, memberId, dateString, nextShiftId)"), "manual and paste shift writes should enforce demand cap");
 assert(renderer.includes("showInfoMessage(getShiftDemandLimitMessage(nextShiftId, dateString))"), "manual over-demand shift writes should explain why they were blocked");
+assert(renderer.includes("function buildAutoSchedulePreview(dates = getVisibleDates())"), "auto schedule preview should accept an explicit date range");
+assert(renderer.includes('title: "自動排班期間"'), "auto schedule should ask for a period before previewing");
+assert(renderer.includes("const dates = enumerateDateRange(startDate, endDate);"), "auto schedule period modal should build a date range from user input");
+assert(renderer.includes("autoSchedulePreview = buildAutoSchedulePreview(dates);"), "auto schedule preview should use the confirmed period");
 
 console.log("auto schedule rules check ok");
