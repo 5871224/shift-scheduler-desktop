@@ -581,6 +581,7 @@ button {
 }
 
 .table-sticky-header {
+  position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 24;
@@ -648,18 +649,33 @@ button {
 }
 
 .table-sticky-cell-dept {
+  position: -webkit-sticky;
+  position: sticky;
+  left: 0;
+  z-index: 3;
   width: var(--dept-col-width);
   min-width: var(--dept-col-width);
+  background: #fbf8f1;
 }
 
 .table-sticky-cell-person {
+  position: -webkit-sticky;
+  position: sticky;
+  left: var(--dept-col-width);
+  z-index: 3;
   width: var(--person-col-width);
   min-width: var(--person-col-width);
+  background: #fbf8f1;
 }
 
 .table-sticky-cell-stats {
+  position: -webkit-sticky;
+  position: sticky;
+  left: calc(var(--dept-col-width) + var(--person-col-width));
+  z-index: 3;
   width: var(--stats-col-width);
   min-width: var(--stats-col-width);
+  background: #fbf8f1;
 }
 
 .table-sticky-cell-day {
@@ -803,6 +819,7 @@ thead th small {
 .dept-col,
 .person-col,
 .stats-col {
+  position: -webkit-sticky;
   position: sticky;
   z-index: 4;
   padding: 6px 8px;
