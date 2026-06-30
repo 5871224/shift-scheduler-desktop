@@ -28,11 +28,15 @@ assert(renderer.includes('openListSettings("shift");'), "saving shifts should re
 assert(renderer.includes('openDepartmentSettings();'), "saving departments should return to department settings");
 assert(renderer.includes('openMemberSettings();'), "saving members should return to member settings");
 assert(renderer.includes('openListSettings(category);'), "saving named settings should return to their settings list");
-assert(renderer.includes("state.shifts = currentList;"), "shift reorder should persist to state.shifts");
-assert(renderer.includes("state.leaves = currentList;"), "leave reorder should persist to state.leaves");
-assert(renderer.includes("state.departments = currentList;"), "department reorder should persist to state.departments");
+assert(renderer.includes("state.shifts = nextList;"), "shift reorder should persist to state.shifts");
+assert(renderer.includes("state.leaves = nextList;"), "leave reorder should persist to state.leaves");
+assert(renderer.includes("state.departments = nextList;"), "department reorder should persist to state.departments");
 assert(!renderer.includes('data-open-leave-request="true"'), "floating toolbar should not show the leave request button");
 assert(!renderer.includes('data-open-overtime-request="true"'), "floating toolbar should not show the overtime request button");
+assert(renderer.includes("function previewSortableSettingsItem"), "sortable settings rows should preview their insertion position while dragging");
+assert(renderer.includes("function commitSortedListFromDom"), "sortable settings rows should commit the live drag order");
+assert(renderer.includes("function commitDepartmentMemberOrderFromDom"), "department member drag order should commit from the live DOM order");
+assert(renderer.includes("restoreSettingsScroll(returnTo);"), "drag reorder should restore modal scroll position after rerender");
 
 assert(styles.includes(".catalog-settings-modal"), "catalog settings modal styles should exist");
 assert(styles.includes(".department-settings-modal"), "department settings modal styles should exist");
@@ -42,5 +46,6 @@ assert(styles.includes(".settings-table-code"), "leave settings code column styl
 assert(styles.includes(".settings-icon-btn"), "settings icon button styles should exist");
 assert(styles.includes(".member-main") && styles.includes("font-size: inherit;"), "member name size should match the department text size");
 assert(styles.includes(".member-inline-list"), "department row should render inline member list");
+assert(styles.includes(".drag-preview-active"), "drag preview style should exist");
 
 console.log("settings list checks passed");

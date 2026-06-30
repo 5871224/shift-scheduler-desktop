@@ -1431,6 +1431,12 @@ thead th.today,
   opacity: 0.8;
 }
 
+.drag-preview-active {
+  opacity: 0.58;
+  outline: 2px dashed rgba(139, 92, 42, 0.42);
+  outline-offset: -3px;
+}
+
 .compact-btn {
   padding: 8px 12px;
 }

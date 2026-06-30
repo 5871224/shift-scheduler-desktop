@@ -252,6 +252,7 @@ let authModalOpen = false;
 let eventsBound = false;
 let dragSortItemId = "";
 let dragSortCategory = "";
+let dragPreviewElement = null;
 let toolbarCollapsed = false;
 let toolbarCollapseInitialized = false;
 let measureTextContext = null;
@@ -4763,6 +4764,7 @@ async function moveMemberToDepartment(memberId, departmentId, targetMemberId = "
   if (!member || targetMemberId === memberId) {
     return;
   }
+  const returnTo = captureSettingsReturnContext({ category: "department-settings", view: departmentSettingsView });
   const previousHomeDeptId = getMemberHomeDeptId(member);
   const remaining = state.members.filter((item) => item.id !== memberId);
   const targetDeptId = targetMemberId
@@ -4796,32 +4798,111 @@ async function moveMemberToDepartment(memberId, departmentId, targetMemberId = "
   }
   state.members = state.departments.flatMap((department) => grouped.get(department.id) || []);
   openDepartmentSettings();
+  restoreSettingsScroll(returnTo);
   renderAll();
   queueSave();
 }
 
-function reorderListItem(category, draggedId, targetId) {
-  if (!draggedId || !targetId || draggedId === targetId) {
-    return;
+function moveDragPreviewElement(draggedElement, targetElement, clientY) {
+  if (!(draggedElement instanceof HTMLElement) || !(targetElement instanceof HTMLElement) || draggedElement === targetElement) {
+    return false;
   }
+  const parent = targetElement.parentElement;
+  if (!parent || draggedElement.parentElement !== parent) {
+    return false;
+  }
+  const targetRect = targetElement.getBoundingClientRect();
+  const insertAfter = clientY > targetRect.top + targetRect.height / 2;
+  const referenceNode = insertAfter ? targetElement.nextElementSibling : targetElement;
+  if (referenceNode === draggedElement || draggedElement.nextElementSibling === referenceNode) {
+    return true;
+  }
+  parent.insertBefore(draggedElement, referenceNode);
+  dragPreviewElement = draggedElement;
+  return true;
+}
+
+function cssEscapeValue(value) {
+  return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, "\\$&");
+}
+
+function clearDragPreviewState() {
+  if (dragPreviewElement instanceof HTMLElement) {
+    dragPreviewElement.classList.remove("drag-preview-active");
+  }
+  dragPreviewElement = null;
+}
+
+function previewSortableSettingsItem(targetElement, clientY) {
+  const draggedElement = document.querySelector(`[data-sort-item="${cssEscapeValue(dragSortItemId)}"][data-sort-category="${cssEscapeValue(dragSortCategory)}"]`);
+  if (!(draggedElement instanceof HTMLElement)) {
+    return false;
+  }
+  draggedElement.classList.add("drag-preview-active");
+  return moveDragPreviewElement(draggedElement, targetElement, clientY);
+}
+
+function previewScheduleDepartmentOption(targetElement, clientY) {
+  const draggedElement = document.querySelector(`[data-schedule-dept-option="${cssEscapeValue(dragScheduleDeptId)}"]`);
+  if (!(draggedElement instanceof HTMLElement)) {
+    return false;
+  }
+  draggedElement.classList.add("drag-preview-active");
+  if (!moveDragPreviewElement(draggedElement, targetElement, clientY)) {
+    return false;
+  }
+  syncScheduleDeptSelectorRanks();
+  syncScheduleDeptSummary();
+  return true;
+}
+
+function previewDepartmentMember(targetElement, clientY) {
+  const draggedElement = document.querySelector(`[data-member-card="${cssEscapeValue(dragMemberId)}"]`);
+  if (!(draggedElement instanceof HTMLElement)) {
+    return false;
+  }
+  draggedElement.classList.add("drag-preview-active");
+  return moveDragPreviewElement(draggedElement, targetElement, clientY);
+}
+
+function getOrderedIdsFromDom(selector, attributeName) {
+  return Array.from(document.querySelectorAll(selector))
+    .map((element) => element instanceof HTMLElement ? element.dataset[attributeName] || "" : "")
+    .filter(Boolean);
+}
+
+function applyOrderedIds(list, orderedIds) {
+  const byId = new Map(list.map((item) => [item.id, item]));
+  const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+  const missing = list.filter((item) => !orderedIds.includes(item.id));
+  return [...ordered, ...missing];
+}
+
+function commitSortedListFromDom(category) {
+  const orderedIds = getOrderedIdsFromDom(`[data-sort-category="${cssEscapeValue(category)}"][data-sort-item]`, "sortItem");
   const currentList = category === "department"
-    ? [...state.departments]
-    : [...getItemList(category)];
-  const fromIndex = currentList.findIndex((item) => item.id === draggedId);
-  const targetIndex = currentList.findIndex((item) => item.id === targetId);
-  if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) {
-    return;
+    ? state.departments
+    : getItemList(category);
+  if (!orderedIds.length || orderedIds.join("|") === currentList.map((item) => item.id).join("|")) {
+    return false;
   }
-  const [moved] = currentList.splice(fromIndex, 1);
-  currentList.splice(targetIndex, 0, moved);
+  const returnTo = captureSettingsReturnContext({
+    category: category === "department" ? "department-settings" : "list-settings",
+    listCategory: category,
+    view: departmentSettingsView
+  });
+  const nextList = applyOrderedIds(currentList, orderedIds);
   if (category === "department") {
-    state.departments = currentList;
+    state.departments = nextList;
   }
   if (category === "shift") {
-    state.shifts = currentList;
+    state.shifts = nextList;
   }
   if (category === "leave") {
-    state.leaves = currentList;
+    state.leaves = nextList;
+  }
+  if (category === "overtime") {
+    state.overtime = nextList;
   }
   renderAll();
   if (category === "department") {
@@ -4829,7 +4910,53 @@ function reorderListItem(category, draggedId, targetId) {
   } else {
     openListSettings(category);
   }
+  restoreSettingsScroll(returnTo);
   queueSave();
+  return true;
+}
+
+function commitDepartmentMemberOrderFromDom() {
+  const visibleIds = getOrderedIdsFromDom("[data-member-card]", "memberCard");
+  if (!visibleIds.length) {
+    return false;
+  }
+  const visibleIdSet = new Set(visibleIds);
+  const visibleById = new Map(state.members.filter((member) => visibleIdSet.has(member.id)).map((member) => [member.id, member]));
+  const groupedVisibleIds = new Map(state.departments.map((department) => [department.id, []]));
+  document.querySelectorAll(".department-settings-row[data-drop-department]").forEach((container) => {
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+    const departmentId = container.dataset.dropDepartment || "";
+    if (!groupedVisibleIds.has(departmentId)) {
+      return;
+    }
+    container.querySelectorAll("[data-member-card]").forEach((element) => {
+      if (element instanceof HTMLElement && element.dataset.memberCard) {
+        groupedVisibleIds.get(departmentId).push(element.dataset.memberCard);
+      }
+    });
+  });
+  const nextMembers = [];
+  state.departments.forEach((department) => {
+    const visibleMembers = (groupedVisibleIds.get(department.id) || [])
+      .map((memberId) => visibleById.get(memberId))
+      .filter(Boolean);
+    const hiddenMembers = state.members.filter((member) => getMemberHomeDeptId(member) === department.id && !visibleIdSet.has(member.id));
+    nextMembers.push(...visibleMembers, ...hiddenMembers);
+  });
+  const includedIds = new Set(nextMembers.map((member) => member.id));
+  nextMembers.push(...state.members.filter((member) => !includedIds.has(member.id)));
+  if (nextMembers.map((member) => member.id).join("|") === state.members.map((member) => member.id).join("|")) {
+    return false;
+  }
+  const returnTo = captureSettingsReturnContext({ category: "department-settings", view: departmentSettingsView });
+  state.members = nextMembers;
+  openDepartmentSettings();
+  restoreSettingsScroll(returnTo);
+  renderAll();
+  queueSave();
+  return true;
 }
 
 function buildSelectOptions(items, valueField, labelBuilder, selectedValue, includeEmpty = false, emptyLabel = "未指定") {
@@ -4896,19 +5023,6 @@ function syncScheduleDeptSelectorRanks() {
       rank += 1;
     }
   });
-}
-
-function reorderScheduleDepartmentOption(draggedId, targetId) {
-  const list = document.getElementById("memberScheduleDeptList");
-  const rows = Array.from(list?.querySelectorAll("[data-schedule-dept-option]") || []);
-  const dragged = rows.find((row) => row.dataset.scheduleDeptOption === draggedId);
-  const target = rows.find((row) => row.dataset.scheduleDeptOption === targetId);
-  if (!list || !dragged || !target || dragged === target) {
-    return;
-  }
-  list.insertBefore(dragged, target);
-  syncScheduleDeptSelectorRanks();
-  syncScheduleDeptSummary();
 }
 
 function getFilteredMemberSettingsMembers() {
@@ -7454,18 +7568,21 @@ function bindEvents() {
     if (scheduleDeptOption && dragScheduleDeptId) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
+      previewScheduleDepartmentOption(scheduleDeptOption, event.clientY);
       return;
     }
     const memberTarget = event.target.closest("[data-drop-member]");
     if (memberTarget && dragMemberId) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
+      previewDepartmentMember(memberTarget, event.clientY);
       return;
     }
     const sortItem = event.target.closest("[data-sort-item]");
     if (sortItem && dragSortItemId && dragSortCategory === (sortItem.dataset.sortCategory || "")) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
+      previewSortableSettingsItem(sortItem, event.clientY);
       return;
     }
     const dropZone = event.target.closest("[data-drop-department]");
@@ -7480,25 +7597,33 @@ function bindEvents() {
     const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
     if (scheduleDeptOption && dragScheduleDeptId) {
       event.preventDefault();
-      reorderScheduleDepartmentOption(dragScheduleDeptId, scheduleDeptOption.dataset.scheduleDeptOption || "");
+      syncScheduleDeptSelectorRanks();
+      syncScheduleDeptSummary();
+      clearDragPreviewState();
       dragScheduleDeptId = "";
       return;
     }
     const memberTarget = event.target.closest("[data-drop-member]");
     if (memberTarget && dragMemberId) {
       event.preventDefault();
-      await moveMemberToDepartment(
-        dragMemberId,
-        memberTarget.dataset.dropDepartment || "",
-        memberTarget.dataset.dropMember || ""
-      );
+      if (dragPreviewElement?.dataset.memberCard === dragMemberId) {
+        commitDepartmentMemberOrderFromDom();
+      } else {
+        await moveMemberToDepartment(
+          dragMemberId,
+          memberTarget.dataset.dropDepartment || "",
+          memberTarget.dataset.dropMember || ""
+        );
+      }
+      clearDragPreviewState();
       dragMemberId = "";
       return;
     }
     const sortItem = event.target.closest("[data-sort-item]");
     if (sortItem && dragSortItemId && dragSortCategory === (sortItem.dataset.sortCategory || "")) {
       event.preventDefault();
-      reorderListItem(dragSortCategory, dragSortItemId, sortItem.dataset.sortItem || "");
+      commitSortedListFromDom(dragSortCategory);
+      clearDragPreviewState();
       dragSortItemId = "";
       dragSortCategory = "";
       return;
@@ -7509,10 +7634,12 @@ function bindEvents() {
     }
     event.preventDefault();
     await moveMemberToDepartment(dragMemberId, dropZone.dataset.dropDepartment);
+    clearDragPreviewState();
     dragMemberId = "";
   });
 
   document.body.addEventListener("dragend", () => {
+    clearDragPreviewState();
     dragMemberId = "";
     dragScheduleDeptId = "";
     dragSortItemId = "";
