@@ -2699,8 +2699,6 @@ function renderAuthBar() {
     return;
   }
   const requestButtons = currentProfile ? `
-    <button class="ghost-btn compact-btn" type="button" data-open-leave-request="true">請假申請</button>
-    <button class="ghost-btn compact-btn" type="button" data-open-overtime-request="true">加班申請</button>
     <button class="ghost-btn compact-btn" type="button" data-open-change-password="true">修改密碼</button>
   ` : "";
   container.innerHTML = `
@@ -4572,9 +4570,10 @@ async function deleteListItem(category, id) {
 
 function openDepartmentSettings() {
   modalContext = { category: "department-settings", view: departmentSettingsView };
+  const activeMembers = state.members.filter(isMemberCurrentlyActive);
   const departmentRows = state.departments.map((department) => {
-    const homeMembers = state.members.filter((member) => getMemberHomeDeptId(member) === department.id);
-    const schedulableMembers = state.members.filter((member) => getMemberHomeDeptId(member) !== department.id && memberCanScheduleDepartment(member, department.id));
+    const homeMembers = activeMembers.filter((member) => getMemberHomeDeptId(member) === department.id);
+    const schedulableMembers = activeMembers.filter((member) => getMemberHomeDeptId(member) !== department.id && memberCanScheduleDepartment(member, department.id));
     return `
       <div class="department-settings-row sortable-settings-item" draggable="true" data-sort-category="department" data-sort-item="${department.id}" data-drop-department="${department.id}">
         <div class="department-settings-title">${escapeHtml(department.name)}</div>
@@ -4601,7 +4600,7 @@ function openDepartmentSettings() {
       </div>
     `;
   }).join("");
-  const memberRows = state.members.map((member) => `
+  const memberRows = activeMembers.map((member) => `
     <div class="department-settings-row department-settings-row-member">
       <div class="department-settings-title">${escapeHtml(member.name)}</div>
       <div>${escapeHtml(getMemberScheduleDeptNames(member))}</div>
@@ -4628,7 +4627,7 @@ function openDepartmentSettings() {
           </div>
         `
         : '<div class="empty-state">目前還沒有單位</div>')
-      : (state.members.length
+      : (activeMembers.length
         ? `
           <div class="department-settings-table-wrap">
             <div class="department-settings-table department-settings-table-member">
@@ -4641,7 +4640,7 @@ function openDepartmentSettings() {
             </div>
           </div>
         `
-        : '<div class="empty-state">目前還沒有人員</div>')
+        : '<div class="empty-state">目前沒有今日在職人員</div>')
     }
   `;
   openEntityListModal({
