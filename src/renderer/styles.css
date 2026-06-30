@@ -1783,7 +1783,7 @@ thead th.today,
 .request-style-settings-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
 }
 
@@ -1794,13 +1794,15 @@ thead th.today,
 .request-style-settings-controls {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .request-style-settings-preview {
   min-width: 92px;
+  flex: 0 1 auto;
 }
 
 .request-style-settings-actions {
