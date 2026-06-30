@@ -3023,16 +3023,7 @@ function renderTableViewSelect() {
   if (!select) {
     return;
   }
-  select.value = state.tableView === "shift" ? "shift" : "member";
-}
-
-function renderTableStatsSelect() {
-  const select = document.getElementById("tableStatsSelect");
-  if (!select) {
-    return;
-  }
-  select.value = state.tableStatsVisible ? "show" : "hide";
-  select.disabled = state.tableView === "shift";
+  select.value = state.tableView === "shift" ? "shift" : state.tableStatsVisible ? "member-stats" : "member";
 }
 
 function renderChips(containerId, category, items) {
@@ -3053,7 +3044,6 @@ function renderToolbar() {
   renderDeptFilter();
   renderTableViewSelect();
   renderTableDeptScopeFilter();
-  renderTableStatsSelect();
   const visibleShifts = state.deptFilter === "all"
     ? state.shifts
     : state.shifts.filter((shift) => shiftAllowsDepartment(shift, state.deptFilter));
@@ -6992,19 +6982,12 @@ function bindEvents() {
       queueSave();
     });
   }
-  const tableStatsSelect = document.getElementById("tableStatsSelect");
-  if (tableStatsSelect) {
-    tableStatsSelect.addEventListener("change", (event) => {
-      state.tableStatsVisible = event.target.value !== "hide";
-      renderToolbar();
-      renderTable();
-      queueSave();
-    });
-  }
   const tableViewSelect = document.getElementById("tableViewSelect");
   if (tableViewSelect) {
     tableViewSelect.addEventListener("change", (event) => {
-      state.tableView = event.target.value === "shift" ? "shift" : "member";
+      const value = event.target.value;
+      state.tableView = value === "shift" ? "shift" : "member";
+      state.tableStatsVisible = value === "member-stats";
       clearScheduleRangeSelection();
       renderToolbar();
       renderTable();
