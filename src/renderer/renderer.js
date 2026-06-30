@@ -1583,6 +1583,17 @@ function pasteScheduleClipboard() {
   if (!scheduleClipboard || !scheduleRangeSelection) {
     return false;
   }
+  if (scheduleClipboard.rows === 1 && scheduleClipboard.cols === 1) {
+    const [clipboardSlot] = scheduleClipboard.matrix[0] || [];
+    let changed = false;
+    getSelectedScheduleCells().forEach((cell) => {
+      changed = applyClipboardSlotToScheduleCell(cell.dataset.memberId || "", cell.dataset.date || "", clipboardSlot) || changed;
+    });
+    if (changed) {
+      finishScheduleGridMutation();
+    }
+    return changed;
+  }
   let changed = false;
   for (let rowOffset = 0; rowOffset < scheduleClipboard.rows; rowOffset += 1) {
     for (let colOffset = 0; colOffset < scheduleClipboard.cols; colOffset += 1) {
