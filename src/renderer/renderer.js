@@ -1488,7 +1488,12 @@ function applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot) {
   if (!slot) {
     return false;
   }
-  slot.shift = clipboardSlot?.shift || null;
+  const nextShiftId = clipboardSlot?.shift || null;
+  if (nextShiftId && !canAssignShiftWithinDemand(state.schedule, memberId, dateString, nextShiftId)) {
+    pruneEmptySchedule();
+    return false;
+  }
+  slot.shift = nextShiftId;
   if (!slotHasBlockingRequest(slot, "leave")) {
     slot.leave = clipboardSlot?.leave || null;
     delete slot.leaveRequestId;
@@ -1624,6 +1629,18 @@ function getWorkScheduleSlot(scheduleMap, memberId, dateString) {
   return key ? scheduleMap[key] || null : null;
 }
 
+function countAssignedShiftMembers(scheduleMap, shiftId, dateString, excludeMemberId = "") {
+  if (!shiftId || !dateString) {
+    return 0;
+  }
+  return state.members.filter((member) => {
+    if (member.id === excludeMemberId || !isMemberActiveOnDateString(member, dateString)) {
+      return false;
+    }
+    return getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift === shiftId;
+  }).length;
+}
+
 function ensureWorkScheduleSlot(scheduleMap, memberId, dateString) {
   const key = getScheduleKeyForDateString(memberId, dateString);
   if (!key) {
@@ -1736,21 +1753,17 @@ function getDailyShiftNeedOptions(scheduleMap, dateString) {
   const shifts = getVisibleAutoScheduleShifts(dateString);
   const activeMembers = getActiveMembersForDate(dateString);
   const memberDeptIdsById = new Map(activeMembers.map((member) => [member.id, getMemberScheduleDeptIds(member)]));
-  const assignedCountByShiftId = new Map();
   const availableMembers = [];
   activeMembers.forEach((member) => {
     const slot = getWorkScheduleSlot(scheduleMap, member.id, dateString);
-    if (slot?.shift) {
-      assignedCountByShiftId.set(slot.shift, (assignedCountByShiftId.get(slot.shift) || 0) + 1);
-    }
     if (!slot?.shift && !slot?.leave) {
       availableMembers.push(member);
     }
   });
   return shifts
     .map((shift) => {
-      const assignedCount = assignedCountByShiftId.get(shift.id) || 0;
-      const remaining = Math.max(0, (Number(shift.requiredStaffCount) || 0) - assignedCount);
+      const assignedCount = countAssignedShiftMembers(scheduleMap, shift.id, dateString);
+      const remaining = Math.max(0, getShiftDemandForDate(shift, dateString) - assignedCount);
       const shiftDeptIds = getOperatingShiftDepartmentIds(shift, dateString);
       const candidates = remaining > 0
         ? availableMembers.filter((member) => (
@@ -1766,6 +1779,13 @@ function getShiftDepartmentIds(shift) {
   return Array.isArray(shift?.applicableDeptIds) ? shift.applicableDeptIds.filter(Boolean) : [];
 }
 
+function getShiftDemandForDate(shift, dateString) {
+  if (!shift || !isShiftOperatingOnDate(shift, dateString)) {
+    return 0;
+  }
+  return Math.max(0, Number(shift.requiredStaffCount) || 0);
+}
+
 function getOperatingShiftDepartmentIds(shift, dateString) {
   const shiftDeptIds = getShiftDepartmentIds(shift);
   return shiftDeptIds.filter((deptId) => {
@@ -1777,6 +1797,33 @@ function getOperatingShiftDepartmentIds(shift, dateString) {
 function isShiftOperatingOnDate(shift, dateString) {
   const shiftDeptIds = getShiftDepartmentIds(shift);
   return !shiftDeptIds.length || getOperatingShiftDepartmentIds(shift, dateString).length > 0;
+}
+
+function canAssignShiftWithinDemand(scheduleMap, memberId, dateString, shiftId) {
+  if (!shiftId) {
+    return true;
+  }
+  const slot = getWorkScheduleSlot(scheduleMap, memberId, dateString);
+  if (slot?.shift === shiftId) {
+    return true;
+  }
+  const shift = getItem("shift", shiftId);
+  const demand = getShiftDemandForDate(shift, dateString);
+  if (demand <= 0) {
+    return false;
+  }
+  return countAssignedShiftMembers(scheduleMap, shiftId, dateString, memberId) < demand;
+}
+
+function getShiftDemandLimitMessage(shiftId, dateString) {
+  const shift = getItem("shift", shiftId);
+  if (!shift) {
+    return "找不到班別，無法排班";
+  }
+  if (!isShiftOperatingOnDate(shift, dateString)) {
+    return `${shift.name} ${dateString} 不在適用單位營業期間，不能排班`;
+  }
+  return `${shift.name} ${dateString} 需求人數已滿，不能再排`;
 }
 
 function getDailyAssignmentCost(scheduleMap, option, member, dateString, dates) {
@@ -1912,8 +1959,10 @@ function findBestDailyShiftAssignments(scheduleMap, dateString, preview) {
   const assignments = findMinimumCostFlowAssignments(scheduleMap, options, dateString, preview.dates || [dateString]);
   assignments.forEach(({ shift, member }) => {
     const slot = ensureWorkScheduleSlot(scheduleMap, member.id, dateString);
-    if (slot) {
+    if (slot && canAssignShiftWithinDemand(scheduleMap, member.id, dateString, shift.id)) {
       slot.shift = shift.id;
+    } else {
+      preview.warnings.push(`${member.name} ${dateString} ${shift.name} 超過需求人數，已略過`);
     }
   });
   const missingDetails = getRemainingDailyShiftDemandDetails(scheduleMap, dateString);
@@ -1933,18 +1982,11 @@ function getRemainingDailyShiftDemand(scheduleMap, dateString) {
 }
 
 function getRemainingDailyShiftDemandDetails(scheduleMap, dateString) {
-  const assignedCountByShiftId = new Map();
-  getActiveMembersForDate(dateString).forEach((member) => {
-    const shiftId = getWorkScheduleSlot(scheduleMap, member.id, dateString)?.shift;
-    if (shiftId) {
-      assignedCountByShiftId.set(shiftId, (assignedCountByShiftId.get(shiftId) || 0) + 1);
-    }
-  });
   return getVisibleAutoScheduleShifts(dateString)
     .map((shift) => {
       return {
         shift,
-        missing: Math.max(0, (Number(shift.requiredStaffCount) || 0) - (assignedCountByShiftId.get(shift.id) || 0))
+        missing: Math.max(0, getShiftDemandForDate(shift, dateString) - countAssignedShiftMembers(scheduleMap, shift.id, dateString))
       };
     })
     .filter((item) => item.missing > 0);
@@ -3115,9 +3157,7 @@ function getShiftViewMembersForDay(shiftId, dateString) {
 function getShiftViewCellState(shift, dateString) {
   const members = getShiftViewMembersForDay(shift.id, dateString);
   const isOperating = isShiftOperatingOnDate(shift, dateString);
-  const requiredStaffCount = isOperating
-    ? Math.max(0, Number(shift?.requiredStaffCount) || 0)
-    : 0;
+  const requiredStaffCount = getShiftDemandForDate(shift, dateString);
   return {
     members,
     isOperating,
@@ -3518,7 +3558,15 @@ async function applySelectionToCell(memberId, day) {
     }
     return;
   }
-  if (type === "shift") slot.shift = slot.shift === id ? null : id;
+  if (type === "shift") {
+    const nextShiftId = slot.shift === id ? null : id;
+    if (nextShiftId && !canAssignShiftWithinDemand(state.schedule, memberId, dateString, nextShiftId)) {
+      pruneEmptySchedule();
+      showInfoMessage(getShiftDemandLimitMessage(nextShiftId, dateString));
+      return;
+    }
+    slot.shift = nextShiftId;
+  }
   if (type === "overtime") {
     if (slotHasBlockingRequest(slot, "overtime")) {
       showInfoMessage("這格已有加班申請，請先將申請設為已退回後再修改加班");

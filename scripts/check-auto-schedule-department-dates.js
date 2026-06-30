@@ -53,7 +53,7 @@ assert(renderer.includes("function isShiftOperatingOnDate"), "renderer should ch
 assert(renderer.includes("getVisibleAutoScheduleShifts(dateString)"), "daily auto schedule demand should filter by date");
 assert(renderer.includes("getOperatingShiftDepartmentIds(shift, dateString)"), "daily candidates should use operating shift departments");
 assert(renderer.includes("const isOperating = isShiftOperatingOnDate(shift, dateString);"), "shift view should compute operating state");
-assert(renderer.includes("const requiredStaffCount = isOperating"), "shift view shortage should ignore non-operating dates");
+assert(renderer.includes("const requiredStaffCount = getShiftDemandForDate(shift, dateString);"), "shift view shortage should use date-aware demand");
 assert(renderer.includes('const inactiveClass = shiftViewCellState.isOperating ? "" : "inactive-cell";'), "shift view should gray out non-operating dates");
 assert(styles.includes(".shift-view-cell:not(.inactive-cell):hover"), "shift view hover should not override inactive gray cells");
 

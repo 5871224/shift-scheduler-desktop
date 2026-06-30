@@ -1,4 +1,9 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const rootDir = path.resolve(__dirname, "..");
+const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
 
 function holidayTarget(activeDays) {
   return Math.round((activeDays / 56) * 16);
@@ -6,6 +11,16 @@ function holidayTarget(activeDays) {
 
 function memberCanWorkShift(memberDeptIds, shiftDeptIds) {
   return !shiftDeptIds.length || shiftDeptIds.some((deptId) => memberDeptIds.includes(deptId));
+}
+
+function canAssignWithinDemand(currentAssignedCount, demand, alreadyAssigned = false) {
+  if (alreadyAssigned) {
+    return true;
+  }
+  if (demand <= 0) {
+    return false;
+  }
+  return currentAssignedCount < demand;
 }
 
 function findMinimumCostFlowAssignments(options) {
@@ -120,6 +135,11 @@ assert.equal(Math.max(0, holidayTarget(28) - 4), 4);
 assert.equal(memberCanWorkShift(["d2"], ["d1", "d2"]), true);
 assert.equal(memberCanWorkShift(["d3"], ["d1", "d2"]), false);
 assert.equal(memberCanWorkShift(["d3"], []), true);
+assert.equal(canAssignWithinDemand(0, 1), true);
+assert.equal(canAssignWithinDemand(1, 1), false);
+assert.equal(canAssignWithinDemand(2, 1), false);
+assert.equal(canAssignWithinDemand(1, 1, true), true);
+assert.equal(canAssignWithinDemand(0, 0), false);
 assert.deepEqual(chooseDailyAssignments([
   { shift: "critical", remaining: 1, candidates: [{ id: "only" }] },
   { shift: "open", remaining: 1, candidates: [{ id: "only" }, { id: "flex" }] }
@@ -166,5 +186,10 @@ assert.deepEqual(chooseDailyAssignments([
 ]), [
   { shift: "fillable", member: "home_member" }
 ]);
+
+assert(renderer.includes("function canAssignShiftWithinDemand"), "renderer should centralize shift demand cap checks");
+assert(renderer.includes("canAssignShiftWithinDemand(scheduleMap, member.id, dateString, shift.id)"), "auto schedule writes should enforce demand cap");
+assert(renderer.includes("canAssignShiftWithinDemand(state.schedule, memberId, dateString, nextShiftId)"), "manual and paste shift writes should enforce demand cap");
+assert(renderer.includes("showInfoMessage(getShiftDemandLimitMessage(nextShiftId, dateString))"), "manual over-demand shift writes should explain why they were blocked");
 
 console.log("auto schedule rules check ok");
