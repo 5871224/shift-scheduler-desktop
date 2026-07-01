@@ -113,13 +113,15 @@ assert(
     cleanupSql.includes("delete from public.overtime_requests") &&
     cleanupSql.includes('drop policy if exists "employees_can_insert_own_leave_requests"') &&
     cleanupSql.includes('drop policy if exists "employees_can_update_own_leave_requests"') &&
+    cleanupSql.includes('drop policy if exists "employees_can_delete_own_pending_leave_requests"') &&
     cleanupSql.includes('drop policy if exists "employees_can_insert_own_overtime_requests"') &&
     cleanupSql.includes('drop policy if exists "employees_can_update_own_overtime_requests"') &&
-    cleanupSql.includes("drop column if exists source") &&
-    cleanupSql.includes("drop column if exists status") &&
-    cleanupSql.includes("drop column if exists approved_by") &&
-    cleanupSql.includes("drop column if exists approved_at") &&
-    cleanupSql.includes("drop column if exists manager_note"),
+    cleanupSql.includes('drop policy if exists "employees_can_delete_own_pending_overtime_requests"') &&
+    cleanupSql.includes("drop column if exists source cascade") &&
+    cleanupSql.includes("drop column if exists status cascade") &&
+    cleanupSql.includes("drop column if exists approved_by cascade") &&
+    cleanupSql.includes("drop column if exists approved_at cascade") &&
+    cleanupSql.includes("drop column if exists manager_note cascade"),
   "supabase migration should remove employee request and approval columns"
 );
 assert(

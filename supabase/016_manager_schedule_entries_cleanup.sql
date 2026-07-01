@@ -4,8 +4,10 @@ drop function if exists public.get_public_schedule_requests();
 
 drop policy if exists "employees_can_insert_own_leave_requests" on public.leave_requests;
 drop policy if exists "employees_can_update_own_leave_requests" on public.leave_requests;
+drop policy if exists "employees_can_delete_own_pending_leave_requests" on public.leave_requests;
 drop policy if exists "employees_can_insert_own_overtime_requests" on public.overtime_requests;
 drop policy if exists "employees_can_update_own_overtime_requests" on public.overtime_requests;
+drop policy if exists "employees_can_delete_own_pending_overtime_requests" on public.overtime_requests;
 
 drop trigger if exists enforce_single_effective_leave_request on public.leave_requests;
 drop trigger if exists enforce_single_effective_overtime_request on public.overtime_requests;
@@ -41,18 +43,18 @@ drop index if exists public.idx_leave_requests_status;
 drop index if exists public.idx_overtime_requests_status;
 
 alter table public.leave_requests
-  drop column if exists source,
-  drop column if exists status,
-  drop column if exists approved_by,
-  drop column if exists approved_at,
-  drop column if exists manager_note;
+  drop column if exists source cascade,
+  drop column if exists status cascade,
+  drop column if exists approved_by cascade,
+  drop column if exists approved_at cascade,
+  drop column if exists manager_note cascade;
 
 alter table public.overtime_requests
-  drop column if exists source,
-  drop column if exists status,
-  drop column if exists approved_by,
-  drop column if exists approved_at,
-  drop column if exists manager_note;
+  drop column if exists source cascade,
+  drop column if exists status cascade,
+  drop column if exists approved_by cascade,
+  drop column if exists approved_at cascade,
+  drop column if exists manager_note cascade;
 
 create or replace function public.enforce_single_effective_leave_request()
 returns trigger
