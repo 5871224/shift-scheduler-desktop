@@ -186,12 +186,6 @@ const DEFAULT_STATE = {
 
 const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
 const MONTH_LABELS = ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"];
-const REQUEST_STATUS_LABELS = {
-  pending: "待審核",
-  approved: "已核准",
-  rejected: "已退回",
-  cancelled: "已取消"
-};
 const EFFECTIVE_REQUEST_STATUSES = new Set(["pending", "approved"]);
 const DEFAULT_REQUEST_STYLES = createDefaultRequestStyles();
 const WEEK_START_OPTIONS = [
@@ -2330,10 +2324,6 @@ function resolveCurrentMember() {
   return state.members.find((member) => member.code === currentProfile.employee_code) || null;
 }
 
-function getRequestStatusLabel(status) {
-  return REQUEST_STATUS_LABELS[status] || status;
-}
-
 function isEffectiveRequestStatus(status) {
   return EFFECTIVE_REQUEST_STATUSES.has(status);
 }
@@ -2555,12 +2545,6 @@ function slotHasBlockingRequest(slot, category) {
     (Boolean(slot.leaveRequestId) && !isManagerSlotRequest(slot, "leave"))
     || (Boolean(slot.overtimeRequestId) && !isManagerSlotRequest(slot, "overtime"))
   );
-}
-
-function getRequestStatusOptions(selectedValue) {
-  return ["pending", "approved", "rejected"].map((status) => (
-    `<option value="${status}" ${status === selectedValue ? "selected" : ""}>${escapeHtml(getRequestStatusLabel(status))}</option>`
-  )).join("");
 }
 
 function openSignInDialog(message = "") {
@@ -2852,9 +2836,6 @@ function shouldPromptLeaveDetail(leave, leaveMeta = null) {
 
 function formatLeaveDetailSummary(leave, leaveMeta) {
   const lines = [];
-  if (leaveMeta?.requestStatus) {
-    lines.push(`狀態：${getRequestStatusLabel(leaveMeta.requestStatus)}`);
-  }
   if (leave && (leaveRequiresTime(leave) || leaveMeta?.allDay !== undefined || leaveMeta?.startTime || leaveMeta?.endTime)) {
     if (leaveMeta?.allDay !== false) {
       lines.push("時間：整天");
@@ -2887,9 +2868,6 @@ function scheduleHideLeaveTooltip() {
 
 function formatOvertimeDetailSummary(overtimeMeta) {
   const lines = [];
-  if (overtimeMeta?.requestStatus) {
-    lines.push(`狀態：${getRequestStatusLabel(overtimeMeta.requestStatus)}`);
-  }
   lines.push(`時間：${overtimeMeta?.startTime || "--:--"} - ${overtimeMeta?.endTime || "--:--"}`);
   if (overtimeMeta?.useRest1) {
     lines.push(`休息1：${overtimeMeta.rest1StartTime || "--:--"} - ${overtimeMeta.rest1EndTime || "--:--"}`);
@@ -5928,31 +5906,6 @@ async function syncRequestCatalogs() {
   await window.schedulerApi.syncCatalogs({ ...state, requestLeaveCatalog: LEAVE_CATALOG });
 }
 
-function renderRequestSummaryLines(record, kind) {
-  const lines = [];
-  if (record.memberName || record.memberCode) {
-    lines.push(`${record.memberCode || "-"} · ${record.memberName || "-"}`);
-  }
-  if (kind === "leave") {
-    lines.push(`${record.leaveCode || ""} ${getLeaveRequestDisplayName(record)}`.trim());
-    lines.push(`日期：${formatRequestDateText(record.startDate, record.endDate)}`);
-    lines.push(`時間：${formatRequestTimeText(record)}`);
-  } else {
-    lines.push("加班");
-    lines.push(`日期：${record.workDate || ""}`);
-    lines.push(`時間：${formatOvertimeTimeText(record)}`);
-    lines.push(...formatOvertimeRestLines(record));
-  }
-  lines.push(`狀態：${getRequestStatusLabel(record.status)}`);
-  if (record.reason) {
-    lines.push(`原因：${record.reason}`);
-  }
-  if (record.managerNote) {
-    lines.push(`主管備註：${record.managerNote}`);
-  }
-  return lines.filter(Boolean);
-}
-
 function formatMonthText(year, month) {
   return `${year} 年 ${month + 1} 月`;
 }
@@ -6171,24 +6124,6 @@ function openRestComplianceModal() {
     body: `${summaryCards}${notes}${issuesMarkup}`,
     hideFooterClose: true
   });
-}
-
-function getCompactManagerRequestMetaLines(record, kind) {
-  const lines = [
-    kind === "leave"
-      ? `${getLeaveRequestDisplayName(record)}｜${formatRequestDateText(record.startDate, record.endDate)}｜${formatRequestTimeText(record)}`
-      : `加班｜${record.workDate || ""}｜${formatOvertimeTimeText(record)}`
-  ];
-  if (kind === "overtime") {
-    lines.push(...formatOvertimeRestLines(record));
-  }
-  if (record.reason) {
-    lines.push(`原因：${record.reason}`);
-  }
-  if (record.managerNote) {
-    lines.push(`主管備註：${record.managerNote}`);
-  }
-  return lines.filter(Boolean);
 }
 
 function syncScheduleOvertimeFormUi() {

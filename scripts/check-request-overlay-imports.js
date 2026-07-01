@@ -16,6 +16,10 @@ assert(
   "request overlays should only include manager-side leave and overtime settings"
 );
 assert(
+  !renderer.includes("lines.push(`狀態：${getRequestStatusLabel("),
+  "manager leave and overtime tooltips should not show approval status"
+);
+assert(
   !renderer.includes('data-open-leave-request="true"') &&
     !renderer.includes('data-open-overtime-request="true"') &&
     !renderer.includes("openLeaveRequestModal") &&

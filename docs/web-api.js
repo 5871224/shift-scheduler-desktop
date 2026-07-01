@@ -688,7 +688,6 @@
     ensureManager();
     const leaveType = await getLeaveTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    const now = new Date().toISOString();
     await restInsert("leave_requests", [{
       member_id: profileMemberId,
       leave_type_id: leaveType.id,
@@ -699,9 +698,7 @@
       end_time: payload.isAllDay ? null : payload.endTime,
       reason: payload.reason || "",
       status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: now
+      source: "manager"
     }], {
       auth: true,
       prefer: "return=minimal"
@@ -725,10 +722,7 @@
       end_time: payload.isAllDay ? null : payload.endTime,
       reason: payload.reason || "",
       status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: new Date().toISOString(),
-      manager_note: payload.managerNote || ""
+      source: "manager"
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -752,7 +746,6 @@
       ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
       : await getDefaultOvertimeType();
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    const now = new Date().toISOString();
     await restInsert("overtime_requests", [{
       member_id: profileMemberId,
       overtime_type_id: overtimeType.id,
@@ -767,9 +760,7 @@
       rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
       reason: payload.reason || "",
       status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: now
+      source: "manager"
     }], {
       auth: true,
       prefer: "return=minimal"
@@ -799,10 +790,7 @@
       rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
       reason: payload.reason || "",
       status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: new Date().toISOString(),
-      manager_note: payload.managerNote || ""
+      source: "manager"
     }, {
       auth: true,
       prefer: "return=minimal"
