@@ -121,7 +121,14 @@ assert(
     cleanupSql.includes("drop column if exists status cascade") &&
     cleanupSql.includes("drop column if exists approved_by cascade") &&
     cleanupSql.includes("drop column if exists approved_at cascade") &&
-    cleanupSql.includes("drop column if exists manager_note cascade"),
+    cleanupSql.includes("drop column if exists manager_note cascade") &&
+    cleanupSql.includes("drop table if exists public.attendance_logs") &&
+    cleanupSql.includes("drop table if exists public.clock_locations") &&
+    cleanupSql.includes("drop table if exists public.manager_departments") &&
+    !cleanupSql.includes("drop table if exists public.schedule_entries") &&
+    !cleanupSql.includes("drop table if exists public.schedule_months") &&
+    !cleanupSql.includes("drop table if exists public.shift_types") &&
+    !cleanupSql.includes("drop table if exists public.member_departments"),
   "supabase migration should remove employee request and approval columns"
 );
 assert(

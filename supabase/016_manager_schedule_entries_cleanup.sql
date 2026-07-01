@@ -42,6 +42,10 @@ end $$;
 drop index if exists public.idx_leave_requests_status;
 drop index if exists public.idx_overtime_requests_status;
 
+drop table if exists public.attendance_logs;
+drop table if exists public.clock_locations;
+drop table if exists public.manager_departments;
+
 alter table public.leave_requests
   drop column if exists source cascade,
   drop column if exists status cascade,

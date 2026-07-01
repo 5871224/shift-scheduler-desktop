@@ -1,5 +1,11 @@
 begin;
 
+create table if not exists public.schedule_documents (
+  id text primary key default 'default',
+  payload jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.scheduler_settings (
   id text primary key default 'default',
   current_year integer not null default extract(year from now())::integer,
@@ -220,10 +226,31 @@ using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
 alter table public.leave_types
+  add column if not exists scheduler_item_id text,
   add column if not exists text_color text,
   add column if not exists auto_text_color boolean not null default true,
   add column if not exists hidden_from_toolbar boolean not null default false,
   add column if not exists sort_order integer not null default 0;
+
+update public.leave_types
+set scheduler_item_id = concat('legacy:', id::text)
+where scheduler_item_id is null;
+
+alter table public.leave_types
+  drop constraint if exists leave_types_code_key;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.leave_types'::regclass
+      and conname = 'leave_types_scheduler_item_id_key'
+  ) then
+    alter table public.leave_types
+      add constraint leave_types_scheduler_item_id_key unique (scheduler_item_id);
+  end if;
+end $$;
 
 alter table public.overtime_types
   add column if not exists scheduler_item_id text,
