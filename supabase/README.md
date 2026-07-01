@@ -62,11 +62,11 @@
 
 ### `leave_requests`
 
-員工送出的請假申請。
+主管設定的請假紀錄。
 
 ### `overtime_requests`
 
-員工送出的加班申請。
+主管設定的加班紀錄。
 
 ### `clock_locations`
 

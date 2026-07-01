@@ -638,52 +638,6 @@
     return rows[0].id;
   }
 
-  async function createLeaveRequest(payload) {
-    ensureSignedIn();
-    const leaveType = await getLeaveTypeByReference(payload);
-    await restInsert("leave_requests", [{
-      member_id: currentSession.user.id,
-      leave_type_id: leaveType.id,
-      start_date: payload.startDate,
-      end_date: payload.endDate,
-      is_all_day: payload.isAllDay,
-      start_time: payload.isAllDay ? null : payload.startTime,
-      end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || "",
-      source: "employee"
-    }], {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
-  }
-
-  async function createOvertimeRequest(payload) {
-    ensureSignedIn();
-    const overtimeType = payload.overtimeName
-      ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
-      : await getDefaultOvertimeType();
-    await restInsert("overtime_requests", [{
-      member_id: currentSession.user.id,
-      overtime_type_id: overtimeType.id,
-      work_date: payload.workDate,
-      start_time: payload.startTime || null,
-      end_time: payload.endTime || null,
-      use_rest_1: Boolean(payload.useRest1),
-      rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
-      rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
-      use_rest_2: Boolean(payload.useRest2),
-      rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
-      rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || "",
-      source: "employee"
-    }], {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
-  }
-
   async function createManagerLeaveRequest(payload) {
     ensureManager();
     const leaveType = await getLeaveTypeByReference(payload);
@@ -696,9 +650,7 @@
       is_all_day: payload.isAllDay,
       start_time: payload.isAllDay ? null : payload.startTime,
       end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager"
+      reason: payload.reason || ""
     }], {
       auth: true,
       prefer: "return=minimal"
@@ -720,9 +672,7 @@
       is_all_day: payload.isAllDay,
       start_time: payload.isAllDay ? null : payload.startTime,
       end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager"
+      reason: payload.reason || ""
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -758,9 +708,7 @@
       use_rest_2: Boolean(payload.useRest2),
       rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
       rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager"
+      reason: payload.reason || ""
     }], {
       auth: true,
       prefer: "return=minimal"
@@ -788,9 +736,7 @@
       use_rest_2: Boolean(payload.useRest2),
       rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
       rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager"
+      reason: payload.reason || ""
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -896,10 +842,6 @@
       startTime: item.start_time || "",
       endTime: item.end_time || "",
       reason: item.reason || "",
-      status: item.status,
-      source: item.source || "employee",
-      managerNote: item.manager_note || "",
-      approvedAt: item.approved_at || "",
       createdAt: item.created_at
     }));
   }
@@ -938,10 +880,6 @@
       rest2StartTime: item.rest_2_start_time || "",
       rest2EndTime: item.rest_2_end_time || "",
       reason: item.reason || "",
-      status: item.status,
-      source: item.source || "employee",
-      managerNote: item.manager_note || "",
-      approvedAt: item.approved_at || "",
       createdAt: item.created_at
     }));
   }
@@ -965,10 +903,6 @@
           startTime: item.start_time || "",
           endTime: item.end_time || "",
           reason: "",
-          status: item.status,
-          source: item.source || "employee",
-          managerNote: "",
-          approvedAt: "",
           createdAt: item.created_at || ""
         });
         return;
@@ -989,49 +923,11 @@
           rest2StartTime: item.rest_2_start_time || "",
           rest2EndTime: item.rest_2_end_time || "",
           reason: "",
-          status: item.status,
-          source: item.source || "employee",
-          managerNote: "",
-          approvedAt: "",
           createdAt: item.created_at || ""
         });
       }
     });
     return { leaveRequests, overtimeRequests };
-  }
-
-  async function updateLeaveRequest(payload) {
-    ensureManager();
-    const nextStatus = payload.status;
-    await restUpdate("leave_requests", {
-      id: `eq.${payload.id}`
-    }, {
-      status: nextStatus,
-      manager_note: payload.managerNote || "",
-      approved_by: nextStatus === "pending" ? null : currentSession.user.id,
-      approved_at: nextStatus === "pending" ? null : new Date().toISOString()
-    }, {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
-  }
-
-  async function updateOvertimeRequest(payload) {
-    ensureManager();
-    const nextStatus = payload.status;
-    await restUpdate("overtime_requests", {
-      id: `eq.${payload.id}`
-    }, {
-      status: nextStatus,
-      manager_note: payload.managerNote || "",
-      approved_by: nextStatus === "pending" ? null : currentSession.user.id,
-      approved_at: nextStatus === "pending" ? null : new Date().toISOString()
-    }, {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
   }
 
   async function updateOvertimeRequestDetails(payload) {
@@ -1054,53 +950,6 @@
     return { ok: true };
   }
 
-  async function deleteLeaveRequest(requestId) {
-    ensureSignedIn();
-    const rows = await restSelect("leave_requests", {
-      select: "id",
-      filters: {
-        id: `eq.${requestId}`,
-        member_id: `eq.${currentSession.user.id}`,
-        status: "eq.pending"
-      },
-      auth: true
-    });
-    if (!rows?.length) {
-      throw new Error("找不到可刪除的請假申請，可能已被審核、退回，或不屬於目前登入者");
-    }
-    await restDelete("leave_requests", {
-      id: `eq.${requestId}`,
-      member_id: `eq.${currentSession.user.id}`,
-      status: "eq.pending"
-    }, {
-      auth: true
-    });
-    return { ok: true };
-  }
-
-  async function deleteOvertimeRequest(requestId) {
-    ensureSignedIn();
-    const rows = await restSelect("overtime_requests", {
-      select: "id",
-      filters: {
-        id: `eq.${requestId}`,
-        member_id: `eq.${currentSession.user.id}`,
-        status: "eq.pending"
-      },
-      auth: true
-    });
-    if (!rows?.length) {
-      throw new Error("找不到可刪除的加班申請，可能已被審核、退回，或不屬於目前登入者");
-    }
-    await restDelete("overtime_requests", {
-      id: `eq.${requestId}`,
-      member_id: `eq.${currentSession.user.id}`,
-      status: "eq.pending"
-    }, {
-      auth: true
-    });
-    return { ok: true };
-  }
   async function exportSapCsv(payload) {
     if (!exporter.getSapLeaveExportRows(payload).length) {
       return { canceled: true, empty: true };

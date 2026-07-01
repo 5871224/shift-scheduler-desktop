@@ -6,19 +6,8 @@ const rootDir = path.resolve(__dirname, "..");
 const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
 const webApi = fs.readFileSync(path.join(rootDir, "src", "renderer", "web-api.js"), "utf8");
 const exporter = fs.readFileSync(path.join(rootDir, "src", "renderer", "browser-exporter.js"), "utf8");
-const requestConstraintSql = fs.readFileSync(path.join(rootDir, "supabase", "010_request_single_effective_entry.sql"), "utf8");
-const requestSourceSql = fs.readFileSync(path.join(rootDir, "supabase", "011_request_source_manager.sql"), "utf8");
+const cleanupSql = fs.readFileSync(path.join(rootDir, "supabase", "016_manager_schedule_entries_cleanup.sql"), "utf8");
 
-assert(
-  renderer.includes("const onlyManagerRecords = (records) => (records || []).filter((record) => isManagerRequestSource(record.source || \"\"));") &&
-    renderer.includes("leaveRequestRecords = onlyManagerRecords(publicRequests.leaveRequests);") &&
-    renderer.includes("overtimeRequestRecords = onlyManagerRecords(publicRequests.overtimeRequests);"),
-  "request overlays should only include manager-side leave and overtime settings"
-);
-assert(
-  !renderer.includes("lines.push(`狀態：${getRequestStatusLabel("),
-  "manager leave and overtime tooltips should not show approval status"
-);
 assert(
   !renderer.includes('data-open-leave-request="true"') &&
     !renderer.includes('data-open-overtime-request="true"') &&
@@ -29,13 +18,39 @@ assert(
   "employee request and review UI should be removed"
 );
 assert(
-  !webApi.includes("createLeaveRequest,") &&
-    !webApi.includes("createOvertimeRequest,") &&
-    !webApi.includes("updateLeaveRequest,") &&
-    !webApi.includes("updateOvertimeRequest,") &&
-    !webApi.includes("deleteLeaveRequest,") &&
-    !webApi.includes("deleteOvertimeRequest,"),
-  "web api should not expose employee request or review helpers"
+  !renderer.includes("getRequestStatusLabel") &&
+    !renderer.includes("function isManagerRequestSource") &&
+    !renderer.includes("function isEffectiveRequestStatus") &&
+    !renderer.includes("const onlyManagerRecords") &&
+    !renderer.includes("record.source") &&
+    !renderer.includes("record.status"),
+  "renderer should not depend on request approval/source fields"
+);
+assert(
+  renderer.includes("void refreshScheduleRequestsAfterInitialRender();") &&
+    renderer.includes("async function refreshScheduleRequestsAfterInitialRender()"),
+  "schedule should render before slower request sync runs"
+);
+assert(
+  renderer.includes("const canEditScheduleOrder = canEditSchedule();") &&
+    renderer.includes('data-table-member-id="${escapeHtml(member.id)}"') &&
+    renderer.includes('if (!canEditSchedule()) return;') &&
+    renderer.includes("const canDragScheduleOrder = canEditSchedule() && state.tableView !== \"shift\";"),
+  "schedule table drag and double-click edit paths should require manager edit permission"
+);
+assert(
+  !webApi.includes("async function createLeaveRequest") &&
+    !webApi.includes("async function createOvertimeRequest") &&
+    !webApi.includes("async function updateLeaveRequest") &&
+    !webApi.includes("async function updateOvertimeRequest(payload)") &&
+    !webApi.includes("async function deleteLeaveRequest") &&
+    !webApi.includes("async function deleteOvertimeRequest") &&
+    !webApi.includes("status: \"approved\"") &&
+    !webApi.includes("source: \"manager\"") &&
+    !webApi.includes("manager_note") &&
+    !webApi.includes("approved_by") &&
+    !webApi.includes("approved_at"),
+  "web api should not expose employee request, approval, or source helpers"
 );
 assert(
   webApi.includes("async function createManagerLeaveRequest(payload)") &&
@@ -59,11 +74,9 @@ assert(
   "renderer should keep duplicate manager leave and overtime guards"
 );
 assert(
-  renderer.includes("function isManagerRequestSource(source)") &&
-    renderer.includes("function migrateLegacyScheduleRequests()") &&
-    renderer.includes("requestSource: record.source || \"employee\"") &&
+  renderer.includes("function migrateLegacyScheduleRequests()") &&
     renderer.includes("function buildPersistedState()"),
-  "renderer should distinguish manager entries and migrate legacy schedule leave/overtime into request tables"
+  "renderer should keep migrating legacy schedule leave/overtime into manager tables"
 );
 assert(
   renderer.includes('data-export-departments="true"') && renderer.includes('data-import-departments="true"'),
@@ -96,14 +109,25 @@ assert(
   "browser exporter should support workbook round-trips for settings screens"
 );
 assert(
-  requestConstraintSql.includes("create or replace function public.enforce_single_effective_leave_request()") &&
-    requestConstraintSql.includes("create or replace function public.enforce_single_effective_overtime_request()"),
-  "supabase should enforce duplicate effective request rules for leave and overtime tables"
+  cleanupSql.includes("delete from public.leave_requests") &&
+    cleanupSql.includes("delete from public.overtime_requests") &&
+    cleanupSql.includes('drop policy if exists "employees_can_insert_own_leave_requests"') &&
+    cleanupSql.includes('drop policy if exists "employees_can_update_own_leave_requests"') &&
+    cleanupSql.includes('drop policy if exists "employees_can_insert_own_overtime_requests"') &&
+    cleanupSql.includes('drop policy if exists "employees_can_update_own_overtime_requests"') &&
+    cleanupSql.includes("drop column if exists source") &&
+    cleanupSql.includes("drop column if exists status") &&
+    cleanupSql.includes("drop column if exists approved_by") &&
+    cleanupSql.includes("drop column if exists approved_at") &&
+    cleanupSql.includes("drop column if exists manager_note"),
+  "supabase migration should remove employee request and approval columns"
 );
 assert(
-  requestSourceSql.includes("add column if not exists source text not null default 'employee'") &&
-    requestSourceSql.includes("check (source in ('employee', 'manager'))"),
-  "supabase should track whether a request comes from an employee or a manager"
+  cleanupSql.includes("create or replace function public.enforce_single_effective_leave_request()") &&
+    cleanupSql.includes("create or replace function public.enforce_single_effective_overtime_request()") &&
+    !cleanupSql.includes("r.status in") &&
+    !cleanupSql.includes("returns table (\n  kind text,\n  request_id uuid,\n  member_code text,\n  member_name text,\n  leave_item_id text,\n  leave_code text,\n  leave_name text,\n  overtime_name text,\n  start_date date,\n  end_date date,\n  work_date date,\n  is_all_day boolean,\n  start_time time,\n  end_time time,\n  use_rest_1 boolean,\n  rest_1_start_time time,\n  rest_1_end_time time,\n  use_rest_2 boolean,\n  rest_2_start_time time,\n  rest_2_end_time time,\n  source text"),
+  "supabase duplicate guards and public RPC should not depend on approval status/source"
 );
 
-console.log("manager request overlay and settings import/export checks passed");
+console.log("manager schedule entry cleanup and settings import/export checks passed");
