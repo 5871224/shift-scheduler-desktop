@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>班表</title>
-  <link rel="stylesheet" href="./styles.css?v=20260629112342">
+  <link rel="stylesheet" href="./styles.css?v=20260701201107">
 </head>
 <body>
   <div class="app-shell">
@@ -21,9 +21,10 @@
         <div class="core-actions-shell" id="coreActionsShell">
           <button class="ghost-btn core-actions-toggle" id="coreActionsToggle" type="button">功能</button>
           <div class="core-actions-menu" id="coreActionsMenu" aria-hidden="true">
-            <button class="ghost-btn ops-btn" id="leaveApprovalButton" type="button">請假審核</button>
-            <button class="ghost-btn ops-btn" id="overtimeApprovalButton" type="button">加班審核</button>
             <button class="ghost-btn ops-btn" id="weekStartSettingsButton" type="button">週期設定</button>
+            <button class="ghost-btn ops-btn" id="autoSchedulePreviewButton" type="button">自動排班預覽</button>
+            <button class="primary-btn ops-btn" id="autoScheduleApplyButton" type="button">套用預覽</button>
+            <button class="ghost-btn ops-btn" id="autoScheduleCancelButton" type="button">取消預覽</button>
             <button class="primary-btn ops-btn" id="exportSapButton" type="button">匯出休例假</button>
             <button class="primary-btn ops-btn" id="exportLeaveButton" type="button">匯出請假</button>
             <button class="primary-btn ops-btn" id="exportOvertimeButton" type="button">匯出加班</button>
@@ -83,6 +84,7 @@
         <div class="calendar-nav-left">
           <select id="tableViewSelect" aria-label="班表檢視">
             <option value="member">人員檢視</option>
+            <option value="member-stats">人員檢視-統計欄</option>
             <option value="shift">班別檢視</option>
           </select>
           <select id="tableDeptScopeFilter" aria-label="班表顯示範圍"></select>
@@ -102,6 +104,7 @@
         <div class="table-sticky-header-left">
           <div class="table-sticky-cell table-sticky-cell-dept">單位</div>
           <div class="table-sticky-cell table-sticky-cell-person">人員</div>
+          <div class="table-sticky-cell table-sticky-cell-stats">統計</div>
         </div>
         <div class="table-sticky-header-scroll">
           <div class="table-sticky-header-days" id="tableStickyHeaderDays"></div>
@@ -118,10 +121,10 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260629112342"></script>
-  <script src="./browser-exporter.js?v=20260629112342"></script>
-  <script src="./rest-compliance.js?v=20260629112342"></script>
-  <script src="./web-api.js?v=20260629112342"></script>
-  <script src="./renderer.js?v=20260629112342"></script>
+  <script src="./app-config.js?v=20260701201107"></script>
+  <script src="./browser-exporter.js?v=20260701201107"></script>
+  <script src="./rest-compliance.js?v=20260701201107"></script>
+  <script src="./web-api.js?v=20260701201107"></script>
+  <script src="./renderer.js?v=20260701201107"></script>
 </body>
 </html>

@@ -391,126 +391,373 @@
     return { ok: true };
   }
 
+  function nullableDate(value) {
+    const text = String(value || "").trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+  }
+
+  function nullableTime(value) {
+    const text = String(value || "").trim();
+    return /^\d{2}:\d{2}$/.test(text) ? text : null;
+  }
+
+  function clampInteger(value, min, max, fallback = min) {
+    const numeric = Number(value);
+    if (!Number.isInteger(numeric)) {
+      return fallback;
+    }
+    return Math.min(max, Math.max(min, numeric));
+  }
+
+  function notInFilter(values) {
+    const list = [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
+    return list.length ? `not.${buildInFilter(list)}` : "not.is.null";
+  }
+
+  function makeScheduleKey(memberId, workDate) {
+    const [yearText, monthText, dayText] = String(workDate || "").split("-");
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    if (!memberId || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return "";
+    }
+    return `${memberId}_${year}_${month - 1}_${day}`;
+  }
+
+  function parseScheduleKey(key) {
+    const parts = String(key || "").split("_");
+    if (parts.length < 4) {
+      return null;
+    }
+    const memberId = parts.slice(0, -3).join("_");
+    const year = Number(parts[parts.length - 3]);
+    const month = Number(parts[parts.length - 2]);
+    const day = Number(parts[parts.length - 1]);
+    if (!memberId || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+      return null;
+    }
+    return {
+      memberId,
+      workDate: `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      year,
+      month: month + 1
+    };
+  }
+
+  async function deleteSchedulerRowsNotIn(table, schedulerIds) {
+    await restDelete(table, {
+      scheduler_item_id: notInFilter(schedulerIds)
+    }, {
+      auth: true
+    });
+  }
+
+  async function fetchRowsBySchedulerId(table) {
+    const rows = await restSelect(table, {
+      select: "*",
+      auth: Boolean(currentSession?.access_token)
+    });
+    return new Map((rows || [])
+      .filter((row) => row.scheduler_item_id)
+      .map((row) => [row.scheduler_item_id, row]));
+  }
+
+  function getRowSchedulerId(row, fallbackPrefix) {
+    return row.scheduler_item_id || `${fallbackPrefix}:${row.id}`;
+  }
+
+  function mapDepartmentRows(rows = []) {
+    return (rows || [])
+      .filter((row) => row.scheduler_item_id)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.name || "").localeCompare(String(b.name || "")))
+      .map((row) => ({
+        id: row.scheduler_item_id,
+        name: row.name || "",
+        startDate: row.start_date || "",
+        endDate: row.end_date || "",
+        hiddenFromLeave: Boolean(row.hidden_from_leave)
+      }));
+  }
+
+  function mapShiftRows(rows = [], departmentIdByUuid = new Map()) {
+    return (rows || [])
+      .filter((row) => row.scheduler_item_id)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.name || "").localeCompare(String(b.name || "")))
+      .map((row) => ({
+        id: row.scheduler_item_id,
+        name: row.name || "",
+        color: row.color || "#378ADD",
+        textColor: row.text_color || "",
+        autoTextColor: row.auto_text_color !== false,
+        startTime: (row.start_time || "").slice(0, 5),
+        endTime: (row.end_time || "").slice(0, 5),
+        hiddenFromToolbar: Boolean(row.hidden_from_toolbar),
+        requiredStaffCount: Math.max(0, Number(row.required_staff_count) || 0),
+        applicableDeptIds: [departmentIdByUuid.get(row.applicable_department_id)].filter(Boolean),
+        positionRequirements: []
+      }));
+  }
+
+  function mapLeaveRows(rows = []) {
+    return (rows || [])
+      .filter((row) => row.scheduler_item_id)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.code || "").localeCompare(String(b.code || "")))
+      .map((row) => ({
+        id: row.scheduler_item_id,
+        code: row.code || "",
+        name: row.name || "",
+        color: row.color || "#888780",
+        textColor: row.text_color || "",
+        autoTextColor: row.auto_text_color !== false,
+        hiddenFromToolbar: Boolean(row.hidden_from_toolbar),
+        defaultAllDay: Boolean(row.requires_time),
+        requireReason: Boolean(row.requires_reason)
+      }));
+  }
+
+  function mapOvertimeRows(rows = []) {
+    return (rows || [])
+      .filter((row) => row.scheduler_item_id)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.name || "").localeCompare(String(b.name || "")))
+      .map((row) => ({
+        id: row.scheduler_item_id,
+        name: row.name || "加班",
+        color: row.color || "#D85A30",
+        textColor: row.text_color || "",
+        autoTextColor: row.auto_text_color !== false,
+        hiddenFromToolbar: Boolean(row.hidden_from_toolbar),
+        startTime: (row.start_time || "").slice(0, 5),
+        endTime: (row.end_time || "").slice(0, 5),
+        useRest1: Boolean(row.use_rest_1),
+        rest1StartTime: (row.rest_1_start_time || "").slice(0, 5),
+        rest1EndTime: (row.rest_1_end_time || "").slice(0, 5),
+        useRest2: Boolean(row.use_rest_2),
+        rest2StartTime: (row.rest_2_start_time || "").slice(0, 5),
+        rest2EndTime: (row.rest_2_end_time || "").slice(0, 5)
+      }));
+  }
+
+  function mapHolidayRows(rows = []) {
+    return (rows || [])
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.holiday_date || "").localeCompare(String(b.holiday_date || "")))
+      .map((row) => ({
+        id: row.scheduler_item_id || `h:${row.id}`,
+        date: row.holiday_date || "",
+        name: row.name || ""
+      }));
+  }
+
   async function loadState() {
+    const auth = Boolean(currentSession?.access_token);
     try {
-      const rows = await restSelect("schedule_documents", {
-        select: "payload",
-        filters: {
-          id: `eq.${documentId}`
-        },
-        auth: Boolean(currentSession?.access_token)
+      const [
+        settingsRows,
+        departmentRows,
+        profileRows,
+        memberDepartmentRows,
+        shiftRows,
+        leaveRows,
+        overtimeRows,
+        holidayRows,
+        scheduleMonthRows,
+        scheduleEntryRows
+      ] = await Promise.all([
+        restSelect("scheduler_settings", { select: "*", filters: { id: `eq.${documentId}` }, limit: "1", auth }),
+        restSelect("departments", { select: "*", order: "sort_order.asc,name.asc", auth }),
+        restSelect("profiles", { select: "*", filters: { is_active: "eq.true" }, order: "employee_code.asc", auth }),
+        restSelect("member_departments", { select: "*", order: "sort_order.asc", auth }),
+        restSelect("shift_types", { select: "*", order: "sort_order.asc,name.asc", auth }),
+        restSelect("leave_types", { select: "*", order: "sort_order.asc,code.asc", auth }),
+        restSelect("overtime_types", { select: "*", order: "sort_order.asc,name.asc", auth }),
+        restSelect("holidays", { select: "*", order: "sort_order.asc,holiday_date.asc", auth }),
+        restSelect("schedule_months", { select: "*", auth }),
+        restSelect("schedule_entries", { select: "*", order: "work_date.asc", auth })
+      ]);
+
+      const settings = settingsRows?.[0] || {};
+      const departmentIdByUuid = new Map((departmentRows || []).map((row) => [row.id, row.scheduler_item_id || ""]));
+      const shiftIdByUuid = new Map((shiftRows || []).map((row) => [row.id, getRowSchedulerId(row, "shift")]));
+      const leaveIdByUuid = new Map((leaveRows || []).map((row) => [row.id, getRowSchedulerId(row, "leave")]));
+      const overtimeIdByUuid = new Map((overtimeRows || []).map((row) => [row.id, getRowSchedulerId(row, "overtime")]));
+      const memberDepartmentMap = new Map();
+      (memberDepartmentRows || []).forEach((row) => {
+        const departmentId = departmentIdByUuid.get(row.department_id);
+        if (!row.member_id || !departmentId) {
+          return;
+        }
+        if (!memberDepartmentMap.has(row.member_id)) {
+          memberDepartmentMap.set(row.member_id, []);
+        }
+        memberDepartmentMap.get(row.member_id).push({
+          departmentId,
+          sortOrder: Number(row.sort_order || 0)
+        });
       });
-      return rows?.[0]?.payload || null;
+      memberDepartmentMap.forEach((items, memberId) => {
+        memberDepartmentMap.set(memberId, items
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((item) => item.departmentId)
+          .filter((value, index, list) => value && list.indexOf(value) === index));
+      });
+
+      const members = (profileRows || []).map((row) => {
+        const relationDeptIds = memberDepartmentMap.get(row.id) || [];
+        const fallbackDeptId = departmentIdByUuid.get(row.home_department_id) || "";
+        const storedDeptIds = Array.isArray(row.schedule_department_ids) ? row.schedule_department_ids : [];
+        const scheduleDeptIds = (relationDeptIds.length ? relationDeptIds : storedDeptIds)
+          .filter((value, index, list) => value && list.indexOf(value) === index);
+        if (fallbackDeptId && !scheduleDeptIds.includes(fallbackDeptId)) {
+          scheduleDeptIds.unshift(fallbackDeptId);
+        }
+        return {
+          id: row.id,
+          code: row.employee_code || "",
+          name: row.full_name || "",
+          deptId: scheduleDeptIds[0] || fallbackDeptId,
+          scheduleDeptIds,
+          positionId: "",
+          proxyMemberId: "",
+          hireDate: row.hire_date || "",
+          leaveDate: row.leave_date || "",
+          payByDay: Boolean(row.pay_by_day),
+          fixedRestWeekday: clampInteger(row.fixed_rest_weekday, 0, 6, 0),
+          monthlyRestDays: Math.max(0, Number(row.monthly_rest_days) || 0),
+          role: row.role === "manager" ? "manager" : "employee"
+        };
+      });
+      const memberByUuid = new Map(members.map((member) => [member.id, member]));
+      const scheduleMonthById = new Map((scheduleMonthRows || []).map((row) => [row.id, row]));
+      const schedule = {};
+      (scheduleEntryRows || []).forEach((row) => {
+        const member = memberByUuid.get(row.member_id);
+        const key = makeScheduleKey(member?.id, row.work_date);
+        if (!key) {
+          return;
+        }
+        const shift = shiftIdByUuid.get(row.shift_type_id) || null;
+        const leave = leaveIdByUuid.get(row.leave_type_id) || null;
+        const overtime = overtimeIdByUuid.get(row.overtime_type_id) || null;
+        if (!shift && !leave && !overtime) {
+          return;
+        }
+        schedule[key] = {
+          shift,
+          leave,
+          overtime,
+          leaveMeta: leave ? {
+            allDay: row.leave_all_day !== false,
+            startTime: (row.leave_start_time || "").slice(0, 5),
+            endTime: (row.leave_end_time || "").slice(0, 5),
+            reasonEnabled: Boolean(row.leave_reason),
+            reason: row.leave_reason || ""
+          } : null,
+          overtimeMeta: overtime ? {
+            startTime: (row.overtime_start_time || "").slice(0, 5),
+            endTime: (row.overtime_end_time || "").slice(0, 5),
+            useRest1: Boolean(row.overtime_use_rest_1),
+            rest1StartTime: (row.overtime_rest_1_start_time || "").slice(0, 5),
+            rest1EndTime: (row.overtime_rest_1_end_time || "").slice(0, 5),
+            useRest2: Boolean(row.overtime_use_rest_2),
+            rest2StartTime: (row.overtime_rest_2_start_time || "").slice(0, 5),
+            rest2EndTime: (row.overtime_rest_2_end_time || "").slice(0, 5),
+            reason: row.overtime_reason || ""
+          } : null
+        };
+      });
+
+      const currentMonth = scheduleMonthById.size
+        ? [...scheduleMonthById.values()].find((row) => row.year === settings.current_year && row.month === Number(settings.current_month || 0) + 1)
+        : null;
+
+      return {
+        year: Number(settings.current_year) || new Date().getFullYear(),
+        month: clampInteger(settings.current_month, 0, 11, new Date().getMonth()),
+        selected: { type: null, id: null },
+        deptFilter: settings.dept_filter || "all",
+        tableView: settings.table_view === "shift" ? "shift" : "member",
+        tableDeptScopeFilter: settings.table_dept_scope_filter || "all",
+        tableStatsVisible: settings.table_stats_visible !== false,
+        scheduleStartDate: settings.schedule_start_date || "",
+        departments: mapDepartmentRows(departmentRows),
+        members,
+        shifts: mapShiftRows(shiftRows, departmentIdByUuid),
+        leaves: mapLeaveRows(leaveRows),
+        overtime: mapOvertimeRows(overtimeRows),
+        holidays: mapHolidayRows(holidayRows),
+        rules: {
+          maxConsecutiveWorkDays: Math.max(1, Number(settings.max_consecutive_work_days) || 6),
+          weekStart: clampInteger(settings.week_start, 0, 6, 0),
+          monthStartDay: clampInteger(currentMonth?.month_start_day ?? settings.month_start_day, 1, 31, 1),
+          eightWeekStartDate: settings.eight_week_start_date || "",
+          forbidProxyLeaveConflict: settings.forbid_proxy_leave_conflict !== false,
+          requireEmploymentWindow: settings.require_employment_window !== false
+        },
+        schedule
+      };
     } catch (error) {
       if (!currentSession?.access_token && /permission denied|42501|401|403/i.test(error.message || "")) {
-        throw new Error("未登入時無法讀取正式班表，請檢查 schedule_documents 的匿名讀取權限");
+        throw new Error("未登入時無法讀取正式班表，請檢查正規化資料表的匿名讀取權限");
       }
       throw error;
     }
   }
 
-  async function saveState(state) {
-    ensureManager();
-    await restInsert("schedule_documents", [{ id: documentId, payload: state }], {
-      auth: true,
-      onConflict: "id",
-      prefer: "resolution=merge-duplicates,return=minimal"
-    });
-    return { ok: true, savedAt: new Date().toISOString() };
-  }
-
-  async function syncCatalogs(state) {
-    ensureManager();
-
+  async function syncLeaveAndOvertimeCatalogs(state) {
+    const requestLeaveItems = (state.requestLeaveCatalog || [])
+      .filter((item) => item?.code && item?.name)
+      .map((item) => ({
+        id: `catalog:${item.code}`,
+        code: item.code,
+        name: item.name,
+        color: null,
+        defaultAllDay: false,
+        requireReason: false
+      }));
     const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code);
-    if (leaveItems.length) {
-      try {
-        const existingLeaveRows = await restSelect("leave_types", {
-          select: "id,scheduler_item_id",
-          auth: true
-        });
-        const existingLeaveMap = new Map(
-          (existingLeaveRows || [])
-            .filter((item) => item?.scheduler_item_id)
-            .map((item) => [item.scheduler_item_id, item])
-        );
-
-        for (const item of leaveItems) {
-          const payload = {
-            scheduler_item_id: item.id,
-            code: item.code,
-            name: item.name,
-            color: item.color,
-            requires_time: Boolean(item.defaultAllDay),
-            requires_reason: Boolean(item.requireReason)
-          };
-          const existing = existingLeaveMap.get(item.id);
-          if (existing?.id) {
-            await restUpdate("leave_types", { id: `eq.${existing.id}` }, payload, {
-              auth: true,
-              prefer: "return=minimal"
-            });
-          } else {
-            await restInsert("leave_types", [payload], {
-              auth: true,
-              prefer: "return=minimal"
-            });
-          }
-        }
-      } catch (error) {
-        if (!/scheduler_item_id/i.test(error.message || "")) {
-          throw error;
-        }
-        const leaveMap = new Map();
-        leaveItems.forEach((item) => {
-          leaveMap.set(item.code, {
-            code: item.code,
-            name: item.name,
-            color: item.color,
-            requires_time: Boolean(item.defaultAllDay),
-            requires_reason: Boolean(item.requireReason)
-          });
-        });
-        await restInsert("leave_types", [...leaveMap.values()], {
-          auth: true,
-          onConflict: "code",
-          prefer: "resolution=merge-duplicates,return=minimal"
-        });
-      }
+    const allLeaveItems = [...requestLeaveItems, ...leaveItems];
+    if (allLeaveItems.length) {
+      await restInsert("leave_types", allLeaveItems.map((item, index) => ({
+        scheduler_item_id: item.id,
+        code: item.code,
+        name: item.name,
+        color: item.color || null,
+        text_color: item.textColor || null,
+        auto_text_color: item.autoTextColor !== false,
+        hidden_from_toolbar: Boolean(item.hiddenFromToolbar),
+        requires_time: Boolean(item.defaultAllDay),
+        requires_reason: Boolean(item.requireReason),
+        sort_order: index
+      })), {
+        auth: true,
+        onConflict: "scheduler_item_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
     }
 
-    const existingOvertime = await restSelect("overtime_types", {
-      select: "id,name",
-      auth: true
-    });
-    const overtimeMap = new Map((existingOvertime || []).map((item) => [item.name, item]));
-
-    for (const item of state.overtime || []) {
-      const payload = {
+    const overtimeItems = (state.overtime || []).filter((item) => item?.id && item?.name);
+    if (overtimeItems.length) {
+      await restInsert("overtime_types", overtimeItems.map((item, index) => ({
+        scheduler_item_id: item.id,
         name: item.name,
-        color: item.color,
-        start_time: item.startTime,
-        end_time: item.endTime,
-        required_staff_count: Math.max(0, Number(item.requiredStaffCount) || 0),
+        color: item.color || null,
+        text_color: item.textColor || null,
+        auto_text_color: item.autoTextColor !== false,
+        hidden_from_toolbar: Boolean(item.hiddenFromToolbar),
+        start_time: nullableTime(item.startTime),
+        end_time: nullableTime(item.endTime),
         use_rest_1: Boolean(item.useRest1),
-        rest_1_start_time: item.useRest1 ? item.rest1StartTime || null : null,
-        rest_1_end_time: item.useRest1 ? item.rest1EndTime || null : null,
+        rest_1_start_time: item.useRest1 ? nullableTime(item.rest1StartTime) : null,
+        rest_1_end_time: item.useRest1 ? nullableTime(item.rest1EndTime) : null,
         use_rest_2: Boolean(item.useRest2),
-        rest_2_start_time: item.useRest2 ? item.rest2StartTime || null : null,
-        rest_2_end_time: item.useRest2 ? item.rest2EndTime || null : null
-      };
-      const existing = overtimeMap.get(item.name);
-      if (existing?.id) {
-        await restUpdate("overtime_types", { id: `eq.${existing.id}` }, payload, {
-          auth: true,
-          prefer: "return=minimal"
-        });
-      } else {
-        await restInsert("overtime_types", [payload], {
-          auth: true,
-          prefer: "return=minimal"
-        });
-      }
+        rest_2_start_time: item.useRest2 ? nullableTime(item.rest2StartTime) : null,
+        rest_2_end_time: item.useRest2 ? nullableTime(item.rest2EndTime) : null,
+        sort_order: index
+      })), {
+        auth: true,
+        onConflict: "scheduler_item_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
     }
   }
 
@@ -525,6 +772,7 @@
         hireDate: member?.hireDate || null,
         leaveDate: member?.leaveDate || null,
         payByDay: Boolean(member?.payByDay),
+        fixedRestWeekday: clampInteger(member?.fixedRestWeekday, 0, 6, 0),
         scheduleDepartmentIds: Array.isArray(member?.scheduleDeptIds) ? member.scheduleDeptIds : [],
         monthlyRestDays: Math.max(0, Number(member?.monthlyRestDays) || 0)
       },
@@ -581,6 +829,315 @@
     return getLeaveTypeByCode(payload.leaveCode);
   }
 
+  async function ensureMemberProfiles(state) {
+    const members = Array.isArray(state.members) ? state.members.filter((member) => member?.code && member?.name) : [];
+    if (!members.length) {
+      return new Map();
+    }
+    let rows = await restSelect("profiles", {
+      select: "id,employee_code",
+      filters: {
+        employee_code: buildInFilter(members.map((member) => member.code))
+      },
+      auth: true
+    });
+    const existingCodes = new Set((rows || []).map((row) => row.employee_code));
+    for (const member of members) {
+      if (!existingCodes.has(member.code)) {
+        await syncMemberProfile(member, member.code);
+      }
+    }
+    rows = await restSelect("profiles", {
+      select: "*",
+      filters: {
+        employee_code: buildInFilter(members.map((member) => member.code))
+      },
+      auth: true
+    });
+    return new Map((rows || []).map((row) => [row.employee_code, row]));
+  }
+
+  async function saveState(state) {
+    ensureManager();
+    const departments = Array.isArray(state.departments) ? state.departments : [];
+    const shifts = Array.isArray(state.shifts) ? state.shifts : [];
+    const leaves = Array.isArray(state.leaves) ? state.leaves : [];
+    const overtime = Array.isArray(state.overtime) ? state.overtime : [];
+    const holidays = Array.isArray(state.holidays) ? state.holidays : [];
+
+    if (departments.length) {
+      await restInsert("departments", departments.map((department, index) => ({
+        scheduler_item_id: department.id,
+        code: department.id,
+        name: department.name || department.id,
+        start_date: nullableDate(department.startDate),
+        end_date: nullableDate(department.endDate),
+        hidden_from_leave: Boolean(department.hiddenFromLeave),
+        sort_order: index
+      })), {
+        auth: true,
+        onConflict: "scheduler_item_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+    }
+    await deleteSchedulerRowsNotIn("departments", departments.map((department) => department.id));
+    const departmentMap = await fetchRowsBySchedulerId("departments");
+
+    if (leaves.length) {
+      await restInsert("leave_types", leaves.map((item, index) => ({
+        scheduler_item_id: item.id,
+        code: item.code || item.id,
+        name: item.name || item.code || item.id,
+        color: item.color || null,
+        text_color: item.textColor || null,
+        auto_text_color: item.autoTextColor !== false,
+        hidden_from_toolbar: Boolean(item.hiddenFromToolbar),
+        requires_time: Boolean(item.defaultAllDay),
+        requires_reason: Boolean(item.requireReason),
+        sort_order: index
+      })), {
+        auth: true,
+        onConflict: "scheduler_item_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+    }
+    await deleteSchedulerRowsNotIn("leave_types", leaves.map((item) => item.id));
+    const leaveMap = await fetchRowsBySchedulerId("leave_types");
+
+    if (overtime.length) {
+      await restInsert("overtime_types", overtime.map((item, index) => ({
+        scheduler_item_id: item.id,
+        name: item.name || "加班",
+        color: item.color || null,
+        text_color: item.textColor || null,
+        auto_text_color: item.autoTextColor !== false,
+        hidden_from_toolbar: Boolean(item.hiddenFromToolbar),
+        start_time: nullableTime(item.startTime),
+        end_time: nullableTime(item.endTime),
+        use_rest_1: Boolean(item.useRest1),
+        rest_1_start_time: item.useRest1 ? nullableTime(item.rest1StartTime) : null,
+        rest_1_end_time: item.useRest1 ? nullableTime(item.rest1EndTime) : null,
+        use_rest_2: Boolean(item.useRest2),
+        rest_2_start_time: item.useRest2 ? nullableTime(item.rest2StartTime) : null,
+        rest_2_end_time: item.useRest2 ? nullableTime(item.rest2EndTime) : null,
+        sort_order: index
+      })), {
+        auth: true,
+        onConflict: "scheduler_item_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+    }
+    await deleteSchedulerRowsNotIn("overtime_types", overtime.map((item) => item.id));
+    const overtimeMap = await fetchRowsBySchedulerId("overtime_types");
+
+    if (shifts.length) {
+      await restInsert("shift_types", shifts.map((shift, index) => ({
+        scheduler_item_id: shift.id,
+        name: shift.name || shift.id,
+        applicable_department_id: departmentMap.get(shift.applicableDeptIds?.[0])?.id || null,
+        color: shift.color || null,
+        text_color: shift.textColor || null,
+        auto_text_color: shift.autoTextColor !== false,
+        hidden_from_toolbar: Boolean(shift.hiddenFromToolbar),
+        start_time: nullableTime(shift.startTime),
+        end_time: nullableTime(shift.endTime),
+        required_staff_count: Math.max(0, Number(shift.requiredStaffCount) || 0),
+        sort_order: index
+      })), {
+        auth: true,
+        onConflict: "scheduler_item_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+    }
+    await deleteSchedulerRowsNotIn("shift_types", shifts.map((shift) => shift.id));
+    const shiftMap = await fetchRowsBySchedulerId("shift_types");
+
+    if (holidays.length) {
+      await restInsert("holidays", holidays
+        .filter((holiday) => nullableDate(holiday.date))
+        .map((holiday, index) => ({
+          scheduler_item_id: holiday.id,
+          holiday_date: nullableDate(holiday.date),
+          name: holiday.name || "國定假日",
+          sort_order: index
+        })), {
+        auth: true,
+        onConflict: "holiday_date",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+    }
+    await deleteSchedulerRowsNotIn("holidays", holidays.map((holiday) => holiday.id));
+
+    const profileMap = await ensureMemberProfiles(state);
+    const memberCodes = (state.members || []).map((member) => member.code).filter(Boolean);
+    if (memberCodes.length) {
+      await restUpdate("profiles", {
+        employee_code: `not.${buildInFilter(memberCodes)}`
+      }, {
+        is_active: false
+      }, {
+        auth: true,
+        prefer: "return=minimal"
+      });
+    }
+    for (const member of state.members || []) {
+      const profile = profileMap.get(member.code);
+      if (!profile?.id) {
+        continue;
+      }
+      const scheduleDeptIds = Array.isArray(member.scheduleDeptIds) && member.scheduleDeptIds.length
+        ? member.scheduleDeptIds
+        : [member.deptId].filter(Boolean);
+      await restUpdate("profiles", {
+        id: `eq.${profile.id}`
+      }, {
+        employee_code: member.code,
+        full_name: member.name,
+        role: member.role === "manager" ? "manager" : "employee",
+        home_department_id: departmentMap.get(scheduleDeptIds[0])?.id || null,
+        hire_date: nullableDate(member.hireDate),
+        leave_date: nullableDate(member.leaveDate),
+        pay_by_day: Boolean(member.payByDay),
+        fixed_rest_weekday: clampInteger(member.fixedRestWeekday, 0, 6, 0),
+        monthly_rest_days: clampInteger(member.monthlyRestDays, 0, 31, 0),
+        schedule_department_ids: scheduleDeptIds,
+        is_active: true
+      }, {
+        auth: true,
+        prefer: "return=minimal"
+      });
+    }
+
+    await restDelete("member_departments", { id: "not.is.null" }, { auth: true });
+    const memberDepartmentRows = [];
+    (state.members || []).forEach((member) => {
+      const profile = profileMap.get(member.code);
+      const scheduleDeptIds = Array.isArray(member.scheduleDeptIds) && member.scheduleDeptIds.length
+        ? member.scheduleDeptIds
+        : [member.deptId].filter(Boolean);
+      scheduleDeptIds.forEach((departmentId, index) => {
+        const department = departmentMap.get(departmentId);
+        if (profile?.id && department?.id) {
+          memberDepartmentRows.push({
+            member_id: profile.id,
+            department_id: department.id,
+            sort_order: index
+          });
+        }
+      });
+    });
+    if (memberDepartmentRows.length) {
+      await restInsert("member_departments", memberDepartmentRows, {
+        auth: true,
+        onConflict: "member_id,department_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+    }
+
+    await restInsert("scheduler_settings", [{
+      id: documentId,
+      current_year: Number(state.year) || new Date().getFullYear(),
+      current_month: clampInteger(state.month, 0, 11, new Date().getMonth()),
+      dept_filter: state.deptFilter || "all",
+      table_view: state.tableView === "shift" ? "shift" : "member",
+      table_dept_scope_filter: state.tableDeptScopeFilter || "all",
+      table_stats_visible: state.tableStatsVisible !== false,
+      schedule_start_date: nullableDate(state.scheduleStartDate),
+      max_consecutive_work_days: Math.max(1, Number(state.rules?.maxConsecutiveWorkDays) || 6),
+      week_start: clampInteger(state.rules?.weekStart, 0, 6, 0),
+      month_start_day: clampInteger(state.rules?.monthStartDay, 1, 31, 1),
+      eight_week_start_date: nullableDate(state.rules?.eightWeekStartDate),
+      forbid_proxy_leave_conflict: state.rules?.forbidProxyLeaveConflict !== false,
+      require_employment_window: state.rules?.requireEmploymentWindow !== false,
+      updated_at: new Date().toISOString()
+    }], {
+      auth: true,
+      onConflict: "id",
+      prefer: "resolution=merge-duplicates,return=minimal"
+    });
+
+    const scheduleEntries = [];
+    Object.entries(state.schedule || {}).forEach(([key, slot]) => {
+      const parsed = parseScheduleKey(key);
+      if (!parsed || !slot) {
+        return;
+      }
+      const member = (state.members || []).find((item) => item.id === parsed.memberId);
+      const profile = member ? profileMap.get(member.code) : null;
+      if (!profile?.id) {
+        return;
+      }
+      scheduleEntries.push({ parsed, slot, profile });
+    });
+    const monthRows = new Map();
+    monthRows.set(`${state.year}-${Number(state.month) + 1}`, {
+      year: Number(state.year) || new Date().getFullYear(),
+      month: Number(state.month) + 1
+    });
+    scheduleEntries.forEach(({ parsed }) => {
+      monthRows.set(`${parsed.year}-${parsed.month}`, {
+        year: parsed.year,
+        month: parsed.month
+      });
+    });
+    await restInsert("schedule_months", [...monthRows.values()].map((item) => ({
+      year: item.year,
+      month: item.month,
+      month_start_day: clampInteger(state.rules?.monthStartDay, 1, 31, 1),
+      name: `${item.year}-${String(item.month).padStart(2, "0")}`
+    })), {
+      auth: true,
+      onConflict: "year,month",
+      prefer: "resolution=merge-duplicates,return=minimal"
+    });
+    const scheduleMonths = await restSelect("schedule_months", {
+      select: "*",
+      auth: true
+    });
+    const scheduleMonthMap = new Map((scheduleMonths || []).map((row) => [`${row.year}-${row.month}`, row]));
+
+    await restDelete("schedule_entries", { id: "not.is.null" }, { auth: true });
+    const scheduleRows = scheduleEntries.map(({ parsed, slot, profile }) => {
+      const scheduleMonth = scheduleMonthMap.get(`${parsed.year}-${parsed.month}`);
+      return scheduleMonth?.id ? {
+        schedule_month_id: scheduleMonth.id,
+        member_id: profile.id,
+        work_date: parsed.workDate,
+        shift_type_id: shiftMap.get(slot.shift)?.id || null,
+        leave_type_id: leaveMap.get(slot.leave)?.id || null,
+        leave_all_day: slot.leaveMeta?.allDay !== false,
+        leave_start_time: slot.leaveMeta?.allDay === false ? nullableTime(slot.leaveMeta?.startTime) : null,
+        leave_end_time: slot.leaveMeta?.allDay === false ? nullableTime(slot.leaveMeta?.endTime) : null,
+        leave_reason: slot.leaveMeta?.reason || null,
+        overtime_type_id: overtimeMap.get(slot.overtime)?.id || null,
+        overtime_start_time: nullableTime(slot.overtimeMeta?.startTime),
+        overtime_end_time: nullableTime(slot.overtimeMeta?.endTime),
+        overtime_use_rest_1: Boolean(slot.overtimeMeta?.useRest1),
+        overtime_rest_1_start_time: slot.overtimeMeta?.useRest1 ? nullableTime(slot.overtimeMeta?.rest1StartTime) : null,
+        overtime_rest_1_end_time: slot.overtimeMeta?.useRest1 ? nullableTime(slot.overtimeMeta?.rest1EndTime) : null,
+        overtime_use_rest_2: Boolean(slot.overtimeMeta?.useRest2),
+        overtime_rest_2_start_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2StartTime) : null,
+        overtime_rest_2_end_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2EndTime) : null,
+        overtime_reason: slot.overtimeMeta?.reason || null
+      } : null;
+    }).filter((row) => row && (row.shift_type_id || row.leave_type_id || row.overtime_type_id));
+    if (scheduleRows.length) {
+      await restInsert("schedule_entries", scheduleRows, {
+        auth: true,
+        onConflict: "schedule_month_id,member_id,work_date",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+    }
+
+    await syncLeaveAndOvertimeCatalogs(state);
+    return { ok: true, savedAt: new Date().toISOString() };
+  }
+
+  async function syncCatalogs(state) {
+    ensureManager();
+    await syncLeaveAndOvertimeCatalogs(state);
+  }
+
   async function getOvertimeTypeByName(name) {
     const rows = await restSelect("overtime_types", {
       select: "id,name",
@@ -630,57 +1187,10 @@
     return rows[0].id;
   }
 
-  async function createLeaveRequest(payload) {
-    ensureSignedIn();
-    const leaveType = await getLeaveTypeByCode(payload.leaveCode);
-    await restInsert("leave_requests", [{
-      member_id: currentSession.user.id,
-      leave_type_id: leaveType.id,
-      start_date: payload.startDate,
-      end_date: payload.endDate,
-      is_all_day: payload.isAllDay,
-      start_time: payload.isAllDay ? null : payload.startTime,
-      end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || "",
-      source: "employee"
-    }], {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
-  }
-
-  async function createOvertimeRequest(payload) {
-    ensureSignedIn();
-    const overtimeType = payload.overtimeName
-      ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
-      : await getDefaultOvertimeType();
-    await restInsert("overtime_requests", [{
-      member_id: currentSession.user.id,
-      overtime_type_id: overtimeType.id,
-      work_date: payload.workDate,
-      start_time: payload.startTime || null,
-      end_time: payload.endTime || null,
-      use_rest_1: Boolean(payload.useRest1),
-      rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
-      rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
-      use_rest_2: Boolean(payload.useRest2),
-      rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
-      rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || "",
-      source: "employee"
-    }], {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
-  }
-
   async function createManagerLeaveRequest(payload) {
     ensureManager();
     const leaveType = await getLeaveTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    const now = new Date().toISOString();
     await restInsert("leave_requests", [{
       member_id: profileMemberId,
       leave_type_id: leaveType.id,
@@ -689,11 +1199,7 @@
       is_all_day: payload.isAllDay,
       start_time: payload.isAllDay ? null : payload.startTime,
       end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: now
+      reason: payload.reason || ""
     }], {
       auth: true,
       prefer: "return=minimal"
@@ -715,12 +1221,7 @@
       is_all_day: payload.isAllDay,
       start_time: payload.isAllDay ? null : payload.startTime,
       end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: new Date().toISOString(),
-      manager_note: payload.managerNote || ""
+      reason: payload.reason || ""
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -744,7 +1245,6 @@
       ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
       : await getDefaultOvertimeType();
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    const now = new Date().toISOString();
     await restInsert("overtime_requests", [{
       member_id: profileMemberId,
       overtime_type_id: overtimeType.id,
@@ -757,11 +1257,7 @@
       use_rest_2: Boolean(payload.useRest2),
       rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
       rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: now
+      reason: payload.reason || ""
     }], {
       auth: true,
       prefer: "return=minimal"
@@ -789,12 +1285,7 @@
       use_rest_2: Boolean(payload.useRest2),
       rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
       rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || "",
-      status: "approved",
-      source: "manager",
-      approved_by: currentSession.user.id,
-      approved_at: new Date().toISOString(),
-      manager_note: payload.managerNote || ""
+      reason: payload.reason || ""
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -900,10 +1391,6 @@
       startTime: item.start_time || "",
       endTime: item.end_time || "",
       reason: item.reason || "",
-      status: item.status,
-      source: item.source || "employee",
-      managerNote: item.manager_note || "",
-      approvedAt: item.approved_at || "",
       createdAt: item.created_at
     }));
   }
@@ -942,10 +1429,6 @@
       rest2StartTime: item.rest_2_start_time || "",
       rest2EndTime: item.rest_2_end_time || "",
       reason: item.reason || "",
-      status: item.status,
-      source: item.source || "employee",
-      managerNote: item.manager_note || "",
-      approvedAt: item.approved_at || "",
       createdAt: item.created_at
     }));
   }
@@ -969,10 +1452,6 @@
           startTime: item.start_time || "",
           endTime: item.end_time || "",
           reason: "",
-          status: item.status,
-          source: item.source || "employee",
-          managerNote: "",
-          approvedAt: "",
           createdAt: item.created_at || ""
         });
         return;
@@ -993,49 +1472,11 @@
           rest2StartTime: item.rest_2_start_time || "",
           rest2EndTime: item.rest_2_end_time || "",
           reason: "",
-          status: item.status,
-          source: item.source || "employee",
-          managerNote: "",
-          approvedAt: "",
           createdAt: item.created_at || ""
         });
       }
     });
     return { leaveRequests, overtimeRequests };
-  }
-
-  async function updateLeaveRequest(payload) {
-    ensureManager();
-    const nextStatus = payload.status;
-    await restUpdate("leave_requests", {
-      id: `eq.${payload.id}`
-    }, {
-      status: nextStatus,
-      manager_note: payload.managerNote || "",
-      approved_by: nextStatus === "pending" ? null : currentSession.user.id,
-      approved_at: nextStatus === "pending" ? null : new Date().toISOString()
-    }, {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
-  }
-
-  async function updateOvertimeRequest(payload) {
-    ensureManager();
-    const nextStatus = payload.status;
-    await restUpdate("overtime_requests", {
-      id: `eq.${payload.id}`
-    }, {
-      status: nextStatus,
-      manager_note: payload.managerNote || "",
-      approved_by: nextStatus === "pending" ? null : currentSession.user.id,
-      approved_at: nextStatus === "pending" ? null : new Date().toISOString()
-    }, {
-      auth: true,
-      prefer: "return=minimal"
-    });
-    return { ok: true };
   }
 
   async function updateOvertimeRequestDetails(payload) {
@@ -1058,54 +1499,10 @@
     return { ok: true };
   }
 
-  async function deleteLeaveRequest(requestId) {
-    ensureSignedIn();
-    const rows = await restSelect("leave_requests", {
-      select: "id",
-      filters: {
-        id: `eq.${requestId}`,
-        member_id: `eq.${currentSession.user.id}`,
-        status: "eq.pending"
-      },
-      auth: true
-    });
-    if (!rows?.length) {
-      throw new Error("找不到可刪除的請假申請，可能已被審核、退回，或不屬於目前登入者");
-    }
-    await restDelete("leave_requests", {
-      id: `eq.${requestId}`,
-      member_id: `eq.${currentSession.user.id}`,
-      status: "eq.pending"
-    }, {
-      auth: true
-    });
-    return { ok: true };
-  }
-
-  async function deleteOvertimeRequest(requestId) {
-    ensureSignedIn();
-    const rows = await restSelect("overtime_requests", {
-      select: "id",
-      filters: {
-        id: `eq.${requestId}`,
-        member_id: `eq.${currentSession.user.id}`,
-        status: "eq.pending"
-      },
-      auth: true
-    });
-    if (!rows?.length) {
-      throw new Error("找不到可刪除的加班申請，可能已被審核、退回，或不屬於目前登入者");
-    }
-    await restDelete("overtime_requests", {
-      id: `eq.${requestId}`,
-      member_id: `eq.${currentSession.user.id}`,
-      status: "eq.pending"
-    }, {
-      auth: true
-    });
-    return { ok: true };
-  }
   async function exportSapCsv(payload) {
+    if (!exporter.getSapLeaveExportRows(payload).length) {
+      return { canceled: true, empty: true };
+    }
     const blob = new Blob(
       [exporter.buildSapLeaveCsvContent(payload)],
       { type: "text/csv;charset=utf-8" }
@@ -1116,6 +1513,9 @@
   }
 
   async function exportOvertime(payload) {
+    if (!exporter.getOvertimeExportRows(payload).length) {
+      return { canceled: true, empty: true };
+    }
     const blob = await exporter.workbookToBlob(await exporter.createOvertimeWorkbook(payload));
     const fileName = makeFileName("匯出加班", payload, "xlsx");
     downloadBlob(blob, fileName);
@@ -1123,6 +1523,9 @@
   }
 
   async function exportLeave(payload) {
+    if (!exporter.getLeaveExportRows(payload).length) {
+      return { canceled: true, empty: true };
+    }
     const blob = await exporter.workbookToBlob(await exporter.createLeaveWorkbook(payload));
     const fileName = makeFileName("匯出請假", payload, "xlsx");
     downloadBlob(blob, fileName);
@@ -1230,8 +1633,6 @@
     syncCatalogs,
     syncMemberProfile,
     resetMemberPassword,
-    createLeaveRequest,
-    createOvertimeRequest,
     createManagerLeaveRequest,
     updateManagerLeaveRequest,
     deleteManagerLeaveRequest,
@@ -1241,11 +1642,7 @@
     listLeaveRequests,
     listOvertimeRequests,
     listPublicScheduleRequests,
-    updateLeaveRequest,
-    updateOvertimeRequest,
     updateOvertimeRequestDetails,
-    deleteLeaveRequest,
-    deleteOvertimeRequest,
     exportSapCsv,
     exportOvertime,
     exportLeave,
@@ -1260,7 +1657,7 @@
     exportOvertimeSettings,
     importOvertimeSettings,
     getAppInfo: async () => ({
-      databasePath: `Supabase / schedule_documents / ${documentId}`,
+      databasePath: `Supabase / normalized scheduler tables / ${documentId}`,
       backend: "supabase-static",
       updatedAt: null
     }),

@@ -10,10 +10,6 @@ const roots = [
 const bannedTables = [
   "attendance_logs",
   "clock_locations",
-  "schedule_entries",
-  "schedule_months",
-  "shift_types",
-  "member_departments",
   "manager_departments"
 ];
 

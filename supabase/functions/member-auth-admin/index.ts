@@ -7,6 +7,7 @@ type MemberPayload = {
   hireDate?: string | null;
   leaveDate?: string | null;
   payByDay?: boolean;
+  fixedRestWeekday?: number;
   scheduleDepartmentIds?: string[];
   monthlyRestDays?: number;
 };
@@ -43,6 +44,7 @@ function normalizeMember(member: MemberPayload) {
     hireDate: member?.hireDate || null,
     leaveDate: member?.leaveDate || null,
     payByDay: Boolean(member?.payByDay),
+    fixedRestWeekday: Math.min(6, Math.max(0, Number(member?.fixedRestWeekday) || 0)),
     scheduleDepartmentIds: Array.isArray(member?.scheduleDepartmentIds)
       ? member.scheduleDepartmentIds.map((value) => String(value || "").trim()).filter(Boolean)
       : [],
@@ -118,6 +120,7 @@ async function upsertMember(ctx: any, body: any) {
         hire_date: member.hireDate,
         leave_date: member.leaveDate,
         pay_by_day: member.payByDay,
+        fixed_rest_weekday: member.fixedRestWeekday,
         schedule_department_ids: member.scheduleDepartmentIds,
         monthly_rest_days: member.monthlyRestDays,
         login_email: member.loginEmail
@@ -141,9 +144,10 @@ async function upsertMember(ctx: any, body: any) {
       full_name: member.fullName
     }
   });
-  if (updateAuthError) {
+  if (updateAuthError && !/not found/i.test(String(updateAuthError.message || updateAuthError))) {
     throw updateAuthError;
   }
+  const authUserSynced = !updateAuthError;
 
   const { error: updateProfileError } = await ctx.supabaseAdmin
     .from("profiles")
@@ -154,9 +158,10 @@ async function upsertMember(ctx: any, body: any) {
       hire_date: member.hireDate,
       leave_date: member.leaveDate,
       pay_by_day: member.payByDay,
+      fixed_rest_weekday: member.fixedRestWeekday,
       schedule_department_ids: member.scheduleDepartmentIds,
       monthly_rest_days: member.monthlyRestDays,
-      login_email: member.loginEmail
+      login_email: authUserSynced ? member.loginEmail : null
     })
     .eq("id", profile.id);
   if (updateProfileError) {

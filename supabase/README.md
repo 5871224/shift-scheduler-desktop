@@ -1,21 +1,23 @@
-# Supabase 第一版資料表說明
+# Supabase 資料表說明
 
-這一版是依照目前討論結果先規劃的「可落地版本」。
+目前排班系統不再把主要資料存在 `schedule_documents.payload` JSON 裡。
 
-不是最精簡的版本，但它比較適合你後面要做：
+主要資料改由各自資料表保存：
 
-- 員工看所有人班表
-- 員工請假 / 加班申請
-- 主管審核
-- 手機打卡
-- 多單位主管
-- 跨單位支援
+- 單位：`departments`
+- 人員：`profiles` / `member_departments`
+- 班別：`shift_types`
+- 假別：`leave_types`
+- 加班：`overtime_types`
+- 班表：`schedule_months` / `schedule_entries`
+- 主管設定請假：`leave_requests`
+- 主管設定加班：`overtime_requests`
 
 ## 檔案
 
 - [001_initial_schema.sql](/C:/Users/indar/Desktop/排班/supabase/001_initial_schema.sql)
 
-把這份 SQL 貼到 Supabase SQL Editor 執行即可。
+新環境依序執行 SQL。既有環境請至少套用到最新的 migration。
 
 ## 表的白話用途
 
@@ -30,8 +32,7 @@
 
 ### `manager_departments`
 
-主管可以管理哪些單位。  
-因為你有「一個主管可管多個單位」。
+舊版多單位主管關聯，目前 web 版沒有使用。
 
 ### `member_departments`
 
@@ -62,48 +63,38 @@
 
 ### `leave_requests`
 
-員工送出的請假申請。
+主管設定的請假紀錄。
 
 ### `overtime_requests`
 
-員工送出的加班申請。
+主管設定的加班紀錄。
 
 ### `clock_locations`
 
-允許打卡的地點。
+舊版打卡地點，目前 web 版沒有使用。
 
 ### `attendance_logs`
 
-上下班打卡紀錄，含定位與判定結果。
+舊版打卡紀錄，目前 web 版沒有使用。
+
+### `scheduler_settings`
+
+目前班表檢視月份、週起算、月起算、表格檢視等設定。
+
+### `holidays`
+
+國定假日設定。
 
 ## 權限目前設計
 
-這份 SQL 已先包含基本 RLS：
+目前 RLS：
 
-- 所有登入者都可讀主要資料
-- 員工只能新增 / 修改自己的申請與自己的打卡
-- 主管可管理所有設定與所有申請資料
+- 未登入可讀班表顯示需要的資料
+- 登入者可讀主要資料
+- 主管可管理設定、人員、班表、請假與加班資料
 
 ## 這份 SQL 的定位
 
-這是第一版骨架，目的不是一次到位，而是先把：
+目前的資料表是正式儲存來源。`schedule_documents` 只保留為舊 JSON 資料回填來源，不再是前端主要儲存目標。
 
-- 登入
-- 人員
-- 單位
-- 班別
-- 班表
-- 請假申請
-- 加班申請
-- 打卡
-
-都先有地方可放。
-
-## 下一步建議
-
-建完資料表後，下一步最適合做：
-
-1. 建測試帳號與測試單位
-2. 寫前端登入
-3. 先做 `profiles / departments / schedule_entries` 串接
-4. 再接請假與加班申請
+舊資料回填在 `017_normalized_scheduler_storage.sql` 內處理。

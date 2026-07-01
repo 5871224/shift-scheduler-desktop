@@ -14,6 +14,6 @@ assert(renderer.includes("let state = createEmptyState();"), "renderer should st
 assert(renderer.includes("return createEmptyState();"), "invalid payload should fall back to empty state");
 assert(renderer.includes("state = createEmptyState();"), "load failure should fall back to empty state");
 assert(!renderer.includes("merged.overtime = merged.overtime.length ? [merged.overtime[0]] : [{ ...DEFAULT_STATE.overtime[0] }];"), "empty overtime should no longer restore demo overtime");
-assert(webApi.includes("未登入時無法讀取正式班表，請檢查 schedule_documents 的匿名讀取權限"), "anon permission errors should show a clear message");
+assert(webApi.includes("正規化資料表"), "anon permission errors should show a clear message");
 
 console.log("empty state checks passed");

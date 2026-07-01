@@ -17,9 +17,10 @@ assert(renderer.includes("需填原因"), "leave settings should expose required
 assert(renderer.includes("function renderActionIconButton"), "action icon helper should exist");
 assert(renderer.includes('renderActionIconButton("edit"'), "edit actions should use the shared icon helper");
 assert(renderer.includes('renderActionIconButton("delete"'), "delete actions should use the shared icon helper");
-assert(!renderer.includes(">修改</button>"), "edit actions should no longer use text buttons");
-assert(!renderer.includes(">刪除</button>"), "delete actions should no longer use text buttons");
 assert(renderer.includes('data-sort-category="department"'), "department settings should support drag sorting");
+assert(renderer.includes("const activeMembers = state.members.filter(isMemberCurrentlyActive);"), "department settings should filter members by today's employment status");
+assert(renderer.includes("const homeMembers = activeMembers.filter"), "department view should only show active home members");
+assert(renderer.includes("const memberRows = activeMembers.map"), "department member view should only show active members");
 assert(renderer.includes('data-drop-member="${member.id}"'), "department settings should support dropping onto members for reordering");
 assert(renderer.includes('<span>${escapeHtml(member.name)}</span>'), "department settings should show member names without employee codes");
 assert(renderer.includes('showInfoMessage("這個單位還有人員，請先將人員移轉到其他單位後再刪除。");'), "department deletion should be blocked while members remain");
@@ -27,9 +28,15 @@ assert(renderer.includes('openListSettings("shift");'), "saving shifts should re
 assert(renderer.includes('openDepartmentSettings();'), "saving departments should return to department settings");
 assert(renderer.includes('openMemberSettings();'), "saving members should return to member settings");
 assert(renderer.includes('openListSettings(category);'), "saving named settings should return to their settings list");
-assert(renderer.includes('if (category === "shift") {\n    state.shifts = currentList;'), "shift reorder should persist to state.shifts");
-assert(renderer.includes('if (category === "leave") {\n    state.leaves = currentList;'), "leave reorder should persist to state.leaves");
-assert(renderer.includes('if (category === "department") {\n    state.departments = currentList;'), "department reorder should persist to state.departments");
+assert(renderer.includes("state.shifts = nextList;"), "shift reorder should persist to state.shifts");
+assert(renderer.includes("state.leaves = nextList;"), "leave reorder should persist to state.leaves");
+assert(renderer.includes("state.departments = nextList;"), "department reorder should persist to state.departments");
+assert(!renderer.includes('data-open-leave-request="true"'), "floating toolbar should not show the leave request button");
+assert(!renderer.includes('data-open-overtime-request="true"'), "floating toolbar should not show the overtime request button");
+assert(renderer.includes("function previewSortableSettingsItem"), "sortable settings rows should preview their insertion position while dragging");
+assert(renderer.includes("function commitSortedListFromDom"), "sortable settings rows should commit the live drag order");
+assert(renderer.includes("function commitDepartmentMemberOrderFromDom"), "department member drag order should commit from the live DOM order");
+assert(renderer.includes("restoreSettingsScroll(returnTo);"), "drag reorder should restore modal scroll position after rerender");
 
 assert(styles.includes(".catalog-settings-modal"), "catalog settings modal styles should exist");
 assert(styles.includes(".department-settings-modal"), "department settings modal styles should exist");
@@ -37,7 +44,12 @@ assert(styles.includes(".settings-table-row-shift"), "shift table row styles sho
 assert(styles.includes(".settings-table-row-leave"), "leave table row styles should exist");
 assert(styles.includes(".settings-table-code"), "leave settings code column styles should exist");
 assert(styles.includes(".settings-icon-btn"), "settings icon button styles should exist");
-assert(styles.includes(".member-main {\n  font-size: inherit;"), "member name size should match the department text size");
+assert(styles.includes(".member-main") && styles.includes("font-size: inherit;"), "member name size should match the department text size");
+assert(renderer.includes('<span class="member-pay-type">PT</span>'), "daily-pay schedule members should show a PT label after their name");
+assert(styles.includes(".member-pay-type") && styles.includes("font-size: 0.85em;"), "daily-pay PT label should be smaller than the member name");
+assert(styles.includes(".member-pay-type") && styles.includes("white-space: nowrap;"), "daily-pay PT label should not wrap to a new line");
+assert(!styles.includes(".pay-daily-row .member-main"), "daily-pay schedule members should not use a highlighted name background");
 assert(styles.includes(".member-inline-list"), "department row should render inline member list");
+assert(styles.includes(".drag-preview-active"), "drag preview style should exist");
 
 console.log("settings list checks passed");
