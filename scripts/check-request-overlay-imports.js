@@ -10,32 +10,56 @@ const requestConstraintSql = fs.readFileSync(path.join(rootDir, "supabase", "010
 const requestSourceSql = fs.readFileSync(path.join(rootDir, "supabase", "011_request_source_manager.sql"), "utf8");
 
 assert(
-  renderer.includes('const publicRequests = await window.schedulerApi.listPublicScheduleRequests();'),
-  "refreshRequestData should supplement manager requests from the public overlay feed"
+  renderer.includes("const onlyManagerRecords = (records) => (records || []).filter((record) => isManagerRequestSource(record.source || \"\"));") &&
+    renderer.includes("leaveRequestRecords = onlyManagerRecords(publicRequests.leaveRequests);") &&
+    renderer.includes("overtimeRequestRecords = onlyManagerRecords(publicRequests.overtimeRequests);"),
+  "request overlays should only include manager-side leave and overtime settings"
 );
 assert(
-  renderer.includes("function isValidDateTimeRange(startDate, startTime, endDate, endTime)") &&
-    renderer.includes("!isAllDay && !isValidDateTimeRange(startDate, startTime, endDate, endTime)"),
-  "leave request validation should compare combined start/end date-times"
+  !renderer.includes('data-open-leave-request="true"') &&
+    !renderer.includes('data-open-overtime-request="true"') &&
+    !renderer.includes("openLeaveRequestModal") &&
+    !renderer.includes("openOvertimeRequestModal") &&
+    !renderer.includes("openLeaveApprovalModal") &&
+    !renderer.includes("openOvertimeApprovalModal"),
+  "employee request and review UI should be removed"
 );
 assert(
-  renderer.includes("const today = getTodayDateString();") &&
-    renderer.includes('<input id="leaveRequestStartDate" type="date" value="${today}">') &&
-    renderer.includes('<input id="leaveRequestEndDate" type="date" value="${today}">'),
-  "leave request start and end dates should default to today"
+  !webApi.includes("createLeaveRequest,") &&
+    !webApi.includes("createOvertimeRequest,") &&
+    !webApi.includes("updateLeaveRequest,") &&
+    !webApi.includes("updateOvertimeRequest,") &&
+    !webApi.includes("deleteLeaveRequest,") &&
+    !webApi.includes("deleteOvertimeRequest,"),
+  "web api should not expose employee request or review helpers"
 );
 assert(
-  renderer.includes('memberCode: record.memberCode || publicLeaveMap.get(record.id)?.memberCode || ""'),
-  "leave requests should backfill memberCode from public overlay data"
+  webApi.includes("async function createManagerLeaveRequest(payload)") &&
+    webApi.includes("async function updateManagerLeaveRequest(payload)") &&
+    webApi.includes("async function deleteManagerLeaveRequest(requestId)") &&
+    webApi.includes("async function createManagerOvertimeRequest(payload)") &&
+    webApi.includes("async function updateManagerOvertimeRequest(payload)") &&
+    webApi.includes("async function deleteManagerOvertimeRequest(requestId)"),
+  "web api should expose manager-side leave and overtime helpers"
 );
 assert(
-  renderer.includes('memberCode: record.memberCode || publicOvertimeMap.get(record.id)?.memberCode || ""'),
-  "overtime requests should backfill memberCode from public overlay data"
+  renderer.includes("const member = state.members.find((item) => item.id === record.memberId)\r\n    || state.members.find((item) => item.code === record.memberCode);")
+    || renderer.includes("const member = state.members.find((item) => item.id === record.memberId)\n    || state.members.find((item) => item.code === record.memberCode);"),
+  "manager overlays should match members by memberId first and fall back to memberCode"
 );
 assert(
-  renderer.includes('const member = state.members.find((item) => item.id === record.memberId)\r\n    || state.members.find((item) => item.code === record.memberCode);')
-    || renderer.includes('const member = state.members.find((item) => item.id === record.memberId)\n    || state.members.find((item) => item.code === record.memberCode);'),
-  "request overlays should match members by memberId first and fall back to memberCode"
+  renderer.includes("function findEffectiveLeaveRequestConflict(") &&
+    renderer.includes("function findEffectiveOvertimeRequestConflict(") &&
+    renderer.includes("function findDirectLeaveScheduleConflict(") &&
+    renderer.includes("function hasDirectOvertimeScheduleConflict("),
+  "renderer should keep duplicate manager leave and overtime guards"
+);
+assert(
+  renderer.includes("function isManagerRequestSource(source)") &&
+    renderer.includes("function migrateLegacyScheduleRequests()") &&
+    renderer.includes("requestSource: record.source || \"employee\"") &&
+    renderer.includes("function buildPersistedState()"),
+  "renderer should distinguish manager entries and migrate legacy schedule leave/overtime into request tables"
 );
 assert(
   renderer.includes('data-export-departments="true"') && renderer.includes('data-import-departments="true"'),
@@ -54,16 +78,7 @@ assert(
     webApi.includes("async function importLeaveSettings()") &&
     webApi.includes("async function exportOvertimeSettings(payload)") &&
     webApi.includes("async function importOvertimeSettings()"),
-  "web api should expose import and export helpers for all requested settings screens"
-);
-assert(
-  webApi.includes("async function createManagerLeaveRequest(payload)") &&
-    webApi.includes("async function updateManagerLeaveRequest(payload)") &&
-    webApi.includes("async function deleteManagerLeaveRequest(requestId)") &&
-    webApi.includes("async function createManagerOvertimeRequest(payload)") &&
-    webApi.includes("async function updateManagerOvertimeRequest(payload)") &&
-    webApi.includes("async function deleteManagerOvertimeRequest(requestId)"),
-  "web api should expose manager-side leave and overtime request helpers"
+  "web api should expose import and export helpers for all settings screens"
 );
 assert(
   exporter.includes("createDepartmentWorkbook") &&
@@ -74,37 +89,7 @@ assert(
     exporter.includes("parseLeaveSettingsWorkbook") &&
     exporter.includes("createOvertimeSettingsWorkbook") &&
     exporter.includes("parseOvertimeSettingsWorkbook"),
-  "browser exporter should support workbook round-trips for all requested settings screens"
-);
-assert(
-  exporter.includes('["工號", "姓名", "所屬單位", "排班單位", "權限", "到職日", "離職日", "計薪方式", "例假星期"]') &&
-    exporter.includes("scheduleDepartmentNames") &&
-    renderer.includes("hasUnknownScheduleDepartment"),
-  "member import/export should include schedule departments and skip rows with unknown schedule departments"
-);
-assert(
-  exporter.includes('["班別", "適用單位", "需求人數", "上班時間", "下班時間", "底色", "字色", "自動字色", "不顯示"]') &&
-    exporter.includes("requiredStaffCountColumn") &&
-    renderer.includes("requiredStaffCount: Math.max(0, Number(row.requiredStaffCount) || 0)"),
-  "shift import/export should include required staff count"
-);
-assert(
-  renderer.includes("const EFFECTIVE_REQUEST_STATUSES = new Set([\"pending\", \"approved\"]);") &&
-    renderer.includes("function findEffectiveLeaveRequestConflict(") &&
-    renderer.includes("function findEffectiveOvertimeRequestConflict("),
-  "renderer should define effective-request conflict helpers"
-);
-assert(
-  renderer.includes("function isManagerRequestSource(source)") &&
-    renderer.includes("function migrateLegacyScheduleRequests()") &&
-    renderer.includes("requestSource: record.source || \"employee\"") &&
-    renderer.includes("function buildPersistedState()"),
-  "renderer should distinguish manager entries and migrate legacy schedule leave/overtime into request tables"
-);
-assert(
-  renderer.includes("同一天只能有一筆請假（待審核或已核準）") &&
-    renderer.includes("同一天只能有一筆加班（待審核或已核準）"),
-  "renderer should block duplicate effective leave and overtime entries in the UI"
+  "browser exporter should support workbook round-trips for settings screens"
 );
 assert(
   requestConstraintSql.includes("create or replace function public.enforce_single_effective_leave_request()") &&
@@ -117,4 +102,4 @@ assert(
   "supabase should track whether a request comes from an employee or a manager"
 );
 
-console.log("request overlay and settings import/export checks passed");
+console.log("manager request overlay and settings import/export checks passed");

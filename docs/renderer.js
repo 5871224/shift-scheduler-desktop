@@ -235,10 +235,6 @@ let overtimeRequestRecords = [];
 let leaveOverlayRecords = [];
 let overtimeOverlayRecords = [];
 let requestOverlaySourceLoaded = false;
-let requestReviewFilters = {
-  leave: { memberCode: "", date: "", status: "" },
-  overtime: { memberCode: "", date: "", status: "" }
-};
 let memberSettingsFilters = {
   name: "",
   department: "all",
@@ -1730,28 +1726,11 @@ function countMemberRestInWeek(scheduleMap, memberId, dates, weekIndex, rangeSta
   )).length;
 }
 
-function getEffectiveEmployeeLeaveRequestsForDate(member, dateString) {
-  return leaveRequestRecords.filter((record) => {
-    if (!record || isManagerRequestSource(record.source || "")) {
-      return false;
-    }
-    if (!["pending", "approved"].includes(record.status)) {
-      return false;
-    }
-    const sameMember = record.memberId === member.id || (record.memberCode && record.memberCode === member.code);
-    return sameMember && dateString >= record.startDate && dateString <= record.endDate;
-  });
-}
-
 function markAutoLeave(scheduleMap, member, dateString, leave, preview, reason) {
   const slot = ensureWorkScheduleSlot(scheduleMap, member.id, dateString);
   if (!slot || !leave) {
     return false;
   }
-  getEffectiveEmployeeLeaveRequestsForDate(member, dateString).forEach((record) => {
-    preview.cancelLeaveRequestIds.add(record.id);
-    preview.warnings.push(`${member.name} ${dateString} 原請假申請將自動改為已取消，改排${leave.name}`);
-  });
   slot.leave = leave.id;
   slot.leaveRequestId = null;
   slot.leaveMeta = {
@@ -2154,12 +2133,8 @@ async function applyAutoSchedulePreview() {
     showInfoMessage("目前沒有自動排班預覽");
     return;
   }
-  if (!await confirmAction("確定要套用目前綠色預排結果嗎？套用後會寫入班表並取消預覽中標記的員工請假申請。")) {
+  if (!await confirmAction("確定要套用目前綠色預排結果嗎？套用後會寫入班表。")) {
     return;
-  }
-  const cancelIds = Array.isArray(autoSchedulePreview.cancelLeaveRequestIds) ? autoSchedulePreview.cancelLeaveRequestIds : [];
-  for (const requestId of cancelIds) {
-    await window.schedulerApi.updateLeaveRequest({ id: requestId, status: "cancelled", managerNote: "自動排班改排固定例假" });
   }
   Object.entries(autoSchedulePreview.slots || {}).forEach(([key, slot]) => {
     state.schedule[key] = deepClone(slot);
@@ -2675,9 +2650,7 @@ function syncRoleUi() {
     "restComplianceButton",
     "leaveSettingsButton",
     "overtimeSettingsButton",
-    "weekStartSettingsButton",
-    "leaveApprovalButton",
-    "overtimeApprovalButton"
+    "weekStartSettingsButton"
   ];
   managerOnlyIds.forEach((id) => {
     const element = document.getElementById(id);
@@ -2976,7 +2949,6 @@ function showScheduleTooltip(memberId, day, category, anchorRect) {
         : ""}
     </div>
     ${lines.map((line) => `<div class="leave-tooltip-line">${escapeHtml(line)}</div>`).join("")}
-    ${isManager() && requestId && !isManagerSource ? `<div class="leave-tooltip-actions"><button class="btn-primary tooltip-review-btn" type="button" data-open-request-review="${category}:${requestId}">審核</button></div>` : ""}
   `;
   root.addEventListener("mouseenter", () => {
     if (leaveTooltipTimer) {
@@ -4119,38 +4091,6 @@ async function saveOvertimeAssignmentFromModal() {
   }
 }
 
-function openRequestStyleModal(kind) {
-  const style = getRequestDisplayStyle(kind);
-  modalColor = style.color;
-  modalTextColor = style.textColor;
-  modalTextColorAuto = style.autoTextColor;
-  modalContext = { category: "request-style", requestKind: kind };
-  openEntityListModal({
-    title: kind === "leave" ? "請假申請顏色" : "加班申請顏色",
-    modalClass: "modal modal-form-compact",
-    body: renderColorPreviewFields("request-style", kind === "leave" ? "請假申請" : "加班"),
-    headerButtons: '<button class="btn-primary" type="button" data-save-request-style="true">儲存設定</button>',
-    hideFooterClose: true
-  });
-  syncNamedColorUi();
-}
-
-function saveRequestStyleFromModal() {
-  const kind = modalContext.requestKind;
-  if (!kind || !state.requestStyles?.[kind]) {
-    return;
-  }
-  state.requestStyles[kind] = {
-    color: modalColor,
-    textColor: modalTextColor,
-    autoTextColor: modalTextColorAuto
-  };
-  closeModal();
-  renderAll();
-  openListSettings(kind);
-  queueSave();
-}
-
 function openListSettings(category) {
   modalContext = { category: "list-settings", listCategory: category };
   const titleMap = {
@@ -4289,15 +4229,11 @@ function syncNamedColorUi() {
   }
   const fallbackName = modalContext.category === "shift"
     ? "班別"
-    : modalContext.category === "request-style"
-      ? (modalContext.requestKind === "leave" ? "請假申請" : "加班")
     : modalContext.category === "overtime"
       ? "加班"
       : "名稱";
   const displayName = modalContext.category === "leave"
     ? (document.getElementById("leaveCatalogName")?.value.trim() || "名稱")
-    : modalContext.category === "request-style"
-      ? fallbackName
     : modalContext.category === "shift"
       ? (document.getElementById("shiftName")?.value.trim() || fallbackName)
       : (document.getElementById("namedItemName")?.value.trim() || fallbackName);
@@ -5576,13 +5512,14 @@ async function resetMemberPasswordFromModal(employeeCode) {
 }
 
 async function refreshRequestData() {
-  if (!isLoggedIn() || !currentProfile) {
+  const onlyManagerRecords = (records) => (records || []).filter((record) => isManagerRequestSource(record.source || ""));
+  if (!isManager()) {
     try {
       const publicRequests = await window.schedulerApi.listPublicScheduleRequests();
-      leaveRequestRecords = publicRequests.leaveRequests;
-      overtimeRequestRecords = publicRequests.overtimeRequests;
-      leaveOverlayRecords = publicRequests.leaveRequests;
-      overtimeOverlayRecords = publicRequests.overtimeRequests;
+      leaveRequestRecords = onlyManagerRecords(publicRequests.leaveRequests);
+      overtimeRequestRecords = onlyManagerRecords(publicRequests.overtimeRequests);
+      leaveOverlayRecords = leaveRequestRecords;
+      overtimeOverlayRecords = overtimeRequestRecords;
       requestOverlaySourceLoaded = true;
     } catch {
       requestOverlaySourceLoaded = false;
@@ -5593,37 +5530,14 @@ async function refreshRequestData() {
     }
     return;
   }
-  const [leaveRequests, overtimeRequests, publicRequests] = await Promise.all([
+  const [leaveRequests, overtimeRequests] = await Promise.all([
     window.schedulerApi.listLeaveRequests({ manager: isManager() }),
-    window.schedulerApi.listOvertimeRequests({ manager: isManager() }),
-    window.schedulerApi.listPublicScheduleRequests().catch(() => null)
+    window.schedulerApi.listOvertimeRequests({ manager: isManager() })
   ]);
-  leaveRequestRecords = leaveRequests;
-  overtimeRequestRecords = overtimeRequests;
-  if (publicRequests) {
-    leaveOverlayRecords = publicRequests.leaveRequests || [];
-    overtimeOverlayRecords = publicRequests.overtimeRequests || [];
-    const publicLeaveMap = new Map((publicRequests.leaveRequests || []).map((record) => [record.id, record]));
-    const publicOvertimeMap = new Map((publicRequests.overtimeRequests || []).map((record) => [record.id, record]));
-    leaveRequestRecords = leaveRequestRecords.map((record) => ({
-      ...record,
-      memberCode: record.memberCode || publicLeaveMap.get(record.id)?.memberCode || "",
-      memberName: record.memberName || publicLeaveMap.get(record.id)?.memberName || "",
-      leaveItemId: record.leaveItemId || publicLeaveMap.get(record.id)?.leaveItemId || "",
-      leaveCode: record.leaveCode || publicLeaveMap.get(record.id)?.leaveCode || "",
-      leaveName: record.leaveName || publicLeaveMap.get(record.id)?.leaveName || ""
-    }));
-    overtimeRequestRecords = overtimeRequestRecords.map((record) => ({
-      ...record,
-      memberCode: record.memberCode || publicOvertimeMap.get(record.id)?.memberCode || "",
-      memberName: record.memberName || publicOvertimeMap.get(record.id)?.memberName || "",
-      overtimeName: record.overtimeName || publicOvertimeMap.get(record.id)?.overtimeName || ""
-    }));
-  } else {
-    // ponytail: 主管審核資料仍以正式 API 為主；公開 overlay 補資料失敗時不擋主流程。
-    leaveOverlayRecords = leaveRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
-    overtimeOverlayRecords = overtimeRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
-  }
+  leaveRequestRecords = onlyManagerRecords(leaveRequests);
+  overtimeRequestRecords = onlyManagerRecords(overtimeRequests);
+  leaveOverlayRecords = leaveRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
+  overtimeOverlayRecords = overtimeRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
   requestOverlaySourceLoaded = true;
 }
 
@@ -5903,14 +5817,6 @@ async function importLeaveSettings() {
       imported += 1;
     }
 
-    if (result.requestStyle?.color) {
-      state.requestStyles.leave = {
-        color: result.requestStyle.color,
-        textColor: result.requestStyle.textColor || autoLeaveTextColor(result.requestStyle.color),
-        autoTextColor: result.requestStyle.autoTextColor !== false
-      };
-    }
-
     renderAll();
     openListSettings("leave");
     queueSave();
@@ -5966,14 +5872,6 @@ async function importOvertimeSettings() {
       });
       importedNames.add(name);
       imported += 1;
-    }
-
-    if (result.requestStyle?.color) {
-      state.requestStyles.overtime = {
-        color: result.requestStyle.color,
-        textColor: result.requestStyle.textColor || autoLeaveTextColor(result.requestStyle.color),
-        autoTextColor: result.requestStyle.autoTextColor !== false
-      };
     }
 
     renderAll();
@@ -6293,184 +6191,6 @@ function getCompactManagerRequestMetaLines(record, kind) {
   return lines.filter(Boolean);
 }
 
-function renderEmployeeRequestList(kind, records) {
-  const sortedRecords = [...records].sort((left, right) => {
-    const leftDate = kind === "leave"
-      ? `${left.endDate || left.startDate || ""}|${left.startDate || ""}|${left.createdAt || ""}`
-      : `${left.workDate || ""}|${left.createdAt || ""}`;
-    const rightDate = kind === "leave"
-      ? `${right.endDate || right.startDate || ""}|${right.startDate || ""}|${right.createdAt || ""}`
-      : `${right.workDate || ""}|${right.createdAt || ""}`;
-    return rightDate.localeCompare(leftDate);
-  });
-  if (!records.length) {
-    return '<div class="empty-state">目前還沒有申請資料</div>';
-  }
-  return sortedRecords.map((record) => `
-    <div class="request-item request-item-compact">
-      <div class="request-head request-head-compact">
-        <div class="request-title request-title-compact">${escapeHtml(kind === "leave" ? getLeaveRequestDisplayName(record) : "加班")}</div>
-        <div class="request-head-actions">
-        <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
-          ${record.status === "pending"
-            ? `<button class="ghost-btn compact-btn request-delete-btn" type="button" data-delete-request="${kind}:${record.id}">刪除</button>`
-            : ""}
-        </div>
-      </div>
-      <div class="request-inline-meta">
-        <span class="request-meta">${escapeHtml(kind === "leave" ? formatRequestDateText(record.startDate, record.endDate) : record.workDate || "-")}</span>
-        <span class="request-inline-divider">｜</span>
-        <span class="request-meta">${escapeHtml(kind === "leave" ? formatRequestTimeText(record) : formatOvertimeTimeText(record))}</span>
-        ${record.reason ? `<span class="request-inline-divider">｜</span><span class="request-meta">${escapeHtml(`原因：${record.reason}`)}</span>` : ""}
-      </div>
-    </div>
-  `).join("");
-}
-
-function getOwnRequestRecords(kind) {
-  const employeeCode = currentProfile?.employee_code || currentMember?.code || "";
-  const memberId = currentSession?.user?.id || "";
-  const source = kind === "leave" ? leaveRequestRecords : overtimeRequestRecords;
-  return source.filter((record) => (
-    !isManagerRequestSource(record.source)
-    && ((employeeCode && record.memberCode === employeeCode) ||
-    (memberId && record.memberId === memberId))
-  ));
-}
-
-async function deleteEmployeeRequest(kind, requestId) {
-  const label = kind === "leave" ? "請假申請" : "加班申請";
-  const confirmed = await confirmAction(`確定要刪除這筆${label}嗎？`);
-  if (!confirmed) {
-    return;
-  }
-  try {
-    if (kind === "leave") {
-      await window.schedulerApi.deleteLeaveRequest(requestId);
-      await refreshRequestData();
-      renderTable();
-      await openLeaveRequestModal();
-      return;
-    }
-    await window.schedulerApi.deleteOvertimeRequest(requestId);
-    await refreshRequestData();
-    renderTable();
-    await openOvertimeRequestModal();
-  } catch (error) {
-    showInfoMessage(`刪除${label}失敗：${formatSchedulerError(error, "刪除失敗")}`);
-  }
-}
-
-function renderManagerRequestList(kind, records) {
-  const filter = requestReviewFilters[kind] || { memberCode: "", date: "", status: "" };
-  const reviewableRecords = records.filter((record) => !isManagerRequestSource(record.source));
-  const filteredRecords = reviewableRecords.filter((record) => {
-    const memberKeyword = String(filter.memberCode || "").trim();
-    const memberMatch = !memberKeyword || `${record.memberName || ""}`.includes(memberKeyword);
-    const dateValue = kind === "leave" ? record.startDate : record.workDate;
-    const dateMatch = !filter.date || dateValue === filter.date;
-    const statusMatch = !filter.status || record.status === filter.status;
-    return memberMatch && dateMatch && statusMatch;
-  });
-  if (!reviewableRecords.length) {
-    return '<div class="empty-state">目前沒有可審核資料</div>';
-  }
-  return `
-    <div class="request-filter-bar">
-      <div class="form-row">
-        <label for="${kind}ReviewFilterMember">申請人</label>
-        <input id="${kind}ReviewFilterMember" type="text" value="${escapeHtml(filter.memberCode)}" placeholder="輸入姓名" data-request-filter-kind="${kind}" data-request-filter-field="memberCode">
-      </div>
-      <div class="form-row">
-        <label for="${kind}ReviewFilterDate">日期</label>
-        <input id="${kind}ReviewFilterDate" type="date" value="${escapeHtml(filter.date)}" data-request-filter-kind="${kind}" data-request-filter-field="date">
-      </div>
-      <div class="form-row">
-        <label for="${kind}ReviewFilterStatus">審核結果</label>
-        <select id="${kind}ReviewFilterStatus" data-request-filter-kind="${kind}" data-request-filter-field="status">
-          <option value="">全部</option>
-          <option value="pending" ${filter.status === "pending" ? "selected" : ""}>待審核</option>
-          <option value="approved" ${filter.status === "approved" ? "selected" : ""}>已核准</option>
-          <option value="rejected" ${filter.status === "rejected" ? "selected" : ""}>已退回</option>
-        </select>
-      </div>
-      <div class="request-filter-actions">
-        <button class="ghost-btn compact-btn" type="button" data-clear-request-filters="${kind}">清除</button>
-      </div>
-    </div>
-    <div class="request-list-wrap">
-      ${filteredRecords.length ? filteredRecords.map((record) => `
-    <div class="request-review-row">
-      <div class="request-review-main">
-        <div class="request-review-person">${escapeHtml(record.memberName || "-")}</div>
-        <div class="request-review-summary">
-          ${getCompactManagerRequestMetaLines(record, kind).map((line) => `<div class="request-meta">${escapeHtml(line)}</div>`).join("")}
-        </div>
-      </div>
-      <span class="request-status request-status-${escapeHtml(record.status)}">${escapeHtml(getRequestStatusLabel(record.status))}</span>
-      <div class="request-review-controls">
-        <div class="form-row">
-          <label for="${kind}ReviewStatus_${record.id}">審核</label>
-          <select id="${kind}ReviewStatus_${record.id}">${getRequestStatusOptions(record.status)}</select>
-        </div>
-        <div class="form-row">
-          <label for="${kind}ReviewNote_${record.id}">備註</label>
-          <input id="${kind}ReviewNote_${record.id}" type="text" maxlength="120" value="${escapeHtml(record.managerNote || "")}" placeholder="可選填">
-        </div>
-        <div class="request-actions">
-          <button class="btn-primary" type="button" data-save-request-review="${kind}:${record.id}">儲存審核</button>
-        </div>
-      </div>
-    </div>
-  `).join("") : '<div class="empty-state">沒有符合篩選條件的資料</div>'}
-    </div>
-  `;
-}
-
-function syncLeaveRequestFormUi(resetAllDay = false) {
-  if (resetAllDay) {
-    const leaveItemId = document.getElementById("leaveRequestType")?.value || "";
-    const leave = getAllowedLeaveRequestItems().find((item) => item.id === leaveItemId) || null;
-    const allDayToggle = document.getElementById("leaveRequestAllDay");
-    if (allDayToggle) {
-      allDayToggle.checked = defaultLeaveIsAllDay(leave);
-    }
-  }
-  const allDay = document.getElementById("leaveRequestAllDay")?.checked !== false;
-  const timeSection = document.getElementById("leaveRequestTimeSection");
-  if (timeSection) {
-    timeSection.style.display = allDay ? "none" : "";
-  }
-  setTimeInputDisabled("leaveRequestStartTime", allDay);
-  setTimeInputDisabled("leaveRequestEndTime", allDay);
-}
-
-function syncOvertimeRequestFormUi() {
-  const useRest1 = Boolean(document.getElementById("overtimeRequestUseRest1")?.checked);
-  const useRest2 = Boolean(document.getElementById("overtimeRequestUseRest2")?.checked) && useRest1;
-  const rest1Fields = document.getElementById("overtimeRequestRest1Fields");
-  const rest2Fields = document.getElementById("overtimeRequestRest2Fields");
-  const rest2Toggle = document.getElementById("overtimeRequestUseRest2");
-
-  if (rest1Fields) {
-    rest1Fields.style.display = useRest1 ? "" : "none";
-  }
-  setTimeInputDisabled("overtimeRequestRest1StartTime", !useRest1);
-  setTimeInputDisabled("overtimeRequestRest1EndTime", !useRest1);
-
-  if (rest2Toggle) {
-    rest2Toggle.disabled = !useRest1;
-    if (!useRest1) {
-      rest2Toggle.checked = false;
-    }
-  }
-  if (rest2Fields) {
-    rest2Fields.style.display = useRest2 ? "" : "none";
-  }
-  setTimeInputDisabled("overtimeRequestRest2StartTime", !useRest2);
-  setTimeInputDisabled("overtimeRequestRest2EndTime", !useRest2);
-}
-
 function syncScheduleOvertimeFormUi() {
   const useRest1 = Boolean(document.getElementById("scheduleOvertimeUseRest1")?.checked);
   const useRest2 = Boolean(document.getElementById("scheduleOvertimeUseRest2")?.checked) && useRest1;
@@ -6495,333 +6215,6 @@ function syncScheduleOvertimeFormUi() {
   }
   setTimeInputDisabled("scheduleOvertimeRest2StartTime", !useRest2);
   setTimeInputDisabled("scheduleOvertimeRest2EndTime", !useRest2);
-}
-
-async function openLeaveRequestModal() {
-  if (!isLoggedIn()) {
-    openSignInDialog("送出請假申請前請先登入");
-    return;
-  }
-  const actor = getRequestActor();
-  if (!actor) {
-    showInfoMessage("目前帳號尚未建立身份資料，無法送出請假申請");
-    return;
-  }
-  await refreshRequestData();
-  const ownLeaveRequestRecords = getOwnRequestRecords("leave");
-  const leaveItems = getAllowedLeaveRequestItems();
-  const defaultLeave = leaveItems[0];
-  const today = getTodayDateString();
-  openEntityListModal({
-    title: "請假申請",
-    modalClass: "modal modal-wide",
-    body: `
-      <div class="form-grid">
-        <div class="form-row">
-          <label>申請人</label>
-          <div class="readonly-pill">${escapeHtml(actor.code)} · ${escapeHtml(actor.name)}</div>
-        </div>
-        <div class="form-row">
-          <label for="leaveRequestType">假別</label>
-          <select id="leaveRequestType">${leaveItems.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(`${item.code} ${item.name}`)}</option>`).join("")}</select>
-        </div>
-        <div class="form-row">
-          <label for="leaveRequestStartDate">開始日期</label>
-          <input id="leaveRequestStartDate" type="date" value="${today}">
-        </div>
-        <div class="form-row">
-          <label for="leaveRequestEndDate">結束日期</label>
-          <input id="leaveRequestEndDate" type="date" value="${today}">
-        </div>
-      </div>
-      <div class="form-row checkbox-row checkbox-row-left">
-        <label>
-          <input id="leaveRequestAllDay" type="checkbox" ${defaultLeaveIsAllDay(defaultLeave) ? "checked" : ""}>
-          整天
-        </label>
-      </div>
-      <div class="form-grid" id="leaveRequestTimeSection" style="${defaultLeaveIsAllDay(defaultLeave) ? "display:none;" : ""}">
-        <div class="form-row">
-          <label for="leaveRequestStartTime">開始時間</label>
-          ${timeInputMarkup("leaveRequestStartTime", "")}
-        </div>
-        <div class="form-row">
-          <label for="leaveRequestEndTime">結束時間</label>
-          ${timeInputMarkup("leaveRequestEndTime", "")}
-        </div>
-      </div>
-      <div class="form-row">
-        <label for="leaveRequestReason">原因</label>
-        <input id="leaveRequestReason" type="text" maxlength="120" placeholder="請輸入原因">
-      </div>
-      <div class="request-section">
-        <div class="section-title">我的請假申請</div>
-        ${renderEmployeeRequestList("leave", ownLeaveRequestRecords)}
-      </div>
-    `,
-    footerButtons: '<button class="btn-primary" type="button" data-save-leave-request="true">送出申請</button>'
-  });
-  syncLeaveRequestFormUi();
-}
-
-async function saveLeaveRequestFromModal() {
-  const leaveItemId = document.getElementById("leaveRequestType")?.value || "";
-  const leave = getAllowedLeaveRequestItems().find((item) => item.id === leaveItemId);
-  const startDate = document.getElementById("leaveRequestStartDate")?.value || "";
-  const endDate = document.getElementById("leaveRequestEndDate")?.value || "";
-  const isAllDay = document.getElementById("leaveRequestAllDay")?.checked !== false;
-  const startTime = readTimeInputValue("leaveRequestStartTime");
-  const endTime = readTimeInputValue("leaveRequestEndTime");
-  if (!leave || !startDate || !endDate || !isValidDateRange(startDate, endDate) && startDate !== endDate) {
-    reportValidationError("請確認請假日期");
-    return;
-  }
-  if (!isAllDay && !isValidDateTimeRange(startDate, startTime, endDate, endTime)) {
-    reportValidationError("開始日期時間必須早於結束日期時間");
-    return;
-  }
-  await refreshRequestData();
-  const scheduleMember = currentMember || resolveCurrentMember();
-  const memberId = currentSession?.user?.id || "";
-  const memberCode = currentProfile?.employee_code || scheduleMember?.code || "";
-  const leaveRequestConflict = findEffectiveLeaveRequestConflict(memberId, memberCode, startDate, endDate);
-  if (leaveRequestConflict) {
-    reportValidationError(`同一天只能有一筆請假（待審核或已核準）；${formatRequestDateText(leaveRequestConflict.startDate, leaveRequestConflict.endDate)} 已有請假資料`);
-    return;
-  }
-  const directLeaveConflictDate = findDirectLeaveScheduleConflict(scheduleMember?.id || "", startDate, endDate);
-  if (directLeaveConflictDate) {
-    reportValidationError(`同一天只能有一筆請假（待審核或已核準）；${formatDateTextFromIso(directLeaveConflictDate)} 已有主管設定的請假`);
-    return;
-  }
-  try {
-    await window.schedulerApi.createLeaveRequest({
-      leaveItemId: leave.id,
-      leaveCode: leave.code,
-      startDate,
-      endDate,
-      isAllDay,
-      startTime,
-      endTime,
-      reason: document.getElementById("leaveRequestReason")?.value.trim() || ""
-    });
-  } catch (error) {
-    reportValidationError(`請假申請送出失敗：${formatSchedulerError(error, "送出失敗")}`);
-    return;
-  }
-  await refreshRequestData();
-  const nextRecord = getOwnRequestRecords("leave").find((record) => (
-    record.memberCode === currentProfile?.employee_code &&
-    record.leaveItemId === leave.id &&
-    record.startDate === startDate &&
-    record.endDate === endDate
-  ));
-  if (nextRecord) {
-    applyApprovedLeaveRequestToSchedule(nextRecord);
-    renderTable();
-  }
-  showInfoMessage("請假申請已送出");
-  await openLeaveRequestModal();
-}
-
-async function openOvertimeRequestModal() {
-  if (!isLoggedIn()) {
-    openSignInDialog("送出加班申請前請先登入");
-    return;
-  }
-  const actor = getRequestActor();
-  if (!actor) {
-    showInfoMessage("目前帳號尚未建立身份資料，無法送出加班申請");
-    return;
-  }
-  await refreshRequestData();
-  const ownOvertimeRequestRecords = getOwnRequestRecords("overtime");
-  openEntityListModal({
-    title: "加班申請",
-    modalClass: "modal modal-wide",
-    body: `
-      <div class="form-grid">
-        <div class="form-row">
-          <label>申請人</label>
-          <div class="readonly-pill">${escapeHtml(actor.code)} · ${escapeHtml(actor.name)}</div>
-        </div>
-        <div class="form-row">
-          <label for="overtimeRequestDate">加班日期</label>
-          <input id="overtimeRequestDate" type="date" value="${toDateString(state.year, state.month, 1)}">
-        </div>
-      </div>
-      <div class="form-grid">
-        <div class="form-row">
-          <label for="overtimeRequestStartTime">加班開始</label>
-          ${timeInputMarkup("overtimeRequestStartTime", "")}
-        </div>
-        <div class="form-row">
-          <label for="overtimeRequestEndTime">加班結束</label>
-          ${timeInputMarkup("overtimeRequestEndTime", "")}
-        </div>
-      </div>
-      <div class="form-section">
-        <div class="form-row checkbox-row">
-          <label class="overtime-use-label">
-            <input id="overtimeRequestUseRest1" type="checkbox">
-            使用休息1
-          </label>
-        </div>
-        <div class="form-grid" id="overtimeRequestRest1Fields" style="display:none;">
-          <div class="form-row">
-            <label for="overtimeRequestRest1StartTime">休息1開始</label>
-            ${timeInputMarkup("overtimeRequestRest1StartTime", "", true)}
-          </div>
-          <div class="form-row">
-            <label for="overtimeRequestRest1EndTime">休息1結束</label>
-            ${timeInputMarkup("overtimeRequestRest1EndTime", "", true)}
-          </div>
-        </div>
-      </div>
-      <div class="form-section">
-        <div class="form-row checkbox-row">
-          <label class="overtime-use-label">
-            <input id="overtimeRequestUseRest2" type="checkbox" disabled>
-            使用休息2
-          </label>
-        </div>
-        <div class="form-grid" id="overtimeRequestRest2Fields" style="display:none;">
-          <div class="form-row">
-            <label for="overtimeRequestRest2StartTime">休息2開始</label>
-            ${timeInputMarkup("overtimeRequestRest2StartTime", "", true)}
-          </div>
-          <div class="form-row">
-            <label for="overtimeRequestRest2EndTime">休息2結束</label>
-            ${timeInputMarkup("overtimeRequestRest2EndTime", "", true)}
-          </div>
-        </div>
-      </div>
-      <div class="form-row">
-        <label for="overtimeRequestReason">原因</label>
-        <input id="overtimeRequestReason" type="text" maxlength="120" placeholder="請輸入原因">
-      </div>
-      <div class="request-section">
-        <div class="section-title">我的加班申請</div>
-        ${renderEmployeeRequestList("overtime", ownOvertimeRequestRecords)}
-      </div>
-    `,
-    footerButtons: '<button class="btn-primary" type="button" data-save-overtime-request="true">送出申請</button>'
-  });
-  syncOvertimeRequestFormUi();
-}
-
-async function saveOvertimeRequestFromModal() {
-  const workDate = document.getElementById("overtimeRequestDate")?.value || "";
-  const startTime = readTimeInputValue("overtimeRequestStartTime");
-  const endTime = readTimeInputValue("overtimeRequestEndTime");
-  const useRest1 = Boolean(document.getElementById("overtimeRequestUseRest1")?.checked);
-  const useRest2 = Boolean(document.getElementById("overtimeRequestUseRest2")?.checked) && useRest1;
-  const rest1StartTime = readTimeInputValue("overtimeRequestRest1StartTime");
-  const rest1EndTime = readTimeInputValue("overtimeRequestRest1EndTime");
-  const rest2StartTime = readTimeInputValue("overtimeRequestRest2StartTime");
-  const rest2EndTime = readTimeInputValue("overtimeRequestRest2EndTime");
-  if (!workDate) {
-    reportValidationError("請確認加班日期");
-    return;
-  }
-  if (!isValidTimeRange(startTime, endTime)) {
-    reportValidationError("加班開始時間必須早於加班結束時間");
-    return;
-  }
-  if (useRest1 && !isValidTimeRange(rest1StartTime, rest1EndTime)) {
-    reportValidationError("休息1開始時間必須早於結束時間");
-    return;
-  }
-  if (useRest2 && !isValidTimeRange(rest2StartTime, rest2EndTime)) {
-    reportValidationError("休息2開始時間必須早於結束時間");
-    return;
-  }
-  await refreshRequestData();
-  const scheduleMember = currentMember || resolveCurrentMember();
-  const memberId = currentSession?.user?.id || "";
-  const memberCode = currentProfile?.employee_code || scheduleMember?.code || "";
-  const overtimeRequestConflict = findEffectiveOvertimeRequestConflict(memberId, memberCode, workDate);
-  if (overtimeRequestConflict) {
-    reportValidationError(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(workDate)} 已有加班資料`);
-    return;
-  }
-  if (hasDirectOvertimeScheduleConflict(scheduleMember?.id || "", workDate)) {
-    reportValidationError(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(workDate)} 已有主管設定的加班`);
-    return;
-  }
-  try {
-    await window.schedulerApi.createOvertimeRequest({
-      workDate,
-      startTime,
-      endTime,
-      useRest1,
-      rest1StartTime,
-      rest1EndTime,
-      useRest2,
-      rest2StartTime,
-      rest2EndTime,
-      reason: document.getElementById("overtimeRequestReason")?.value.trim() || ""
-    });
-  } catch (error) {
-    showInfoMessage(`加班申請送出失敗：${formatSchedulerError(error, "送出失敗")}`);
-    return;
-  }
-  await refreshRequestData();
-  const nextRecord = getOwnRequestRecords("overtime").find((record) => (
-    record.memberCode === currentProfile?.employee_code &&
-    record.workDate === workDate &&
-    record.startTime === startTime &&
-    record.endTime === endTime
-  ));
-  if (nextRecord) {
-    applyApprovedOvertimeRequestToSchedule(nextRecord);
-    renderTable();
-  }
-  showInfoMessage("加班申請已送出");
-  await openOvertimeRequestModal();
-}
-
-async function openLeaveApprovalModal() {
-  if (!promptManagerAccess("審核請假前請先登入主管帳號")) {
-    return;
-  }
-  await refreshRequestData();
-  openEntityListModal({
-    title: "請假審核",
-    modalClass: "modal modal-wide",
-    body: renderManagerRequestList("leave", leaveRequestRecords)
-  });
-}
-
-async function openOvertimeApprovalModal() {
-  if (!promptManagerAccess("審核加班前請先登入主管帳號")) {
-    return;
-  }
-  await refreshRequestData();
-  openEntityListModal({
-    title: "加班審核",
-    modalClass: "modal modal-wide",
-    body: renderManagerRequestList("overtime", overtimeRequestRecords)
-  });
-}
-
-async function openRequestReviewFromTooltip(kind, requestId) {
-  if (!promptManagerAccess("審核申請前請先登入主管帳號")) {
-    return;
-  }
-  await refreshRequestData();
-  const records = kind === "leave" ? leaveRequestRecords : overtimeRequestRecords;
-  const record = records.find((item) => item.id === requestId);
-  requestReviewFilters[kind] = {
-    memberCode: record?.memberName || "",
-    date: kind === "leave" ? (record?.startDate || "") : (record?.workDate || ""),
-    status: record?.status || ""
-  };
-  if (kind === "leave") {
-    await openLeaveApprovalModal(false);
-  } else {
-    await openOvertimeApprovalModal(false);
-  }
 }
 
 function clearScheduleLeaveByRequestId(requestId) {
@@ -6920,80 +6313,6 @@ function applyApprovedOvertimeRequestToSchedule(record) {
   slot.overtimeRequestId = record.id;
   state.schedule[slotKey] = slot;
   pruneEmptySchedule();
-}
-
-async function saveRequestReview(kind, requestId) {
-  if (!promptManagerAccess("審核申請前請先登入主管帳號")) {
-    return;
-  }
-  const status = document.getElementById(`${kind}ReviewStatus_${requestId}`)?.value || "pending";
-  const managerNote = document.getElementById(`${kind}ReviewNote_${requestId}`)?.value.trim() || "";
-  const sourceRecords = kind === "leave" ? leaveRequestRecords : overtimeRequestRecords;
-  const currentRecord = sourceRecords.find((item) => item.id === requestId);
-  if (currentRecord && isEffectiveRequestStatus(status)) {
-    const scheduleMember = state.members.find((item) => item.id === currentRecord.memberId)
-      || state.members.find((item) => item.code === currentRecord.memberCode);
-    if (kind === "leave") {
-      const leaveRequestConflict = findEffectiveLeaveRequestConflict(
-        currentRecord.memberId || "",
-        currentRecord.memberCode || "",
-        currentRecord.startDate,
-        currentRecord.endDate,
-        requestId
-      );
-      if (leaveRequestConflict) {
-        showInfoMessage(`同一天只能有一筆請假（待審核或已核準）；${formatRequestDateText(currentRecord.startDate, currentRecord.endDate)} 已有其他請假資料`);
-        return;
-      }
-      const directLeaveConflictDate = findDirectLeaveScheduleConflict(scheduleMember?.id || "", currentRecord.startDate, currentRecord.endDate);
-      if (directLeaveConflictDate) {
-        showInfoMessage(`同一天只能有一筆請假（待審核或已核準）；${formatDateTextFromIso(directLeaveConflictDate)} 已有主管設定的請假`);
-        return;
-      }
-    } else {
-      const overtimeRequestConflict = findEffectiveOvertimeRequestConflict(
-        currentRecord.memberId || "",
-        currentRecord.memberCode || "",
-        currentRecord.workDate,
-        requestId
-      );
-      if (overtimeRequestConflict) {
-        showInfoMessage(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(currentRecord.workDate)} 已有其他加班資料`);
-        return;
-      }
-      if (hasDirectOvertimeScheduleConflict(scheduleMember?.id || "", currentRecord.workDate)) {
-        showInfoMessage(`同一天只能有一筆加班（待審核或已核準）；${formatDateTextFromIso(currentRecord.workDate)} 已有主管設定的加班`);
-        return;
-      }
-    }
-  }
-  try {
-    if (kind === "leave") {
-      await window.schedulerApi.updateLeaveRequest({ id: requestId, status, managerNote });
-    } else {
-      await window.schedulerApi.updateOvertimeRequest({ id: requestId, status, managerNote });
-    }
-  } catch (error) {
-    showInfoMessage(`儲存審核失敗：${formatSchedulerError(error, "儲存失敗")}`);
-    return;
-  }
-  await refreshRequestData();
-  syncApprovedRequestsToSchedule();
-  const nextRecord = (kind === "leave" ? leaveRequestRecords : overtimeRequestRecords).find((item) => item.id === requestId);
-  if (nextRecord) {
-    if (kind === "leave") {
-      applyApprovedLeaveRequestToSchedule(nextRecord);
-    } else {
-      applyApprovedOvertimeRequestToSchedule(nextRecord);
-    }
-    await forceSave();
-  }
-  renderAll();
-  if (kind === "leave") {
-    await openLeaveApprovalModal(false);
-  } else {
-    await openOvertimeApprovalModal(false);
-  }
 }
 
 async function handleSignIn() {
@@ -7167,24 +6486,6 @@ function bindEvents() {
   bindClick("shiftSettingsButton", () => openListSettings("shift"));
   bindClick("leaveSettingsButton", () => openListSettings("leave"));
   bindClick("overtimeSettingsButton", () => openListSettings("overtime"));
-  bindClick("leaveApprovalButton", async () => {
-    closeCoreActionsMenu();
-    requestReviewFilters.leave = {
-      memberCode: "",
-      date: "",
-      status: "pending"
-    };
-    await openLeaveApprovalModal(false);
-  });
-  bindClick("overtimeApprovalButton", async () => {
-    closeCoreActionsMenu();
-    requestReviewFilters.overtime = {
-      memberCode: "",
-      date: "",
-      status: "pending"
-    };
-    await openOvertimeApprovalModal(false);
-  });
   bindClick("weekStartSettingsButton", () => {
     closeCoreActionsMenu();
     openWeekStartSettingModal();
@@ -7320,8 +6621,6 @@ function bindEvents() {
       target.dataset.editItem ||
       target.dataset.saveShift ||
       target.dataset.saveNamedItem ||
-      target.dataset.openRequestStyle ||
-      target.dataset.saveRequestStyle ||
       target.id === "autoSchedulePreviewButton" ||
       target.id === "autoScheduleApplyButton" ||
       target.id === "autoScheduleCancelButton" ||
@@ -7349,20 +6648,12 @@ function bindEvents() {
       promptManagerAccess("此功能需先登入主管帳號");
       return;
     }
-    if (target.dataset.openLeaveRequest) {
-      await openLeaveRequestModal();
-      return;
-    }
     if (target.dataset.openDepartmentSettings) {
       openDepartmentSettings();
       return;
     }
     if (target.dataset.openMemberSettings) {
       openMemberSettings();
-      return;
-    }
-    if (target.dataset.openOvertimeRequest) {
-      await openOvertimeRequestModal();
       return;
     }
     if (target.dataset.openChangePassword) {
@@ -7412,26 +6703,6 @@ function bindEvents() {
       openOvertimeAssignmentModal(memberId, dateString);
       return;
     }
-    if (target.dataset.openRequestReview) {
-      const [kind, requestId] = target.dataset.openRequestReview.split(":");
-      hideLeaveTooltip();
-      await openRequestReviewFromTooltip(kind, requestId);
-      return;
-    }
-    if (target.dataset.deleteRequest) {
-      const [kind, requestId] = target.dataset.deleteRequest.split(":");
-      await deleteEmployeeRequest(kind, requestId);
-      return;
-    }
-    if (target.dataset.clearRequestFilters) {
-      requestReviewFilters[target.dataset.clearRequestFilters] = { memberCode: "", date: "", status: "" };
-      if (target.dataset.clearRequestFilters === "leave") {
-        await openLeaveApprovalModal(false);
-      } else {
-        await openOvertimeApprovalModal(false);
-      }
-      return;
-    }
     if (target.dataset.generateAutoSchedule) {
       await generateAutoSchedulePreviewFromModal();
       return;
@@ -7439,7 +6710,6 @@ function bindEvents() {
     if (target.dataset.openAdd === "shift") openShiftFormModal("add");
     if (target.dataset.openAdd === "leave") openNamedColorFormModal("leave", "add");
     if (target.dataset.openAdd === "overtime") openNamedColorFormModal("overtime", "add");
-    if (target.dataset.openRequestStyle) openRequestStyleModal(target.dataset.openRequestStyle);
     if (target.dataset.editItem === "shift") openShiftFormModal("edit", target.dataset.editId);
     if (target.dataset.editItem === "leave") openNamedColorFormModal("leave", "edit", target.dataset.editId);
     if (target.dataset.editItem === "overtime") openNamedColorFormModal("overtime", "edit", target.dataset.editId);
@@ -7451,30 +6721,13 @@ function bindEvents() {
     if (target.dataset.saveWeekStart) {
       saveWeekStartSettingFromModal();
     }
-    if (target.dataset.saveRequestStyle) {
-      saveRequestStyleFromModal();
-      return;
-    }
     if (target.dataset.saveLeaveAssignment) saveLeaveAssignmentFromModal();
     if (target.dataset.saveOvertimeAssignment) {
       await saveOvertimeAssignmentFromModal();
       return;
     }
-    if (target.dataset.saveLeaveRequest) {
-      await saveLeaveRequestFromModal();
-      return;
-    }
-    if (target.dataset.saveOvertimeRequest) {
-      await saveOvertimeRequestFromModal();
-      return;
-    }
     if (target.dataset.saveChangePassword) {
       await saveChangedPassword();
-      return;
-    }
-    if (target.dataset.saveRequestReview) {
-      const [kind, requestId] = target.dataset.saveRequestReview.split(":");
-      await saveRequestReview(kind, requestId);
       return;
     }
 
@@ -7587,10 +6840,6 @@ function bindEvents() {
 
   document.body.addEventListener("change", (event) => {
     const target = event.target;
-    if (target instanceof HTMLSelectElement && target.id === "leaveRequestType") {
-      syncLeaveRequestFormUi(true);
-      return;
-    }
     if (target instanceof HTMLSelectElement && target.dataset.memberSettingsFilterField) {
       const field = target.dataset.memberSettingsFilterField;
       memberSettingsFilters[field] = target.value || (field === "employment" ? "active" : "all");
@@ -7611,14 +6860,6 @@ function bindEvents() {
     };
     if (target.id === "leaveAssignmentAllDay" || target.id === "leaveAssignmentReasonEnabled") {
       syncLeaveAssignmentModalUi();
-      return;
-    }
-    if (target.id === "leaveRequestAllDay") {
-      syncLeaveRequestFormUi();
-      return;
-    }
-    if (target.id === "overtimeRequestUseRest1" || target.id === "overtimeRequestUseRest2") {
-      syncOvertimeRequestFormUi();
       return;
     }
     if (target.id === "scheduleOvertimeUseRest1" || target.id === "scheduleOvertimeUseRest2") {
@@ -7669,24 +6910,6 @@ function bindEvents() {
       return;
     }
     scheduleHideLeaveTooltip();
-  });
-
-  document.body.addEventListener("change", async (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement) || !target.dataset.requestFilterKind) {
-      return;
-    }
-    const kind = target.dataset.requestFilterKind;
-    const field = target.dataset.requestFilterField;
-    requestReviewFilters[kind] = {
-      ...(requestReviewFilters[kind] || { memberCode: "", date: "", status: "" }),
-      [field]: target.value || ""
-    };
-    if (kind === "leave") {
-      await openLeaveApprovalModal(false);
-    } else {
-      await openOvertimeApprovalModal(false);
-    }
   });
 
   document.body.addEventListener("dragstart", (event) => {

@@ -84,13 +84,6 @@ button {
   min-width: 0;
 }
 
-.top-request-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .top-signout-slot {
   display: flex;
   align-items: center;
