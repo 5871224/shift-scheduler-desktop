@@ -2960,7 +2960,7 @@ function showScheduleTooltip(memberId, day, category, anchorRect) {
   const root = document.createElement("div");
   root.id = "leaveTooltipRoot";
   root.className = "leave-tooltip";
-  root.style.left = `${Math.min(window.innerWidth - 250, anchorRect.left + window.scrollX + 10)}px`;
+  root.style.left = `${Math.min(window.innerWidth - 250, anchorRect.left + 10) + window.scrollX}px`;
   root.style.top = `${anchorRect.bottom + window.scrollY + 8}px`;
   root.innerHTML = `
     <div class="leave-tooltip-head">
