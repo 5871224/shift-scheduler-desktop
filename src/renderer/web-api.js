@@ -460,6 +460,25 @@
       .map((row) => [row.scheduler_item_id, row]));
   }
 
+  function getRemovedSchedulerRowIds(rowMap, keptSchedulerIds) {
+    const keptIds = new Set((keptSchedulerIds || []).map((value) => String(value || "").trim()).filter(Boolean));
+    return [...rowMap.entries()]
+      .filter(([schedulerId, row]) => schedulerId && !keptIds.has(schedulerId) && row?.id)
+      .map(([, row]) => row.id);
+  }
+
+  async function deleteRowsByForeignIds(table, column, ids) {
+    const values = [...new Set((ids || []).map((value) => String(value || "").trim()).filter(Boolean))];
+    if (!values.length) {
+      return;
+    }
+    await restDelete(table, {
+      [column]: buildInFilter(values)
+    }, {
+      auth: true
+    });
+  }
+
   function getRowSchedulerId(row, fallbackPrefix) {
     return row.scheduler_item_id || `${fallbackPrefix}:${row.id}`;
   }
@@ -898,7 +917,13 @@
         prefer: "resolution=merge-duplicates,return=minimal"
       });
     }
-    await deleteSchedulerRowsNotIn("leave_types", leaves.map((item) => item.id));
+    const keptLeaveIds = [
+      ...leaves.map((item) => item.id),
+      ...(state.requestLeaveCatalog || []).map((item) => item?.id)
+    ];
+    const existingLeaveMap = await fetchRowsBySchedulerId("leave_types");
+    await deleteRowsByForeignIds("leave_requests", "leave_type_id", getRemovedSchedulerRowIds(existingLeaveMap, keptLeaveIds));
+    await deleteSchedulerRowsNotIn("leave_types", keptLeaveIds);
     const leaveMap = await fetchRowsBySchedulerId("leave_types");
 
     if (overtime.length) {
@@ -924,7 +949,10 @@
         prefer: "resolution=merge-duplicates,return=minimal"
       });
     }
-    await deleteSchedulerRowsNotIn("overtime_types", overtime.map((item) => item.id));
+    const keptOvertimeIds = overtime.map((item) => item.id);
+    const existingOvertimeMap = await fetchRowsBySchedulerId("overtime_types");
+    await deleteRowsByForeignIds("overtime_requests", "overtime_type_id", getRemovedSchedulerRowIds(existingOvertimeMap, keptOvertimeIds));
+    await deleteSchedulerRowsNotIn("overtime_types", keptOvertimeIds);
     const overtimeMap = await fetchRowsBySchedulerId("overtime_types");
 
     if (shifts.length) {

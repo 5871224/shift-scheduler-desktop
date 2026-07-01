@@ -252,6 +252,15 @@ begin
   end if;
 end $$;
 
+alter table public.leave_requests
+  drop constraint if exists leave_requests_leave_type_id_fkey;
+
+alter table public.leave_requests
+  add constraint leave_requests_leave_type_id_fkey
+  foreign key (leave_type_id)
+  references public.leave_types (id)
+  on delete cascade;
+
 alter table public.overtime_types
   add column if not exists scheduler_item_id text,
   add column if not exists text_color text,
@@ -275,6 +284,15 @@ begin
       add constraint overtime_types_scheduler_item_id_key unique (scheduler_item_id);
   end if;
 end $$;
+
+alter table public.overtime_requests
+  drop constraint if exists overtime_requests_overtime_type_id_fkey;
+
+alter table public.overtime_requests
+  add constraint overtime_requests_overtime_type_id_fkey
+  foreign key (overtime_type_id)
+  references public.overtime_types (id)
+  on delete cascade;
 
 create table if not exists public.schedule_months (
   id uuid primary key default gen_random_uuid(),

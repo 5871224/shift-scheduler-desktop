@@ -930,6 +930,14 @@ function isDepartmentActiveInVisibleRange(department) {
   return doesDateRangeOverlapRange(department?.startDate || "", department?.endDate || "", startDate, endDate);
 }
 
+function isDepartmentVisibleInSchedule(department) {
+  return Boolean(department) && !department.hiddenFromLeave;
+}
+
+function isDepartmentVisibleInScheduleRange(department) {
+  return isDepartmentVisibleInSchedule(department) && isDepartmentActiveInVisibleRange(department);
+}
+
 function isDepartmentOperatingOnDate(department, dateString) {
   if (!department || !dateString) {
     return false;
@@ -1777,13 +1785,20 @@ function getOperatingShiftDepartmentIds(shift, dateString) {
   const shiftDeptIds = getShiftDepartmentIds(shift);
   return shiftDeptIds.filter((deptId) => {
     const department = state.departments.find((item) => item.id === deptId);
-    return isDepartmentOperatingOnDate(department, dateString);
+    return isDepartmentVisibleInSchedule(department) && isDepartmentOperatingOnDate(department, dateString);
   });
 }
 
 function isShiftOperatingOnDate(shift, dateString) {
   const shiftDeptIds = getShiftDepartmentIds(shift);
   return !shiftDeptIds.length || getOperatingShiftDepartmentIds(shift, dateString).length > 0;
+}
+
+function shiftHasVisibleDepartment(shift) {
+  const shiftDeptIds = getShiftDepartmentIds(shift);
+  return !shiftDeptIds.length || shiftDeptIds.some((deptId) => (
+    isDepartmentVisibleInScheduleRange(state.departments.find((department) => department.id === deptId))
+  ));
 }
 
 function getDailyAssignmentCost(scheduleMap, option, member, dateString, dates) {
@@ -2931,7 +2946,7 @@ function setModal(content) {
 
 function renderDeptFilter() {
   const select = document.getElementById("deptFilter");
-  const departments = state.departments.filter((department) => isDepartmentActiveInVisibleRange(department));
+  const departments = state.departments.filter((department) => isDepartmentVisibleInScheduleRange(department));
   if (state.deptFilter !== "all" && !departments.some((department) => department.id === state.deptFilter)) {
     state.deptFilter = "all";
   }
@@ -2948,7 +2963,7 @@ function renderTableDeptScopeFilter() {
   if (!select) {
     return;
   }
-  const departments = state.departments.filter((department) => isDepartmentActiveInVisibleRange(department));
+  const departments = state.departments.filter((department) => isDepartmentVisibleInScheduleRange(department));
   if (state.tableDeptScopeFilter !== "all" && !departments.some((department) => department.id === state.tableDeptScopeFilter)) {
     state.tableDeptScopeFilter = "all";
   }
@@ -3069,7 +3084,7 @@ function memberHasScheduledShiftInDepartment(member, departmentId) {
 
 function getVisibleTableGroups() {
   return state.departments
-    .filter((department) => isDepartmentActiveInVisibleRange(department))
+    .filter((department) => isDepartmentVisibleInScheduleRange(department))
     .map((department) => ({
       department,
       members: state.members.filter((member) => {
@@ -3164,7 +3179,8 @@ function reorderScheduleTableMember(draggedId, targetId, insertAfter = false) {
 
 function getVisibleShiftRows() {
   return state.shifts.filter((shift) => (
-    state.tableDeptScopeFilter === "all" || shiftAllowsDepartment(shift, state.tableDeptScopeFilter)
+    shiftHasVisibleDepartment(shift)
+    && (state.tableDeptScopeFilter === "all" || shiftAllowsDepartment(shift, state.tableDeptScopeFilter))
   ));
 }
 

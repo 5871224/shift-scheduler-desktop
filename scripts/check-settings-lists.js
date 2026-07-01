@@ -37,6 +37,9 @@ assert(renderer.includes("function previewSortableSettingsItem"), "sortable sett
 assert(renderer.includes("function commitSortedListFromDom"), "sortable settings rows should commit the live drag order");
 assert(renderer.includes("function commitDepartmentMemberOrderFromDom"), "department member drag order should commit from the live DOM order");
 assert(renderer.includes("restoreSettingsScroll(returnTo);"), "drag reorder should restore modal scroll position after rerender");
+assert(renderer.includes("function isDepartmentVisibleInScheduleRange"), "department hidden flag should be part of schedule table visibility");
+assert(renderer.includes(".filter((department) => isDepartmentVisibleInScheduleRange(department))"), "hidden departments should be excluded from schedule table groups and filters");
+assert(renderer.includes("function shiftHasVisibleDepartment"), "shift view should hide shifts that only belong to hidden departments");
 
 assert(styles.includes(".catalog-settings-modal"), "catalog settings modal styles should exist");
 assert(styles.includes(".department-settings-modal"), "department settings modal styles should exist");
