@@ -94,7 +94,9 @@ assert(indexHtml.includes('<option value="member-stats">人員檢視-統計欄</
 assert(indexHtml.includes('<option value="shift">班別檢視</option>'), "table view select should include shift view");
 assert(!indexHtml.includes("tableStatsSelect") && !renderer.includes("tableStatsSelect"), "stats visibility should be merged into table view select");
 assert(styles.includes(".table-sticky-header {\n  position: -webkit-sticky;\n  position: sticky;"), "date header should use mobile-safe sticky positioning");
+assert(styles.includes(".table-sticky-header-left {\n  position: -webkit-sticky;\n  position: sticky;\n  left: 0;"), "unit/person/stats header group should stay fixed at the left while horizontally scrolled");
 assert(styles.includes(".table-sticky-cell-person {\n  position: -webkit-sticky;\n  position: sticky;\n  left: var(--dept-col-width);"), "person header should stay sticky beside the department header");
+assert(styles.includes(".table-sticky-cell-stats {\n  position: -webkit-sticky;\n  position: sticky;\n  left: calc(var(--dept-col-width) + var(--person-col-width));"), "stats header should stay sticky with the unit and person headers");
 assert(styles.includes(".dept-col,\n.person-col,\n.stats-col {\n  position: -webkit-sticky;\n  position: sticky;"), "member columns should keep mobile-safe sticky positioning");
 
 console.log("schedule grid ops check ok");

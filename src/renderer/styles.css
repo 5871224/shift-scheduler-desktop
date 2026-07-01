@@ -583,28 +583,61 @@ button {
   background: #fff;
 }
 
-/* Schedule frame: outer wrappers own the rounded border; cells only draw inner grid lines. */
+/* Schedule table: wrappers draw the outer frame; cells draw only inner grid lines. */
 .table-sticky-header {
   position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 24;
+  isolation: isolate;
   display: flex;
   align-items: stretch;
   width: max-content;
   min-width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-bottom: none;
   border-radius: var(--schedule-radius) var(--schedule-radius) 0 0;
-  clip-path: inset(0 round var(--schedule-radius) var(--schedule-radius) 0 0);
   background: var(--schedule-header-bg);
   overflow: visible;
   box-shadow: 0 8px 18px rgba(72, 52, 31, 0.08);
 }
 
+.table-sticky-header::after,
+.table-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.table-sticky-header::after {
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: var(--schedule-radius) var(--schedule-radius) 0 0;
+}
+
 .table-sticky-header-left {
+  position: -webkit-sticky;
+  position: sticky;
+  left: 0;
+  z-index: 8;
   display: flex;
   flex-shrink: 0;
+  background: var(--schedule-header-bg);
+  border-top-left-radius: var(--schedule-radius);
+}
+
+.table-sticky-header-left::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  z-index: 9;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  border-top-left-radius: var(--schedule-radius);
+  pointer-events: none;
 }
 
 .table-sticky-header-scroll {
@@ -688,10 +721,6 @@ button {
   gap: 2px;
 }
 
-.table-sticky-cell-day:last-child {
-  border-right: none;
-}
-
 .table-sticky-cell-day.sun {
   color: #c93f3f;
 }
@@ -730,6 +759,10 @@ button {
   border-right: 2px solid #b39a75;
 }
 
+.table-sticky-cell-day:last-child {
+  border-right: none;
+}
+
 .table-sticky-cell-day span {
   color: var(--muted);
   font-size: 10px;
@@ -749,15 +782,21 @@ button {
 
 .table-wrap {
   position: relative;
+  isolation: isolate;
   overflow-x: visible;
   overflow-y: visible;
   width: max-content;
   min-width: 100%;
   border-radius: 0 0 var(--schedule-radius) var(--schedule-radius);
-  clip-path: inset(0 round 0 0 var(--schedule-radius) var(--schedule-radius));
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-top: none;
   background: #fff;
+}
+
+.table-wrap::after {
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 0 var(--schedule-radius) var(--schedule-radius);
 }
 
 table {
@@ -787,10 +826,6 @@ th,
 td {
   border-right: 1px solid var(--schedule-grid-line);
   border-bottom: 1px solid var(--schedule-grid-line);
-}
-
-#mainTable tr > :last-child {
-  border-right: none;
 }
 
 #mainTable tbody tr:last-child > * {
@@ -939,6 +974,10 @@ thead th.today,
 
 .cell.week-boundary-end {
   border-right: 2px solid #b39a75;
+}
+
+#mainTable tr > :last-child {
+  border-right: none;
 }
 
 .cell:hover {
