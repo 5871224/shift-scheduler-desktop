@@ -17,6 +17,9 @@
   --person-col-width: 92px;
   --stats-col-width: 86px;
   --day-col-width: 44px;
+  --schedule-radius: 18px;
+  --schedule-grid-line: #ebe3d8;
+  --schedule-header-bg: #fbf8f1;
 }
 
 * {
@@ -580,6 +583,7 @@ button {
   background: #fff;
 }
 
+/* Schedule frame: outer wrappers own the rounded border; cells only draw inner grid lines. */
 .table-sticky-header {
   position: -webkit-sticky;
   position: sticky;
@@ -591,8 +595,9 @@ button {
   min-width: 100%;
   border: 1px solid var(--line);
   border-bottom: none;
-  border-radius: 18px 18px 0 0;
-  background: #fbf8f1;
+  border-radius: var(--schedule-radius) var(--schedule-radius) 0 0;
+  clip-path: inset(0 round var(--schedule-radius) var(--schedule-radius) 0 0);
+  background: var(--schedule-header-bg);
   overflow: visible;
   box-shadow: 0 8px 18px rgba(72, 52, 31, 0.08);
 }
@@ -622,8 +627,8 @@ button {
   justify-content: center;
   min-height: 40px;
   padding: 6px 2px;
-  border-right: 1px solid #ebe3d8;
-  box-shadow: inset 0 -1px 0 #ebe3d8;
+  border-right: 1px solid var(--schedule-grid-line);
+  box-shadow: inset 0 -1px 0 var(--schedule-grid-line);
   font-size: 11px;
   font-weight: 700;
   text-align: center;
@@ -655,7 +660,7 @@ button {
   z-index: 3;
   width: var(--dept-col-width);
   min-width: var(--dept-col-width);
-  background: #fbf8f1;
+  background: var(--schedule-header-bg);
 }
 
 .table-sticky-cell-person {
@@ -665,7 +670,7 @@ button {
   z-index: 3;
   width: var(--person-col-width);
   min-width: var(--person-col-width);
-  background: #fbf8f1;
+  background: var(--schedule-header-bg);
 }
 
 .table-sticky-cell-stats {
@@ -675,12 +680,16 @@ button {
   z-index: 3;
   width: var(--stats-col-width);
   min-width: var(--stats-col-width);
-  background: #fbf8f1;
+  background: var(--schedule-header-bg);
 }
 
 .table-sticky-cell-day {
   flex-direction: column;
   gap: 2px;
+}
+
+.table-sticky-cell-day:last-child {
+  border-right: none;
 }
 
 .table-sticky-cell-day.sun {
@@ -739,12 +748,13 @@ button {
 }
 
 .table-wrap {
+  position: relative;
   overflow-x: visible;
   overflow-y: visible;
   width: max-content;
   min-width: 100%;
-  border-radius: 0 0 18px 18px;
-  clip-path: inset(0 round 0 0 18px 18px);
+  border-radius: 0 0 var(--schedule-radius) var(--schedule-radius);
+  clip-path: inset(0 round 0 0 var(--schedule-radius) var(--schedule-radius));
   border: 1px solid var(--line);
   border-top: none;
   background: #fff;
@@ -775,8 +785,16 @@ table {
 
 th,
 td {
-  border-right: 1px solid #ebe3d8;
-  border-bottom: 1px solid #ebe3d8;
+  border-right: 1px solid var(--schedule-grid-line);
+  border-bottom: 1px solid var(--schedule-grid-line);
+}
+
+#mainTable tr > :last-child {
+  border-right: none;
+}
+
+#mainTable tbody tr:last-child > * {
+  border-bottom: none;
 }
 
 thead {
@@ -788,7 +806,7 @@ thead tr {
 }
 
 thead th {
-  background: #fbf8f1;
+  background: var(--schedule-header-bg);
   font-size: 11px;
   font-weight: 700;
   padding: 0;
@@ -859,7 +877,7 @@ thead th small {
 thead th.dept-col,
 thead th.person-col,
 thead th.stats-col {
-  background: #fbf8f1;
+  background: var(--schedule-header-bg);
   z-index: 7;
 }
 
