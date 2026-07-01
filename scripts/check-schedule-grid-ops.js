@@ -98,5 +98,11 @@ assert(styles.includes(".table-sticky-header-left {\n  position: -webkit-sticky;
 assert(styles.includes(".table-sticky-cell-person {\n  position: -webkit-sticky;\n  position: sticky;\n  left: var(--dept-col-width);"), "person header should stay sticky beside the department header");
 assert(styles.includes(".table-sticky-cell-stats {\n  position: -webkit-sticky;\n  position: sticky;\n  left: calc(var(--dept-col-width) + var(--person-col-width));"), "stats header should stay sticky with the unit and person headers");
 assert(styles.includes(".dept-col,\n.person-col,\n.stats-col {\n  position: -webkit-sticky;\n  position: sticky;"), "member columns should keep mobile-safe sticky positioning");
+assert(renderer.includes('data-table-department-id="${escapeHtml(department.id)}"'), "department cells should be draggable reorder handles");
+assert(renderer.includes('data-table-member-id="${escapeHtml(member.id)}"'), "member cells should be draggable reorder handles");
+assert(renderer.includes("function reorderScheduleTableDepartment"), "schedule table should support department display reordering");
+assert(renderer.includes("function reorderScheduleTableMember"), "schedule table should support member display reordering");
+assert(renderer.includes("departmentId !== getMemberHomeDeptId(targetMember)"), "schedule table member reordering should reject cross-department drops");
+assert(styles.includes(".schedule-order-drag"), "schedule table reorder handles should have drag affordance");
 
 console.log("schedule grid ops check ok");

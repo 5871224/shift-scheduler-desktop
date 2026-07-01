@@ -253,6 +253,8 @@ let eventsBound = false;
 let dragSortItemId = "";
 let dragSortCategory = "";
 let dragPreviewElement = null;
+let dragScheduleTableDeptId = "";
+let dragScheduleTableMemberId = "";
 let toolbarCollapsed = false;
 let toolbarCollapseInitialized = false;
 let measureTextContext = null;
@@ -3156,6 +3158,80 @@ function getVisibleTableGroups() {
     .filter(({ members }) => members.length);
 }
 
+function getReorderedVisibleIds(visibleIds, draggedId, targetId, insertAfter) {
+  if (!draggedId || !targetId || draggedId === targetId || !visibleIds.includes(draggedId) || !visibleIds.includes(targetId)) {
+    return visibleIds;
+  }
+  const reorderedIds = visibleIds.filter((id) => id !== draggedId);
+  const targetIndex = reorderedIds.indexOf(targetId);
+  if (targetIndex < 0) {
+    return visibleIds;
+  }
+  reorderedIds.splice(targetIndex + (insertAfter ? 1 : 0), 0, draggedId);
+  return reorderedIds;
+}
+
+function applyVisibleOrderById(items, visibleIds) {
+  const orderedQueue = visibleIds.slice();
+  const orderedById = new Map(items.map((item) => [item.id, item]));
+  const visibleIdSet = new Set(visibleIds);
+  return items.map((item) => {
+    if (!visibleIdSet.has(item.id)) {
+      return item;
+    }
+    const nextId = orderedQueue.shift();
+    return orderedById.get(nextId) || item;
+  });
+}
+
+function captureScheduleViewport() {
+  return { scrollX: window.scrollX || 0, scrollY: window.scrollY || 0 };
+}
+
+function restoreScheduleViewport(viewport) {
+  requestAnimationFrame(() => {
+    window.scrollTo(viewport?.scrollX || 0, viewport?.scrollY || 0);
+    syncStickyHeaderScroll();
+  });
+}
+
+function finishScheduleTableOrderChange(viewport) {
+  renderAll();
+  restoreScheduleViewport(viewport);
+  queueSave();
+}
+
+function reorderScheduleTableDepartment(draggedId, targetId, insertAfter = false) {
+  const visibleIds = getVisibleTableGroups().map(({ department }) => department.id);
+  const nextVisibleIds = getReorderedVisibleIds(visibleIds, draggedId, targetId, insertAfter);
+  if (nextVisibleIds.join("|") === visibleIds.join("|")) {
+    return false;
+  }
+  const viewport = captureScheduleViewport();
+  state.departments = applyVisibleOrderById(state.departments, nextVisibleIds);
+  finishScheduleTableOrderChange(viewport);
+  return true;
+}
+
+function reorderScheduleTableMember(draggedId, targetId, insertAfter = false) {
+  const draggedMember = state.members.find((member) => member.id === draggedId);
+  const targetMember = state.members.find((member) => member.id === targetId);
+  const departmentId = getMemberHomeDeptId(draggedMember);
+  if (!draggedMember || !targetMember || !departmentId || departmentId !== getMemberHomeDeptId(targetMember)) {
+    return false;
+  }
+  const group = getVisibleTableGroups().find(({ department }) => department.id === departmentId);
+  const visibleIds = (group?.members || []).map((member) => member.id);
+  const nextVisibleIds = getReorderedVisibleIds(visibleIds, draggedId, targetId, insertAfter);
+  if (nextVisibleIds.join("|") === visibleIds.join("|")) {
+    return false;
+  }
+  const viewport = captureScheduleViewport();
+  state.members = applyVisibleOrderById(state.members, nextVisibleIds);
+  finishScheduleTableOrderChange(viewport);
+  return true;
+}
+
 function getVisibleShiftRows() {
   return state.shifts.filter((shift) => (
     state.tableDeptScopeFilter === "all" || shiftAllowsDepartment(shift, state.tableDeptScopeFilter)
@@ -3309,9 +3385,9 @@ function renderTable() {
         members.forEach((member, index) => {
           html += `<tr class="${member.payByDay ? "pay-daily-row" : ""}">`;
           if (index === 0) {
-            html += `<td class="dept-col" rowspan="${members.length}">${escapeHtml(department.name)}</td>`;
+            html += `<td class="dept-col schedule-order-drag" rowspan="${members.length}" draggable="true" data-table-department-id="${escapeHtml(department.id)}">${escapeHtml(department.name)}</td>`;
           }
-          html += `<td class="person-col"><div class="member-label">${memberLabel(member)}</div></td>`;
+          html += `<td class="person-col schedule-order-drag" draggable="true" data-table-member-id="${escapeHtml(member.id)}" data-table-member-department-id="${escapeHtml(getMemberHomeDeptId(member))}"><div class="member-label">${memberLabel(member)}</div></td>`;
           if (state.tableStatsVisible) {
             html += `<td class="stats-col">${renderMemberStats(member)}</td>`;
           }
@@ -4831,6 +4907,17 @@ function clearDragPreviewState() {
     dragPreviewElement.classList.remove("drag-preview-active");
   }
   dragPreviewElement = null;
+}
+
+function markDragPreviewTarget(element) {
+  if (!(element instanceof HTMLElement)) {
+    return;
+  }
+  if (dragPreviewElement !== element) {
+    clearDragPreviewState();
+    dragPreviewElement = element;
+  }
+  element.classList.add("drag-preview-active");
 }
 
 function previewSortableSettingsItem(targetElement, clientY) {
@@ -7539,6 +7626,20 @@ function bindEvents() {
   });
 
   document.body.addEventListener("dragstart", (event) => {
+    const tableDepartment = event.target.closest("[data-table-department-id]");
+    if (tableDepartment && state.tableView !== "shift") {
+      dragScheduleTableDeptId = tableDepartment.dataset.tableDepartmentId || "";
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", dragScheduleTableDeptId);
+      return;
+    }
+    const tableMember = event.target.closest("[data-table-member-id]");
+    if (tableMember && state.tableView !== "shift") {
+      dragScheduleTableMemberId = tableMember.dataset.tableMemberId || "";
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", dragScheduleTableMemberId);
+      return;
+    }
     const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
     if (scheduleDeptOption) {
       dragScheduleDeptId = scheduleDeptOption.dataset.scheduleDeptOption || "";
@@ -7564,6 +7665,23 @@ function bindEvents() {
   });
 
   document.body.addEventListener("dragover", (event) => {
+    const tableDepartment = event.target.closest("[data-table-department-id]");
+    if (tableDepartment && dragScheduleTableDeptId) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      markDragPreviewTarget(tableDepartment);
+      return;
+    }
+    const tableMember = event.target.closest("[data-table-member-id]");
+    if (tableMember && dragScheduleTableMemberId) {
+      const draggedMember = state.members.find((member) => member.id === dragScheduleTableMemberId);
+      if (draggedMember && tableMember.dataset.tableMemberDepartmentId === getMemberHomeDeptId(draggedMember)) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        markDragPreviewTarget(tableMember);
+        return;
+      }
+    }
     const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
     if (scheduleDeptOption && dragScheduleDeptId) {
       event.preventDefault();
@@ -7594,6 +7712,24 @@ function bindEvents() {
   });
 
   document.body.addEventListener("drop", async (event) => {
+    const tableDepartment = event.target.closest("[data-table-department-id]");
+    if (tableDepartment && dragScheduleTableDeptId) {
+      event.preventDefault();
+      const rect = tableDepartment.getBoundingClientRect();
+      reorderScheduleTableDepartment(dragScheduleTableDeptId, tableDepartment.dataset.tableDepartmentId || "", event.clientY > rect.top + rect.height / 2);
+      clearDragPreviewState();
+      dragScheduleTableDeptId = "";
+      return;
+    }
+    const tableMember = event.target.closest("[data-table-member-id]");
+    if (tableMember && dragScheduleTableMemberId) {
+      event.preventDefault();
+      const rect = tableMember.getBoundingClientRect();
+      reorderScheduleTableMember(dragScheduleTableMemberId, tableMember.dataset.tableMemberId || "", event.clientY > rect.top + rect.height / 2);
+      clearDragPreviewState();
+      dragScheduleTableMemberId = "";
+      return;
+    }
     const scheduleDeptOption = event.target.closest("[data-schedule-dept-option]");
     if (scheduleDeptOption && dragScheduleDeptId) {
       event.preventDefault();
@@ -7644,6 +7780,8 @@ function bindEvents() {
     dragScheduleDeptId = "";
     dragSortItemId = "";
     dragSortCategory = "";
+    dragScheduleTableDeptId = "";
+    dragScheduleTableMemberId = "";
   });
 
   document.addEventListener("click", (event) => {

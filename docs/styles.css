@@ -909,6 +909,19 @@ thead th small {
   vertical-align: middle;
 }
 
+.schedule-order-drag {
+  cursor: grab;
+  user-select: none;
+}
+
+.schedule-order-drag:active {
+  cursor: grabbing;
+}
+
+.schedule-order-drag.drag-preview-active {
+  outline-offset: -4px;
+}
+
 thead th.dept-col,
 thead th.person-col,
 thead th.stats-col {
