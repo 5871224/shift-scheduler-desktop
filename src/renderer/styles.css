@@ -943,12 +943,15 @@ thead th.stats-col {
 }
 
 .member-label {
-  display: block;
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
 }
 
 .member-main {
-  display: inline-block;
+  display: block;
+  flex: 0 0 auto;
   font-size: inherit;
   font-weight: 600;
   line-height: 1.35;

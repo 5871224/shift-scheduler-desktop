@@ -517,13 +517,15 @@ function syncScheduleColumnWidths() {
   } else {
     const visibleGroups = getVisibleTableGroups();
     const visibleDepartments = visibleGroups.map(({ department }) => department.name);
-    const visibleMembers = visibleGroups.flatMap(({ members }) => members.map((member) => member.name));
+    const visibleMembers = visibleGroups.flatMap(({ members }) => (
+      members.map((member) => `${member.name || ""}${member.payByDay ? "PT" : ""}`)
+    ));
     const deptContentWidth = visibleDepartments.reduce((max, text) => Math.max(max, measureTextWidth(text, deptStyle)), 0);
     const personContentWidth = visibleMembers.reduce((max, text) => Math.max(max, measureTextWidth(text, personStyle)), 0);
     const deptHeaderWidth = measureTextWidth("單位", headerStyle) + managerButtonAllowance;
     const personHeaderWidth = measureTextWidth("人員", headerStyle) + managerButtonAllowance;
     deptWidth = clamp(Math.ceil(Math.max(deptContentWidth, deptHeaderWidth) + 18), 52, 88);
-    personWidth = clamp(Math.ceil(Math.max(personContentWidth, personHeaderWidth) + 18), 64, 118);
+    personWidth = Math.max(Math.ceil(Math.max(personContentWidth, personHeaderWidth) + 18), 64);
   }
   const days = getVisibleDates().length;
   const availableDayWidth = tableWrap
@@ -3305,7 +3307,7 @@ function getScheduleSegmentSizeClass(segment, segmentCount) {
   return "";
 }
 
-function renderCellInner(key, memberId = "", day = 0, slotOverride = null) {
+function renderCellInner(key, memberId = "", day = 0, slotOverride = null, isPreview = false) {
   const cellState = slotOverride || state.schedule[key];
   if (!cellState) {
     return '<div class="cell-inner"></div>';
@@ -3368,9 +3370,9 @@ function renderCellInner(key, memberId = "", day = 0, slotOverride = null) {
   const visibleSegments = segments.slice(0, 3);
   return `<div class="cell-inner">${visibleSegments.map((segment) => (
     `<div class="seg ${segment.status === "pending" ? "seg-pending" : ""}" style="background-color:${segment.color};color:${segment.textColor || textColor(segment.color)}" ${
-      segment.category === "leave" && shouldPromptLeaveDetail(segment, cellState.leaveMeta)
+      segment.category === "leave" && !isPreview && shouldPromptLeaveDetail(segment, cellState.leaveMeta)
         ? `data-hover-schedule-detail="${memberId}:${day}:leave"`
-        : segment.category === "overtime" && cellState.overtimeMeta
+        : segment.category === "overtime" && !isPreview && cellState.overtimeMeta
           ? `data-hover-schedule-detail="${memberId}:${day}:overtime"`
           : ""
     }><span class="seg-label ${getScheduleSegmentSizeClass(segment, visibleSegments.length)}">${escapeHtml(segment.name)}</span></div>`
@@ -3435,9 +3437,10 @@ function renderTable() {
               return;
             }
             const key = getScheduleKeyForDateString(member.id, dateString);
-            const displayedSlot = getPreviewSlotByKey(key) || state.schedule[key] || null;
-            const previewClass = getPreviewSlotByKey(key) ? "auto-schedule-preview" : "";
-            html += `<td class="cell ${previewClass} ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-member-id="${member.id}" data-date="${dateString}" data-row-index="${rowIndex}" data-col-index="${dateIndex}">${renderCellInner(key, member.id, dateString, displayedSlot)}</td>`;
+            const previewSlot = getPreviewSlotByKey(key);
+            const displayedSlot = previewSlot || state.schedule[key] || null;
+            const previewClass = previewSlot ? "auto-schedule-preview" : "";
+            html += `<td class="cell ${previewClass} ${weekBoundaryClass} ${dateString === today ? "today" : ""}" data-member-id="${member.id}" data-date="${dateString}" data-row-index="${rowIndex}" data-col-index="${dateIndex}">${renderCellInner(key, member.id, dateString, displayedSlot, Boolean(previewSlot))}</td>`;
           });
           html += "</tr>";
           rowIndex += 1;
@@ -6855,9 +6858,6 @@ function applyApprovedLeaveRequestToSchedule(record) {
     const [year, month, day] = dateString.split("-").map(Number);
     const slotKey = scheduleKey(member.id, year, month - 1, day);
     const slot = state.schedule[slotKey] || { shift: null, leave: null, overtime: null };
-    if (record.status === "approved") {
-      slot.shift = null;
-    }
     slot.leave = leave.id;
     slot.leaveMeta = {
       leaveCode: record.leaveCode,
@@ -7526,6 +7526,21 @@ function bindEvents() {
     }
     if (target.dataset.deleteMember) {
       await deleteMember(target.dataset.deleteMember);
+    }
+  });
+
+  document.body.addEventListener("dblclick", (event) => {
+    const target = event.target.closest("[data-table-member-id], [data-table-department-id]");
+    if (!target) return;
+    const memberId = target.dataset.tableMemberId;
+    if (memberId) {
+      openMemberForm("edit", memberId);
+      return;
+    }
+    const deptId = target.dataset.tableDepartmentId;
+    if (deptId) {
+      openDepartmentForm("edit", deptId);
+      return;
     }
   });
 
