@@ -911,7 +911,6 @@ thead th small {
 
 .schedule-order-drag {
   cursor: grab;
-  position: relative;
   user-select: none;
 }
 

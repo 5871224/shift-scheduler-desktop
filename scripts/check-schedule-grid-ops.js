@@ -77,7 +77,7 @@ assert.deepEqual(redoSnapshot, { a: 3 });
 
 const statsOrder = [
   "<span>休:${stats.rest}</span>",
-  "<span>休加:${stats.restWork}</span>",
+  "<span>灰休:${stats.restWork}</span>",
   "<span>例:${stats.regular}</span>",
   "<span>未排:${stats.unassigned}</span>"
 ].map((text) => renderer.indexOf(text));
@@ -106,6 +106,7 @@ assert(renderer.includes("departmentId !== getMemberHomeDeptId(targetMember)"), 
 assert(renderer.includes("function getScheduleTableOrderInsertAfter"), "schedule table drops should reuse the visible insertion preview");
 assert(renderer.includes("schedule-order-insert-after"), "schedule table should track whether the preview line means insert after");
 assert(styles.includes(".schedule-order-drag"), "schedule table reorder handles should have drag affordance");
+assert(!styles.includes(".schedule-order-drag {\n  cursor: grab;\n  position:"), "schedule table drag handles should not override sticky column positioning");
 assert(styles.includes(".schedule-order-drag.schedule-order-insert-before"), "schedule table preview should draw an insertion line before the target");
 assert(styles.includes(".schedule-order-drag.schedule-order-insert-after"), "schedule table preview should draw an insertion line after the target");
 
