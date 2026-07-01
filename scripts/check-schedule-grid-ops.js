@@ -103,6 +103,10 @@ assert(renderer.includes('data-table-member-id="${escapeHtml(member.id)}"'), "me
 assert(renderer.includes("function reorderScheduleTableDepartment"), "schedule table should support department display reordering");
 assert(renderer.includes("function reorderScheduleTableMember"), "schedule table should support member display reordering");
 assert(renderer.includes("departmentId !== getMemberHomeDeptId(targetMember)"), "schedule table member reordering should reject cross-department drops");
+assert(renderer.includes("function getScheduleTableOrderInsertAfter"), "schedule table drops should reuse the visible insertion preview");
+assert(renderer.includes("schedule-order-insert-after"), "schedule table should track whether the preview line means insert after");
 assert(styles.includes(".schedule-order-drag"), "schedule table reorder handles should have drag affordance");
+assert(styles.includes(".schedule-order-drag.schedule-order-insert-before"), "schedule table preview should draw an insertion line before the target");
+assert(styles.includes(".schedule-order-drag.schedule-order-insert-after"), "schedule table preview should draw an insertion line after the target");
 
 console.log("schedule grid ops check ok");

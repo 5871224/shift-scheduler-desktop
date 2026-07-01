@@ -4905,11 +4905,13 @@ function cssEscapeValue(value) {
 function clearDragPreviewState() {
   if (dragPreviewElement instanceof HTMLElement) {
     dragPreviewElement.classList.remove("drag-preview-active");
+    dragPreviewElement.classList.remove("schedule-order-insert-before");
+    dragPreviewElement.classList.remove("schedule-order-insert-after");
   }
   dragPreviewElement = null;
 }
 
-function markDragPreviewTarget(element) {
+function markDragPreviewTarget(element, insertAfter = null) {
   if (!(element instanceof HTMLElement)) {
     return;
   }
@@ -4918,6 +4920,33 @@ function markDragPreviewTarget(element) {
     dragPreviewElement = element;
   }
   element.classList.add("drag-preview-active");
+  if (insertAfter !== null) {
+    element.classList.toggle("schedule-order-insert-before", !insertAfter);
+    element.classList.toggle("schedule-order-insert-after", insertAfter);
+  }
+}
+
+function markScheduleTableOrderTarget(element, clientY) {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+  const rect = element.getBoundingClientRect();
+  const insertAfter = clientY > rect.top + rect.height / 2;
+  markDragPreviewTarget(element, insertAfter);
+  return insertAfter;
+}
+
+function getScheduleTableOrderInsertAfter(element, clientY) {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+  if (element.classList.contains("schedule-order-insert-after")) {
+    return true;
+  }
+  if (element.classList.contains("schedule-order-insert-before")) {
+    return false;
+  }
+  return markScheduleTableOrderTarget(element, clientY);
 }
 
 function previewSortableSettingsItem(targetElement, clientY) {
@@ -7669,7 +7698,7 @@ function bindEvents() {
     if (tableDepartment && dragScheduleTableDeptId) {
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
-      markDragPreviewTarget(tableDepartment);
+      markScheduleTableOrderTarget(tableDepartment, event.clientY);
       return;
     }
     const tableMember = event.target.closest("[data-table-member-id]");
@@ -7678,7 +7707,7 @@ function bindEvents() {
       if (draggedMember && tableMember.dataset.tableMemberDepartmentId === getMemberHomeDeptId(draggedMember)) {
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
-        markDragPreviewTarget(tableMember);
+        markScheduleTableOrderTarget(tableMember, event.clientY);
         return;
       }
     }
@@ -7715,8 +7744,7 @@ function bindEvents() {
     const tableDepartment = event.target.closest("[data-table-department-id]");
     if (tableDepartment && dragScheduleTableDeptId) {
       event.preventDefault();
-      const rect = tableDepartment.getBoundingClientRect();
-      reorderScheduleTableDepartment(dragScheduleTableDeptId, tableDepartment.dataset.tableDepartmentId || "", event.clientY > rect.top + rect.height / 2);
+      reorderScheduleTableDepartment(dragScheduleTableDeptId, tableDepartment.dataset.tableDepartmentId || "", getScheduleTableOrderInsertAfter(tableDepartment, event.clientY));
       clearDragPreviewState();
       dragScheduleTableDeptId = "";
       return;
@@ -7724,8 +7752,7 @@ function bindEvents() {
     const tableMember = event.target.closest("[data-table-member-id]");
     if (tableMember && dragScheduleTableMemberId) {
       event.preventDefault();
-      const rect = tableMember.getBoundingClientRect();
-      reorderScheduleTableMember(dragScheduleTableMemberId, tableMember.dataset.tableMemberId || "", event.clientY > rect.top + rect.height / 2);
+      reorderScheduleTableMember(dragScheduleTableMemberId, tableMember.dataset.tableMemberId || "", getScheduleTableOrderInsertAfter(tableMember, event.clientY));
       clearDragPreviewState();
       dragScheduleTableMemberId = "";
       return;

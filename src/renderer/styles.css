@@ -911,6 +911,7 @@ thead th small {
 
 .schedule-order-drag {
   cursor: grab;
+  position: relative;
   user-select: none;
 }
 
@@ -919,7 +920,20 @@ thead th small {
 }
 
 .schedule-order-drag.drag-preview-active {
-  outline-offset: -4px;
+  opacity: 1;
+  outline: 0;
+}
+
+.schedule-order-drag.schedule-order-insert-before,
+.schedule-order-drag.schedule-order-insert-after {
+  background-image: linear-gradient(90deg, rgba(139, 92, 42, 0.82) 50%, transparent 50%);
+  background-position: left top;
+  background-repeat: repeat-x;
+  background-size: 10px 2px;
+}
+
+.schedule-order-drag.schedule-order-insert-after {
+  background-position: left bottom;
 }
 
 thead th.dept-col,
