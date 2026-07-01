@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>班表</title>
-  <link rel="stylesheet" href="./styles.css?v=20260701143350">
+  <link rel="stylesheet" href="./styles.css?v=20260701150546">
 </head>
 <body>
   <div class="app-shell">
@@ -17,6 +17,10 @@
         </button>
         <h2 class="toolbar-main-title">班表</h2>
         <div id="authBar" class="auth-bar"></div>
+        <div class="top-request-actions">
+          <button class="ghost-btn compact-btn" type="button" data-open-leave-request="true">請假申請</button>
+          <button class="ghost-btn compact-btn" type="button" data-open-overtime-request="true">加班申請</button>
+        </div>
         <p id="dbHint" class="db-hint"></p>
         <div class="core-actions-shell" id="coreActionsShell">
           <button class="ghost-btn core-actions-toggle" id="coreActionsToggle" type="button">功能</button>
@@ -122,10 +126,10 @@
   <div id="authRoot"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./app-config.js?v=20260701143350"></script>
-  <script src="./browser-exporter.js?v=20260701143350"></script>
-  <script src="./rest-compliance.js?v=20260701143350"></script>
-  <script src="./web-api.js?v=20260701143350"></script>
-  <script src="./renderer.js?v=20260701143350"></script>
+  <script src="./app-config.js?v=20260701150546"></script>
+  <script src="./browser-exporter.js?v=20260701150546"></script>
+  <script src="./rest-compliance.js?v=20260701150546"></script>
+  <script src="./web-api.js?v=20260701150546"></script>
+  <script src="./renderer.js?v=20260701150546"></script>
 </body>
 </html>

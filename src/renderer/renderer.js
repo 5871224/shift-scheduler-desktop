@@ -5593,10 +5593,14 @@ async function refreshRequestData() {
     }
     return;
   }
-  leaveRequestRecords = await window.schedulerApi.listLeaveRequests({ manager: isManager() });
-  overtimeRequestRecords = await window.schedulerApi.listOvertimeRequests({ manager: isManager() });
-  try {
-    const publicRequests = await window.schedulerApi.listPublicScheduleRequests();
+  const [leaveRequests, overtimeRequests, publicRequests] = await Promise.all([
+    window.schedulerApi.listLeaveRequests({ manager: isManager() }),
+    window.schedulerApi.listOvertimeRequests({ manager: isManager() }),
+    window.schedulerApi.listPublicScheduleRequests().catch(() => null)
+  ]);
+  leaveRequestRecords = leaveRequests;
+  overtimeRequestRecords = overtimeRequests;
+  if (publicRequests) {
     leaveOverlayRecords = publicRequests.leaveRequests || [];
     overtimeOverlayRecords = publicRequests.overtimeRequests || [];
     const publicLeaveMap = new Map((publicRequests.leaveRequests || []).map((record) => [record.id, record]));
@@ -5615,7 +5619,7 @@ async function refreshRequestData() {
       memberName: record.memberName || publicOvertimeMap.get(record.id)?.memberName || "",
       overtimeName: record.overtimeName || publicOvertimeMap.get(record.id)?.overtimeName || ""
     }));
-  } catch {
+  } else {
     // ponytail: 主管審核資料仍以正式 API 為主；公開 overlay 補資料失敗時不擋主流程。
     leaveOverlayRecords = leaveRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
     overtimeOverlayRecords = overtimeRequestRecords.filter((record) => isEffectiveRequestStatus(record.status));
@@ -7889,6 +7893,9 @@ async function loadApp() {
     return;
   }
 
+  renderAll();
+  syncCoreActionsMenu();
+
   if (isManager()) {
     try {
       await syncRequestCatalogs();
@@ -7900,6 +7907,7 @@ async function loadApp() {
   try {
     await refreshRequestData();
     syncApprovedRequestsToSchedule();
+    renderTable();
   } catch (error) {
     setSaveStatus(`部分同步失敗：${error.message}`);
   }
@@ -7910,12 +7918,11 @@ async function loadApp() {
       await refreshRequestData();
       syncApprovedRequestsToSchedule();
       await forceSave();
+      renderTable();
     } catch (error) {
       setSaveStatus(`部分同步失敗：${error.message}`);
     }
   }
-  renderAll();
-  syncCoreActionsMenu();
 }
 
 loadApp();
