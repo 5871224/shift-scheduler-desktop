@@ -1451,7 +1451,21 @@ function serializeScheduleSlotForClipboard(slot) {
   };
 }
 
-function applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot) {
+async function clearManagerEntriesFromSlot(slot, options = {}) {
+  if (!slot) {
+    return;
+  }
+  const clearLeave = options.leave !== false;
+  const clearOvertime = options.overtime !== false;
+  if (clearLeave && slot.leaveRequestId) {
+    await deleteManagerScheduleEntry("leave", slot.leaveRequestId);
+  }
+  if (clearOvertime && slot.overtimeRequestId) {
+    await deleteManagerScheduleEntry("overtime", slot.overtimeRequestId);
+  }
+}
+
+async function applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot) {
   const member = state.members.find((item) => item.id === memberId);
   if (!member || !isMemberActiveOnDateString(member, dateString)) {
     return false;
@@ -1460,6 +1474,7 @@ function applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot) {
   if (!slot) {
     return false;
   }
+  await clearManagerEntriesFromSlot(slot);
   const nextShiftId = clipboardSlot?.shift || null;
   slot.shift = nextShiftId;
   slot.leave = clipboardSlot?.leave || null;
@@ -1479,7 +1494,7 @@ function applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot) {
   return true;
 }
 
-function clearScheduleCellEditableParts(memberId, dateString) {
+async function clearScheduleCellEditableParts(memberId, dateString) {
   return applyClipboardSlotToScheduleCell(memberId, dateString, {
     shift: null,
     leave: null,
@@ -1519,31 +1534,31 @@ function copyScheduleRangeToClipboard() {
   return true;
 }
 
-function clearSelectedScheduleCells() {
+async function clearSelectedScheduleCells() {
   const cells = getSelectedScheduleCells();
   if (!cells.length) {
     return false;
   }
   let changed = false;
-  cells.forEach((cell) => {
-    changed = clearScheduleCellEditableParts(cell.dataset.memberId || "", cell.dataset.date || "") || changed;
-  });
+  for (const cell of cells) {
+    changed = await clearScheduleCellEditableParts(cell.dataset.memberId || "", cell.dataset.date || "") || changed;
+  }
   if (changed) {
     finishScheduleGridMutation();
   }
   return changed;
 }
 
-function pasteScheduleClipboard() {
+async function pasteScheduleClipboard() {
   if (!scheduleClipboard || !scheduleRangeSelection) {
     return false;
   }
   if (scheduleClipboard.rows === 1 && scheduleClipboard.cols === 1) {
     const [clipboardSlot] = scheduleClipboard.matrix[0] || [];
     let changed = false;
-    getSelectedScheduleCells().forEach((cell) => {
-      changed = applyClipboardSlotToScheduleCell(cell.dataset.memberId || "", cell.dataset.date || "", clipboardSlot) || changed;
-    });
+    for (const cell of getSelectedScheduleCells()) {
+      changed = await applyClipboardSlotToScheduleCell(cell.dataset.memberId || "", cell.dataset.date || "", clipboardSlot) || changed;
+    }
     if (changed) {
       finishScheduleGridMutation();
     }
@@ -1558,7 +1573,7 @@ function pasteScheduleClipboard() {
       if (!(cell instanceof HTMLElement) || cell.classList.contains("inactive-cell") || !cell.dataset.memberId || !cell.dataset.date) {
         continue;
       }
-      changed = applyClipboardSlotToScheduleCell(cell.dataset.memberId, cell.dataset.date, scheduleClipboard.matrix[rowOffset][colOffset]) || changed;
+      changed = await applyClipboardSlotToScheduleCell(cell.dataset.memberId, cell.dataset.date, scheduleClipboard.matrix[rowOffset][colOffset]) || changed;
     }
   }
   if (changed) {
@@ -2161,7 +2176,7 @@ function clearSelectedChip() {
   return true;
 }
 
-function handleScheduleGridKeydown(event) {
+async function handleScheduleGridKeydown(event) {
   if (event.key === "Escape"
     && !document.querySelector("#modalRoot .modal-overlay")
     && !isTypingTarget(event.target)
@@ -2181,7 +2196,7 @@ function handleScheduleGridKeydown(event) {
   if (key === "delete" || key === "backspace") {
     event.preventDefault();
     rememberScheduleUndoSnapshot();
-    if (!clearSelectedScheduleCells()) {
+    if (!await clearSelectedScheduleCells()) {
       scheduleUndoSnapshot = null;
     }
     return;
@@ -2200,7 +2215,7 @@ function handleScheduleGridKeydown(event) {
       return;
     }
     rememberScheduleUndoSnapshot();
-    if (!clearSelectedScheduleCells()) {
+    if (!await clearSelectedScheduleCells()) {
       scheduleUndoSnapshot = null;
     }
     return;
@@ -2208,7 +2223,7 @@ function handleScheduleGridKeydown(event) {
   if (key === "v") {
     event.preventDefault();
     rememberScheduleUndoSnapshot();
-    if (!pasteScheduleClipboard()) {
+    if (!await pasteScheduleClipboard()) {
       scheduleUndoSnapshot = null;
     }
     return;

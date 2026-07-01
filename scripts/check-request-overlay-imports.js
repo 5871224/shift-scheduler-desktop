@@ -83,6 +83,14 @@ assert(
   "renderer should keep migrating legacy schedule leave/overtime into manager tables"
 );
 assert(
+  renderer.includes("async function clearManagerEntriesFromSlot(slot") &&
+    renderer.includes('await deleteManagerScheduleEntry("leave", slot.leaveRequestId);') &&
+    renderer.includes('await deleteManagerScheduleEntry("overtime", slot.overtimeRequestId);') &&
+    renderer.includes("async function clearSelectedScheduleCells()") &&
+    renderer.includes("async function pasteScheduleClipboard()"),
+  "keyboard delete and paste should remove manager leave/overtime rows before clearing cells"
+);
+assert(
   !renderer.includes("request-leave-") &&
     !renderer.includes("getAllowedLeaveRequestItems") &&
     !renderer.includes("getLeaveRequestCatalogId") &&
