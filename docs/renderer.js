@@ -3100,7 +3100,7 @@ function memberMatchesSelectedShift(member) {
 function memberLabel(member) {
   const selectedShiftClass = memberMatchesSelectedShift(member) ? "shift-eligible-member-name" : "";
   const payTypeLabel = member.payByDay ? '<span class="member-pay-type">PT</span>' : "";
-  return `<div class="member-main ${selectedShiftClass}">${escapeHtml(member.name)}${payTypeLabel}</div>`;
+  return `<span class="member-main ${selectedShiftClass}">${escapeHtml(member.name)}${payTypeLabel}</span>`;
 }
 
 function getMemberEightWeekStats(member) {
@@ -3290,6 +3290,21 @@ function renderShiftViewCell(members) {
   `;
 }
 
+function getScheduleSegmentTextLength(text) {
+  return Array.from(String(text || "").trim()).length;
+}
+
+function getScheduleSegmentSizeClass(segment, segmentCount) {
+  const textLength = getScheduleSegmentTextLength(segment.name);
+  if (segmentCount < 3 && textLength > 0 && textLength < 3) {
+    return "seg-label-large";
+  }
+  if (segmentCount < 3 && textLength === 3) {
+    return "seg-label-medium";
+  }
+  return "";
+}
+
 function renderCellInner(key, memberId = "", day = 0, slotOverride = null) {
   const cellState = slotOverride || state.schedule[key];
   if (!cellState) {
@@ -3350,14 +3365,15 @@ function renderCellInner(key, memberId = "", day = 0, slotOverride = null) {
   if (!segments.length) {
     return '<div class="cell-inner"></div>';
   }
-  return `<div class="cell-inner">${segments.map((segment) => (
+  const visibleSegments = segments.slice(0, 3);
+  return `<div class="cell-inner">${visibleSegments.map((segment) => (
     `<div class="seg ${segment.status === "pending" ? "seg-pending" : ""}" style="background-color:${segment.color};color:${segment.textColor || textColor(segment.color)}" ${
       segment.category === "leave" && shouldPromptLeaveDetail(segment, cellState.leaveMeta)
         ? `data-hover-schedule-detail="${memberId}:${day}:leave"`
         : segment.category === "overtime" && cellState.overtimeMeta
           ? `data-hover-schedule-detail="${memberId}:${day}:overtime"`
           : ""
-    }>${escapeHtml(segment.name)}</div>`
+    }><span class="seg-label ${getScheduleSegmentSizeClass(segment, visibleSegments.length)}">${escapeHtml(segment.name)}</span></div>`
   )).join("")}</div>`;
 }
 

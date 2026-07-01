@@ -943,16 +943,17 @@ thead th.stats-col {
 }
 
 .member-label {
-  display: flex;
-  flex-direction: column;
-  white-space: normal;
+  display: block;
+  white-space: nowrap;
 }
 
 .member-main {
+  display: inline-block;
   font-size: inherit;
   font-weight: 600;
   line-height: 1.35;
-  word-break: break-all;
+  word-break: keep-all;
+  white-space: nowrap;
 }
 
 .member-stats {
@@ -970,6 +971,7 @@ thead th.stats-col {
   font-size: 0.85em;
   line-height: 1;
   vertical-align: baseline;
+  white-space: nowrap;
 }
 
 .member-main.shift-eligible-member-name {
@@ -1074,8 +1076,26 @@ thead th.today,
   font-weight: 700;
   padding: 1px 2px;
   overflow: hidden;
-  word-break: break-all;
+  line-height: 1.05;
   position: relative;
+}
+
+.seg-label {
+  display: block;
+  width: 3em;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.seg-label-medium {
+  font-size: 1.1em;
+}
+
+.seg-label-large {
+  font-size: 1.2em;
 }
 
 .seg-pending {

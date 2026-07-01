@@ -107,9 +107,13 @@ assert(renderer.includes("function reorderScheduleTableMember"), "schedule table
 assert(renderer.includes("departmentId !== getMemberHomeDeptId(targetMember)"), "schedule table member reordering should reject cross-department drops");
 assert(renderer.includes("function getScheduleTableOrderInsertAfter"), "schedule table drops should reuse the visible insertion preview");
 assert(renderer.includes("schedule-order-insert-after"), "schedule table should track whether the preview line means insert after");
+assert(renderer.includes("segments.slice(0, 3)"), "schedule cells should render at most three visible segment layers");
+assert(renderer.includes("function getScheduleSegmentSizeClass"), "schedule cells should size short labels by layer count and text length");
 assert(styles.includes(".schedule-order-drag"), "schedule table reorder handles should have drag affordance");
 assert(!styles.includes(".schedule-order-drag {\n  cursor: grab;\n  position:"), "schedule table drag handles should not override sticky column positioning");
 assert(styles.includes(".schedule-order-drag.schedule-order-insert-before"), "schedule table preview should draw an insertion line before the target");
 assert(styles.includes(".schedule-order-drag.schedule-order-insert-after"), "schedule table preview should draw an insertion line after the target");
+assert(styles.includes(".seg-label") && styles.includes("width: 3em;"), "schedule segment labels should default to three Chinese-character width");
+assert(styles.includes(".seg-label-large"), "schedule segment labels should enlarge short text when there is room");
 
 console.log("schedule grid ops check ok");

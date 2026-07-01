@@ -47,6 +47,7 @@ assert(styles.includes(".settings-icon-btn"), "settings icon button styles shoul
 assert(styles.includes(".member-main") && styles.includes("font-size: inherit;"), "member name size should match the department text size");
 assert(renderer.includes('<span class="member-pay-type">PT</span>'), "daily-pay schedule members should show a PT label after their name");
 assert(styles.includes(".member-pay-type") && styles.includes("font-size: 0.85em;"), "daily-pay PT label should be smaller than the member name");
+assert(styles.includes(".member-pay-type") && styles.includes("white-space: nowrap;"), "daily-pay PT label should not wrap to a new line");
 assert(!styles.includes(".pay-daily-row .member-main"), "daily-pay schedule members should not use a highlighted name background");
 assert(styles.includes(".member-inline-list"), "department row should render inline member list");
 assert(styles.includes(".drag-preview-active"), "drag preview style should exist");
