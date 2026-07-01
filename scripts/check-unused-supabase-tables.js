@@ -8,9 +8,8 @@ const roots = [
 ];
 
 const bannedTables = [
-  "attendance_logs",
-  "clock_locations",
-  "manager_departments"
+  "manager_departments",
+  "schedule_documents"
 ];
 
 const exts = new Set([".js", ".ts", ".html"]);

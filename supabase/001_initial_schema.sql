@@ -1,8 +1,6 @@
 create extension if not exists pgcrypto;
 
 create type public.app_role as enum ('employee', 'manager');
-create type public.request_type as enum ('leave', 'overtime');
-create type public.request_status as enum ('pending', 'approved', 'rejected', 'cancelled');
 create type public.attendance_type as enum ('clock_in', 'clock_out');
 create type public.attendance_result as enum ('normal', 'late', 'early_leave', 'out_of_range', 'no_shift', 'invalid');
 
@@ -29,14 +27,6 @@ create table public.profiles (
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
-);
-
-create table public.manager_departments (
-  id uuid primary key default gen_random_uuid(),
-  manager_id uuid not null references public.profiles (id) on delete cascade,
-  department_id uuid not null references public.departments (id) on delete cascade,
-  created_at timestamptz not null default now(),
-  unique (manager_id, department_id)
 );
 
 create table public.member_departments (
@@ -132,11 +122,6 @@ create table public.leave_requests (
   start_time time,
   end_time time,
   reason text,
-  source text not null default 'employee' check (source in ('employee', 'manager')),
-  status public.request_status not null default 'pending',
-  approved_by uuid references public.profiles (id) on delete set null,
-  approved_at timestamptz,
-  manager_note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -147,11 +132,6 @@ create table public.overtime_requests (
   overtime_type_id uuid not null references public.overtime_types (id) on delete restrict,
   work_date date not null,
   reason text,
-  source text not null default 'employee' check (source in ('employee', 'manager')),
-  status public.request_status not null default 'pending',
-  approved_by uuid references public.profiles (id) on delete set null,
-  approved_at timestamptz,
-  manager_note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -185,14 +165,11 @@ create table public.attendance_logs (
 );
 
 create index idx_profiles_home_department_id on public.profiles (home_department_id);
-create index idx_manager_departments_manager_id on public.manager_departments (manager_id);
 create index idx_member_departments_member_id on public.member_departments (member_id);
 create index idx_shift_types_applicable_department_id on public.shift_types (applicable_department_id);
 create index idx_schedule_entries_member_date on public.schedule_entries (member_id, work_date);
 create index idx_leave_requests_member_id on public.leave_requests (member_id);
-create index idx_leave_requests_status on public.leave_requests (status);
 create index idx_overtime_requests_member_id on public.overtime_requests (member_id);
-create index idx_overtime_requests_status on public.overtime_requests (status);
 create index idx_attendance_logs_member_date on public.attendance_logs (member_id, work_date);
 
 create or replace function public.set_updated_at()
@@ -247,7 +224,6 @@ for each row execute function public.set_updated_at();
 
 alter table public.departments enable row level security;
 alter table public.profiles enable row level security;
-alter table public.manager_departments enable row level security;
 alter table public.member_departments enable row level security;
 alter table public.shift_types enable row level security;
 alter table public.leave_types enable row level security;
@@ -301,19 +277,6 @@ with check (id = auth.uid());
 
 create policy "managers_can_manage_profiles"
 on public.profiles
-for all
-to authenticated
-using (public.is_manager(auth.uid()))
-with check (public.is_manager(auth.uid()));
-
-create policy "authenticated_can_read_manager_departments"
-on public.manager_departments
-for select
-to authenticated
-using (true);
-
-create policy "managers_can_manage_manager_departments"
-on public.manager_departments
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
@@ -403,19 +366,6 @@ for select
 to authenticated
 using (true);
 
-create policy "employees_can_insert_own_leave_requests"
-on public.leave_requests
-for insert
-to authenticated
-with check (member_id = auth.uid());
-
-create policy "employees_can_update_own_leave_requests"
-on public.leave_requests
-for update
-to authenticated
-using (member_id = auth.uid())
-with check (member_id = auth.uid());
-
 create policy "managers_can_manage_leave_requests"
 on public.leave_requests
 for all
@@ -428,19 +378,6 @@ on public.overtime_requests
 for select
 to authenticated
 using (true);
-
-create policy "employees_can_insert_own_overtime_requests"
-on public.overtime_requests
-for insert
-to authenticated
-with check (member_id = auth.uid());
-
-create policy "employees_can_update_own_overtime_requests"
-on public.overtime_requests
-for update
-to authenticated
-using (member_id = auth.uid())
-with check (member_id = auth.uid());
 
 create policy "managers_can_manage_overtime_requests"
 on public.overtime_requests

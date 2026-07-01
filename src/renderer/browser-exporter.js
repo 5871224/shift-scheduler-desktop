@@ -553,19 +553,6 @@
 
   async function createLeaveSettingsWorkbook(payload) {
     const workbook = new ExcelJS.Workbook();
-    const requestSheet = workbook.addWorksheet("請假申請預覽");
-    requestSheet.addRow(["底色", "字色", "自動字色"]);
-    requestSheet.addRow([
-      payload.state?.requestStyles?.leave?.color || "",
-      payload.state?.requestStyles?.leave?.textColor || "",
-      payload.state?.requestStyles?.leave?.autoTextColor ? "是" : "否"
-    ]);
-    requestSheet.getRow(1).font = { bold: true };
-    requestSheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-    requestSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
-    requestSheet.columns = [{ width: 14 }, { width: 14 }, { width: 12 }];
-    applySheetBorder(requestSheet);
-
     const sheet = workbook.addWorksheet("假別設定");
     const headers = ["假別代碼", "名稱", "需填時間", "需填原因", "底色", "字色", "自動字色", "不顯示"];
     sheet.addRow(headers);
@@ -591,19 +578,6 @@
 
   async function createOvertimeSettingsWorkbook(payload) {
     const workbook = new ExcelJS.Workbook();
-    const requestSheet = workbook.addWorksheet("加班申請預覽");
-    requestSheet.addRow(["底色", "字色", "自動字色"]);
-    requestSheet.addRow([
-      payload.state?.requestStyles?.overtime?.color || "",
-      payload.state?.requestStyles?.overtime?.textColor || "",
-      payload.state?.requestStyles?.overtime?.autoTextColor ? "是" : "否"
-    ]);
-    requestSheet.getRow(1).font = { bold: true };
-    requestSheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-    requestSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3EBD8" } };
-    requestSheet.columns = [{ width: 14 }, { width: 14 }, { width: 12 }];
-    applySheetBorder(requestSheet);
-
     const sheet = workbook.addWorksheet("加班設定");
     const headers = ["名稱", "上班時間", "下班時間", "使用休息1", "休息1開始", "休息1結束", "使用休息2", "休息2開始", "休息2結束", "底色", "字色", "自動字色", "不顯示"];
     sheet.addRow(headers);
@@ -772,15 +746,7 @@
   async function parseLeaveSettingsWorkbook(arrayBuffer) {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);
-    const requestSheet = workbook.getWorksheet("請假申請預覽");
     const sheet = workbook.getWorksheet("假別設定") || workbook.worksheets[0];
-    const requestStyle = requestSheet?.rowCount >= 2
-      ? {
-        color: getCellDisplayValue(requestSheet.getRow(2).getCell(1)),
-        textColor: getCellDisplayValue(requestSheet.getRow(2).getCell(2)),
-        autoTextColor: normalizeImportedBoolean(getCellDisplayValue(requestSheet.getRow(2).getCell(3)))
-      }
-      : null;
     const items = [];
     if (sheet) {
       sheet.eachRow((row, rowNumber) => {
@@ -801,21 +767,13 @@
         items.push({ code, name, defaultAllDay, requireReason, color, textColor, autoTextColor, hiddenFromToolbar });
       });
     }
-    return { requestStyle, items };
+    return { items };
   }
 
   async function parseOvertimeSettingsWorkbook(arrayBuffer) {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);
-    const requestSheet = workbook.getWorksheet("加班申請預覽");
     const sheet = workbook.getWorksheet("加班設定") || workbook.worksheets[0];
-    const requestStyle = requestSheet?.rowCount >= 2
-      ? {
-        color: getCellDisplayValue(requestSheet.getRow(2).getCell(1)),
-        textColor: getCellDisplayValue(requestSheet.getRow(2).getCell(2)),
-        autoTextColor: normalizeImportedBoolean(getCellDisplayValue(requestSheet.getRow(2).getCell(3)))
-      }
-      : null;
     const items = [];
     if (sheet) {
       sheet.eachRow((row, rowNumber) => {
@@ -841,7 +799,7 @@
         items.push({ name, startTime, endTime, useRest1, rest1StartTime, rest1EndTime, useRest2, rest2StartTime, rest2EndTime, color, textColor, autoTextColor, hiddenFromToolbar });
       });
     }
-    return { requestStyle, items };
+    return { items };
   }
 
   async function workbookToBlob(workbook) {

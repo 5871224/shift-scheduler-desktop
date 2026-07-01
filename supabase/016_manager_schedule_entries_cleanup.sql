@@ -42,8 +42,6 @@ end $$;
 drop index if exists public.idx_leave_requests_status;
 drop index if exists public.idx_overtime_requests_status;
 
-drop table if exists public.attendance_logs;
-drop table if exists public.clock_locations;
 drop table if exists public.manager_departments;
 
 alter table public.leave_requests
@@ -204,5 +202,6 @@ $$;
 grant execute on function public.get_public_schedule_requests() to anon, authenticated;
 
 drop type if exists public.request_status;
+drop type if exists public.request_type;
 
 commit;

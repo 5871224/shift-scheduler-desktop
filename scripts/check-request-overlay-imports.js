@@ -6,7 +6,9 @@ const rootDir = path.resolve(__dirname, "..");
 const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
 const webApi = fs.readFileSync(path.join(rootDir, "src", "renderer", "web-api.js"), "utf8");
 const exporter = fs.readFileSync(path.join(rootDir, "src", "renderer", "browser-exporter.js"), "utf8");
+const initialSql = fs.readFileSync(path.join(rootDir, "supabase", "001_initial_schema.sql"), "utf8");
 const cleanupSql = fs.readFileSync(path.join(rootDir, "supabase", "016_manager_schedule_entries_cleanup.sql"), "utf8");
+const unusedSql = fs.readFileSync(path.join(rootDir, "supabase", "018_drop_unused_tables.sql"), "utf8");
 
 assert(
   !renderer.includes('data-open-leave-request="true"') &&
@@ -28,7 +30,9 @@ assert(
 );
 assert(
   renderer.includes("void refreshScheduleRequestsAfterInitialRender();") &&
-    renderer.includes("async function refreshScheduleRequestsAfterInitialRender()"),
+    renderer.includes("async function refreshScheduleRequestsAfterInitialRender()") &&
+    renderer.includes("syncManagerEntriesToSchedule();") &&
+    !renderer.includes("syncApprovedRequestsToSchedule"),
   "schedule should render before slower request sync runs"
 );
 assert(
@@ -79,6 +83,16 @@ assert(
   "renderer should keep migrating legacy schedule leave/overtime into manager tables"
 );
 assert(
+  !renderer.includes("request-leave-") &&
+    !renderer.includes("getAllowedLeaveRequestItems") &&
+    !renderer.includes("getLeaveRequestCatalogId") &&
+    !renderer.includes("getLeaveRequestDisplayName") &&
+    !renderer.includes("requestStyles") &&
+    !renderer.includes("請假申請") &&
+    !renderer.includes("加班申請"),
+  "renderer should not keep removed employee request catalog or wording"
+);
+assert(
   renderer.includes('data-export-departments="true"') && renderer.includes('data-import-departments="true"'),
   "department settings should expose export and import actions"
 );
@@ -109,6 +123,25 @@ assert(
   "browser exporter should support workbook round-trips for settings screens"
 );
 assert(
+  !exporter.includes("請假申請預覽") &&
+    !exporter.includes("加班申請預覽") &&
+    !exporter.includes("requestStyles") &&
+    !exporter.includes("requestStyle"),
+  "settings workbooks should not keep removed request preview sheets"
+);
+assert(
+  !initialSql.includes("request_status") &&
+    !initialSql.includes("request_type") &&
+    !initialSql.includes("approved_by") &&
+    !initialSql.includes("approved_at") &&
+    !initialSql.includes("manager_note") &&
+    !initialSql.includes("employees_can_insert_own_leave_requests") &&
+    !initialSql.includes("employees_can_insert_own_overtime_requests") &&
+    initialSql.includes("create table public.clock_locations") &&
+    initialSql.includes("create table public.attendance_logs"),
+  "initial schema should not recreate removed employee request approval fields"
+);
+assert(
   cleanupSql.includes("delete from public.leave_requests") &&
     cleanupSql.includes("delete from public.overtime_requests") &&
     cleanupSql.includes('drop policy if exists "employees_can_insert_own_leave_requests"') &&
@@ -122,14 +155,23 @@ assert(
     cleanupSql.includes("drop column if exists approved_by cascade") &&
     cleanupSql.includes("drop column if exists approved_at cascade") &&
     cleanupSql.includes("drop column if exists manager_note cascade") &&
-    cleanupSql.includes("drop table if exists public.attendance_logs") &&
-    cleanupSql.includes("drop table if exists public.clock_locations") &&
     cleanupSql.includes("drop table if exists public.manager_departments") &&
+    cleanupSql.includes("drop type if exists public.request_type") &&
+    !cleanupSql.includes("drop table if exists public.attendance_logs") &&
+    !cleanupSql.includes("drop table if exists public.clock_locations") &&
     !cleanupSql.includes("drop table if exists public.schedule_entries") &&
     !cleanupSql.includes("drop table if exists public.schedule_months") &&
     !cleanupSql.includes("drop table if exists public.shift_types") &&
     !cleanupSql.includes("drop table if exists public.member_departments"),
   "supabase migration should remove employee request and approval columns"
+);
+assert(
+  unusedSql.includes("drop table if exists public.manager_departments") &&
+    unusedSql.includes("drop table if exists public.schedule_documents") &&
+    unusedSql.includes("drop type if exists public.request_type") &&
+    !unusedSql.includes("drop table if exists public.attendance_logs") &&
+    !unusedSql.includes("drop table if exists public.clock_locations"),
+  "unused-table cleanup should keep attendance tables for the next feature"
 );
 assert(
   cleanupSql.includes("create or replace function public.enforce_single_effective_leave_request()") &&

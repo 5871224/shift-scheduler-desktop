@@ -467,6 +467,10 @@
       .map(([, row]) => row.id);
   }
 
+  function isLegacyRequestCatalogRow(row) {
+    return String(row?.scheduler_item_id || "").startsWith("catalog:");
+  }
+
   async function deleteRowsByForeignIds(table, column, ids) {
     const values = [...new Set((ids || []).map((value) => String(value || "").trim()).filter(Boolean))];
     if (!values.length) {
@@ -518,6 +522,7 @@
   function mapLeaveRows(rows = []) {
     return (rows || [])
       .filter((row) => row.scheduler_item_id)
+      .filter((row) => !isLegacyRequestCatalogRow(row))
       .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || String(a.code || "").localeCompare(String(b.code || "")))
       .map((row) => ({
         id: row.scheduler_item_id,
@@ -720,7 +725,7 @@
   }
 
   async function syncLeaveAndOvertimeCatalogs(state) {
-    const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code);
+    const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code && !String(item.id).startsWith("catalog:"));
     if (leaveItems.length) {
       await restInsert("leave_types", leaveItems.map((item, index) => ({
         scheduler_item_id: item.id,
@@ -906,7 +911,7 @@
         prefer: "resolution=merge-duplicates,return=minimal"
       });
     }
-    const keptLeaveIds = leaves.map((item) => item.id);
+    const keptLeaveIds = leaves.map((item) => item.id).filter((id) => !String(id).startsWith("catalog:"));
     const existingLeaveMap = await fetchRowsBySchedulerId("leave_types");
     await deleteRowsByForeignIds("leave_requests", "leave_type_id", getRemovedSchedulerRowIds(existingLeaveMap, keptLeaveIds));
     await deleteSchedulerRowsNotIn("leave_types", keptLeaveIds);
