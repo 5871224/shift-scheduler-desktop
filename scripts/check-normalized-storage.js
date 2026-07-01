@@ -19,6 +19,7 @@ assert(!webApi.includes('restSelect("schedule_documents"'), "loadState should no
 assert(webApi.includes('parts.slice(0, -3).join("_")'), "schedule key parser should keep member ids containing underscores");
 assert(webApi.includes('deleteRowsByForeignIds("leave_requests", "leave_type_id"'), "deleting leave settings should remove dependent manager leave rows");
 assert(webApi.includes('deleteRowsByForeignIds("overtime_requests", "overtime_type_id"'), "deleting overtime settings should remove dependent manager overtime rows");
+assert(!webApi.includes("requestLeaveCatalog"), "deleted leave settings should not be preserved by the removed request catalog");
 
 assert(migration.includes("create table if not exists public.scheduler_settings"), "migration should create scheduler_settings");
 assert(migration.includes("create table if not exists public.schedule_entries"), "migration should create schedule_entries");

@@ -30,9 +30,10 @@ assert(
   webApi.includes("async function getLeaveTypeByReference(payload = {})") &&
     webApi.includes("scheduler_item_id: `eq.${leaveItemId}`") &&
     webApi.includes("leaveItemId: leaveTypeMap.get(item.leave_type_id)?.scheduler_item_id || \"\"") &&
-    webApi.includes("const requestLeaveItems = (state.requestLeaveCatalog || [])") &&
+    webApi.includes("const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code);") &&
+    !webApi.includes("requestLeaveCatalog") &&
     webApi.includes("const leaveType = await getLeaveTypeByReference(payload);"),
-  "web api should resolve and return leave types by scheduler item id, including employee request catalog ids"
+  "web api should resolve leave types by scheduler item id without preserving deleted request catalog rows"
 );
 
 assert(

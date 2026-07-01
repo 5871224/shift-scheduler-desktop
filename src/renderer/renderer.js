@@ -5868,7 +5868,7 @@ async function syncRequestCatalogs() {
   if (!isManager()) {
     return;
   }
-  await window.schedulerApi.syncCatalogs({ ...state, requestLeaveCatalog: LEAVE_CATALOG });
+  await window.schedulerApi.syncCatalogs(state);
 }
 
 function formatMonthText(year, month) {

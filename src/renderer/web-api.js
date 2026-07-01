@@ -720,20 +720,9 @@
   }
 
   async function syncLeaveAndOvertimeCatalogs(state) {
-    const requestLeaveItems = (state.requestLeaveCatalog || [])
-      .filter((item) => item?.code && item?.name)
-      .map((item) => ({
-        id: `catalog:${item.code}`,
-        code: item.code,
-        name: item.name,
-        color: null,
-        defaultAllDay: false,
-        requireReason: false
-      }));
     const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code);
-    const allLeaveItems = [...requestLeaveItems, ...leaveItems];
-    if (allLeaveItems.length) {
-      await restInsert("leave_types", allLeaveItems.map((item, index) => ({
+    if (leaveItems.length) {
+      await restInsert("leave_types", leaveItems.map((item, index) => ({
         scheduler_item_id: item.id,
         code: item.code,
         name: item.name,
@@ -917,10 +906,7 @@
         prefer: "resolution=merge-duplicates,return=minimal"
       });
     }
-    const keptLeaveIds = [
-      ...leaves.map((item) => item.id),
-      ...(state.requestLeaveCatalog || []).map((item) => item?.id)
-    ];
+    const keptLeaveIds = leaves.map((item) => item.id);
     const existingLeaveMap = await fetchRowsBySchedulerId("leave_types");
     await deleteRowsByForeignIds("leave_requests", "leave_type_id", getRemovedSchedulerRowIds(existingLeaveMap, keptLeaveIds));
     await deleteSchedulerRowsNotIn("leave_types", keptLeaveIds);
