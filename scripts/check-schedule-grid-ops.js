@@ -93,6 +93,8 @@ assert(indexHtml.includes('<option value="member">人員檢視</option>'), "tabl
 assert(indexHtml.includes('<option value="member-stats">人員檢視-統計欄</option>'), "table view select should include member stats view");
 assert(indexHtml.includes('<option value="shift">班別檢視</option>'), "table view select should include shift view");
 assert(!indexHtml.includes("tableStatsSelect") && !renderer.includes("tableStatsSelect"), "stats visibility should be merged into table view select");
+assert(!renderer.includes("請假申請預覽") && !renderer.includes("加班申請預覽"), "leave/overtime settings should not render request preview cards");
+assert(!styles.includes(".request-style-settings-card"), "request preview card styles should be removed");
 assert(styles.includes(".table-sticky-header {\n  position: -webkit-sticky;\n  position: sticky;"), "date header should use mobile-safe sticky positioning");
 assert(styles.includes(".table-sticky-header-left {\n  position: -webkit-sticky;\n  position: sticky;\n  left: 0;"), "unit/person/stats header group should stay fixed at the left while horizontally scrolled");
 assert(styles.includes(".table-sticky-cell-person {\n  position: -webkit-sticky;\n  position: sticky;\n  left: var(--dept-col-width);"), "person header should stay sticky beside the department header");

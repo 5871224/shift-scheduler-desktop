@@ -2210,7 +2210,26 @@ function endScheduleRangeSelection() {
   scheduleDragSelecting = false;
 }
 
+function clearSelectedChip() {
+  if (!state.selected.type) {
+    return false;
+  }
+  state.selected = { type: null, id: null };
+  clearScheduleRangeSelection();
+  renderToolbar();
+  renderTable();
+  return true;
+}
+
 function handleScheduleGridKeydown(event) {
+  if (event.key === "Escape"
+    && !document.querySelector("#modalRoot .modal-overlay")
+    && !isTypingTarget(event.target)
+    && canEditSchedule()
+    && clearSelectedChip()) {
+    event.preventDefault();
+    return;
+  }
   if (document.querySelector("#modalRoot .modal-overlay")
     || isTypingTarget(event.target)
     || !canEditSchedule()
@@ -3080,7 +3099,8 @@ function memberMatchesSelectedShift(member) {
 
 function memberLabel(member) {
   const selectedShiftClass = memberMatchesSelectedShift(member) ? "shift-eligible-member-name" : "";
-  return `<div class="member-main ${selectedShiftClass}">${escapeHtml(member.name)}</div>`;
+  const payTypeLabel = member.payByDay ? '<span class="member-pay-type">PT</span>' : "";
+  return `<div class="member-main ${selectedShiftClass}">${escapeHtml(member.name)}${payTypeLabel}</div>`;
 }
 
 function getMemberEightWeekStats(member) {
@@ -3740,7 +3760,8 @@ function selectChip(type, id) {
   }
   clearScheduleRangeSelection();
   if (state.selected.type === type && state.selected.id === id) {
-    state.selected = { type: null, id: null };
+    clearSelectedChip();
+    return;
   } else {
     state.selected = { type, id };
   }
@@ -4079,23 +4100,6 @@ async function saveOvertimeAssignmentFromModal() {
   }
 }
 
-function renderRequestStyleSettingsCard(kind) {
-  const style = getRequestDisplayStyle(kind);
-  const titleText = kind === "leave" ? "請假申請預覽" : "加班申請預覽";
-  const previewText = kind === "leave" ? "假別" : "加班";
-  return `
-    <div class="result-item request-style-settings-card">
-      <div class="result-title request-style-settings-title">${titleText}</div>
-      <div class="request-style-settings-controls">
-        <div class="settings-table-preview request-style-settings-preview" style="background:${escapeHtml(style.color)};color:${escapeHtml(style.textColor)}">${escapeHtml(previewText)}</div>
-        <div class="settings-table-actions request-style-settings-actions">
-          ${renderActionIconButton("edit", `data-open-request-style="${kind}"`)}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 function openRequestStyleModal(kind) {
   const style = getRequestDisplayStyle(kind);
   modalColor = style.color;
@@ -4136,12 +4140,8 @@ function openListSettings(category) {
     overtime: "加班設定"
   };
   const list = getItemList(category);
-  const requestStyleCard = (category === "leave" || category === "overtime")
-    ? `${renderRequestStyleSettingsCard(category)}`
-    : "";
   const body = list.length
       ? `
-        ${requestStyleCard}
         <div class="settings-table-wrap">
           <div class="settings-table-scroll">
             <div class="settings-table">
@@ -4194,7 +4194,7 @@ function openListSettings(category) {
           </div>
         </div>
       `
-      : `${requestStyleCard || ""}<div class="empty-state">目前還沒有資料</div>`;
+      : '<div class="empty-state">目前還沒有資料</div>';
 
   openEntityListModal({
     title: titleMap[category],
