@@ -5473,7 +5473,9 @@ function collectLegacyScheduleRequestEntries() {
     if (!slot) {
       return;
     }
-    const [memberId, yearText, monthText, dayText] = key.split("_");
+    const keyParts = key.split("_");
+    const memberId = keyParts.slice(0, -3).join("_");
+    const [yearText, monthText, dayText] = keyParts.slice(-3);
     const year = Number(yearText);
     const month = Number(monthText);
     const day = Number(dayText);

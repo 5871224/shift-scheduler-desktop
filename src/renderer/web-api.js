@@ -427,14 +427,15 @@
     if (parts.length < 4) {
       return null;
     }
-    const year = Number(parts[1]);
-    const month = Number(parts[2]);
-    const day = Number(parts[3]);
-    if (!parts[0] || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    const memberId = parts.slice(0, -3).join("_");
+    const year = Number(parts[parts.length - 3]);
+    const month = Number(parts[parts.length - 2]);
+    const day = Number(parts[parts.length - 1]);
+    if (!memberId || !Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
       return null;
     }
     return {
-      memberId: parts[0],
+      memberId,
       workDate: `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
       year,
       month: month + 1

@@ -877,13 +877,21 @@ from (
       and payload is not null
     limit 1
   )
-  select make_date((key_parts)[2]::integer, (key_parts)[3]::integer + 1, (key_parts)[4]::integer) as work_date
+  select make_date(key_parts[part_count - 2]::integer, key_parts[part_count - 1]::integer + 1, key_parts[part_count]::integer) as work_date
   from (
-    select string_to_array(entry.key, '_') as key_parts
+    select
+      split.key_parts,
+      array_length(split.key_parts, 1) as part_count
     from legacy
     cross join lateral jsonb_each(coalesce(legacy.payload -> 'schedule', '{}'::jsonb)) as entry(key, value)
+    cross join lateral (
+      select string_to_array(entry.key, '_') as key_parts
+    ) split
   ) parsed
-  where array_length(key_parts, 1) >= 4
+  where part_count >= 4
+    and key_parts[part_count - 2] ~ '^[0-9]+$'
+    and key_parts[part_count - 1] ~ '^[0-9]+$'
+    and key_parts[part_count] ~ '^[0-9]+$'
 ) dates
 on conflict (year, month) do update
 set month_start_day = excluded.month_start_day;
@@ -899,18 +907,25 @@ schedule_source as (
   select
     entry.key,
     entry.value as data,
-    string_to_array(entry.key, '_') as key_parts
+    split.key_parts,
+    array_length(split.key_parts, 1) as part_count
   from legacy
   cross join lateral jsonb_each(coalesce(legacy.payload -> 'schedule', '{}'::jsonb)) as entry(key, value)
+  cross join lateral (
+    select string_to_array(entry.key, '_') as key_parts
+  ) split
 ),
 parsed as (
   select
     key,
     data,
-    key_parts[1] as scheduler_member_id,
-    make_date(key_parts[2]::integer, key_parts[3]::integer + 1, key_parts[4]::integer) as work_date
+    array_to_string(key_parts[1:part_count - 3], '_') as scheduler_member_id,
+    make_date(key_parts[part_count - 2]::integer, key_parts[part_count - 1]::integer + 1, key_parts[part_count]::integer) as work_date
   from schedule_source
-  where array_length(key_parts, 1) >= 4
+  where part_count >= 4
+    and key_parts[part_count - 2] ~ '^[0-9]+$'
+    and key_parts[part_count - 1] ~ '^[0-9]+$'
+    and key_parts[part_count] ~ '^[0-9]+$'
 )
 insert into public.schedule_entries (
   schedule_month_id,

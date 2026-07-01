@@ -16,12 +16,14 @@ assert(webApi.includes('restInsert("departments"'), "saveState should write depa
 assert(webApi.includes('restInsert("schedule_entries"'), "saveState should write schedule_entries table");
 assert(!webApi.includes('restInsert("schedule_documents"'), "saveState should not write schedule_documents JSON");
 assert(!webApi.includes('restSelect("schedule_documents"'), "loadState should not read schedule_documents JSON");
+assert(webApi.includes('parts.slice(0, -3).join("_")'), "schedule key parser should keep member ids containing underscores");
 
 assert(migration.includes("create table if not exists public.scheduler_settings"), "migration should create scheduler_settings");
 assert(migration.includes("create table if not exists public.schedule_entries"), "migration should create schedule_entries");
 assert(migration.includes("create table if not exists public.holidays"), "migration should create holidays");
 assert(migration.includes("drop constraint if exists profiles_id_fkey"), "profiles should store scheduler members without requiring auth users");
 assert(migration.includes("insert into public.profiles"), "migration should backfill legacy members into profiles");
+assert(migration.includes("array_to_string(key_parts[1:part_count - 3], '_')"), "migration should keep scheduler member ids containing underscores");
 assert(migration.includes("from public.schedule_documents"), "migration should backfill from legacy JSON once");
 
 console.log("normalized storage checks passed");
