@@ -594,7 +594,6 @@
         leaveRows,
         overtimeRows,
         holidayRows,
-        scheduleMonthRows,
         scheduleEntryRows
       ] = await Promise.all([
         restSelect("scheduler_settings", { select: "*", filters: { id: `eq.${documentId}` }, limit: "1", auth }),
@@ -605,7 +604,6 @@
         restSelect("leave_types", { select: "*", order: "sort_order.asc,code.asc", auth }),
         restSelect("overtime_types", { select: "*", order: "sort_order.asc,name.asc", auth }),
         restSelect("holidays", { select: "*", order: "sort_order.asc,holiday_date.asc", auth }),
-        restSelect("schedule_months", { select: "*", auth }),
         restSelect("schedule_entries", { select: "*", order: "work_date.asc", auth })
       ]);
 
@@ -661,7 +659,6 @@
         };
       });
       const memberByUuid = new Map(members.map((member) => [member.id, member]));
-      const scheduleMonthById = new Map((scheduleMonthRows || []).map((row) => [row.id, row]));
       const schedule = {};
       (scheduleEntryRows || []).forEach((row) => {
         const member = memberByUuid.get(row.member_id);
@@ -700,10 +697,6 @@
         };
       });
 
-      const currentMonth = scheduleMonthById.size
-        ? [...scheduleMonthById.values()].find((row) => row.year === settings.current_year && row.month === Number(settings.current_month || 0) + 1)
-        : null;
-
       return {
         year: Number(settings.current_year) || new Date().getFullYear(),
         month: clampInteger(settings.current_month, 0, 11, new Date().getMonth()),
@@ -722,7 +715,7 @@
         rules: {
           maxConsecutiveWorkDays: Math.max(1, Number(settings.max_consecutive_work_days) || 6),
           weekStart: clampInteger(settings.week_start, 0, 6, 0),
-          monthStartDay: clampInteger(currentMonth?.month_start_day ?? settings.month_start_day, 1, 31, 1),
+          monthStartDay: clampInteger(settings.month_start_day, 1, 31, 1),
           eightWeekStartDate: settings.eight_week_start_date || "",
           forbidProxyLeaveConflict: settings.forbid_proxy_leave_conflict !== false,
           requireEmploymentWindow: settings.require_employment_window !== false
@@ -1119,47 +1112,8 @@
       }
       scheduleEntries.push({ parsed, slot, profile });
     });
-    const monthRows = new Map();
-    monthRows.set(`${state.year}-${Number(state.month) + 1}`, {
-      year: Number(state.year) || new Date().getFullYear(),
-      month: Number(state.month) + 1
-    });
-    scheduleEntries.forEach(({ parsed }) => {
-      monthRows.set(`${parsed.year}-${parsed.month}`, {
-        year: parsed.year,
-        month: parsed.month
-      });
-    });
-    await restInsert("schedule_months", [...monthRows.values()].map((item) => ({
-      year: item.year,
-      month: item.month,
-      month_start_day: clampInteger(state.rules?.monthStartDay, 1, 31, 1),
-      name: `${item.year}-${String(item.month).padStart(2, "0")}`
-    })), {
-      auth: true,
-      onConflict: "year,month",
-      prefer: "resolution=merge-duplicates,return=minimal"
-    });
-    const scheduleMonths = await restSelect("schedule_months", {
-      select: "*",
-      auth: true
-    });
-    const scheduleMonthMap = new Map((scheduleMonths || []).map((row) => [`${row.year}-${row.month}`, row]));
-    const scheduleMonthIds = [...monthRows.keys()]
-      .map((key) => scheduleMonthMap.get(key)?.id)
-      .filter(Boolean);
-
-    if (scheduleMonthIds.length) {
-      await restDelete("schedule_entries", {
-        schedule_month_id: buildInFilter(scheduleMonthIds)
-      }, {
-        auth: true
-      });
-    }
     const scheduleRows = scheduleEntries.map(({ parsed, slot, profile }) => {
-      const scheduleMonth = scheduleMonthMap.get(`${parsed.year}-${parsed.month}`);
-      return scheduleMonth?.id ? {
-        schedule_month_id: scheduleMonth.id,
+      return {
         member_id: profile.id,
         work_date: parsed.workDate,
         shift_type_id: shiftMap.get(slot.shift)?.id || null,
@@ -1178,15 +1132,22 @@
         overtime_rest_2_start_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2StartTime) : null,
         overtime_rest_2_end_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2EndTime) : null,
         overtime_reason: slot.overtimeMeta?.reason || null
-      } : null;
+      };
     }).filter((row) => row && (row.shift_type_id || row.leave_type_id || row.overtime_type_id));
+    let savedScheduleRows = [];
     if (scheduleRows.length) {
-      await restInsert("schedule_entries", scheduleRows, {
+      savedScheduleRows = await restInsert("schedule_entries", scheduleRows, {
         auth: true,
-        onConflict: "schedule_month_id,member_id,work_date",
-        prefer: "resolution=merge-duplicates,return=minimal"
-      });
+        onConflict: "member_id,work_date",
+        prefer: "resolution=merge-duplicates,return=representation"
+      }) || [];
     }
+    const savedScheduleRowIds = savedScheduleRows.map((row) => row?.id).filter(Boolean);
+    await restDelete("schedule_entries", {
+      id: notInFilter(savedScheduleRowIds)
+    }, {
+      auth: true
+    });
 
     await syncLeaveAndOvertimeCatalogs(state);
     return { ok: true, savedAt: new Date().toISOString() };

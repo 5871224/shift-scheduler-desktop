@@ -178,6 +178,7 @@ assert(
 assert(
   unusedSql.includes("drop table if exists public.manager_departments") &&
     unusedSql.includes("drop table if exists public.schedule_documents") &&
+    unusedSql.includes("drop table if exists public.schedule_months cascade") &&
     unusedSql.includes("drop type if exists public.request_type") &&
     !unusedSql.includes("drop table if exists public.attendance_logs") &&
     !unusedSql.includes("drop table if exists public.clock_locations"),

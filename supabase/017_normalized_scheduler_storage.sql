@@ -294,47 +294,8 @@ alter table public.overtime_requests
   references public.overtime_types (id)
   on delete cascade;
 
-create table if not exists public.schedule_months (
-  id uuid primary key default gen_random_uuid(),
-  year integer not null,
-  month integer not null check (month between 1 and 12),
-  month_start_day integer not null default 1 check (month_start_day between 1 and 31),
-  name text,
-  is_locked boolean not null default false,
-  created_by uuid references public.profiles (id) on delete set null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (year, month)
-);
-
-alter table public.schedule_months enable row level security;
-
-drop policy if exists "anon_can_read_schedule_months" on public.schedule_months;
-drop policy if exists "authenticated_can_read_schedule_months" on public.schedule_months;
-drop policy if exists "managers_can_manage_schedule_months" on public.schedule_months;
-
-create policy "anon_can_read_schedule_months"
-on public.schedule_months
-for select
-to anon
-using (true);
-
-create policy "authenticated_can_read_schedule_months"
-on public.schedule_months
-for select
-to authenticated
-using (true);
-
-create policy "managers_can_manage_schedule_months"
-on public.schedule_months
-for all
-to authenticated
-using (public.is_manager(auth.uid()))
-with check (public.is_manager(auth.uid()));
-
 create table if not exists public.schedule_entries (
   id uuid primary key default gen_random_uuid(),
-  schedule_month_id uuid not null references public.schedule_months (id) on delete cascade,
   member_id uuid not null references public.profiles (id) on delete cascade,
   work_date date not null,
   support_department_id uuid references public.departments (id) on delete set null,
@@ -357,8 +318,40 @@ create table if not exists public.schedule_entries (
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (schedule_month_id, member_id, work_date)
+  unique (member_id, work_date)
 );
+
+alter table public.schedule_entries
+  drop constraint if exists schedule_entries_schedule_month_id_member_id_work_date_key,
+  drop column if exists schedule_month_id;
+
+drop table if exists public.schedule_months cascade;
+
+delete from public.schedule_entries se
+using (
+  select
+    id,
+    row_number() over (
+      partition by member_id, work_date
+      order by updated_at desc nulls last, created_at desc nulls last, id
+    ) as row_number
+  from public.schedule_entries
+) ranked
+where se.id = ranked.id
+  and ranked.row_number > 1;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.schedule_entries'::regclass
+      and conname = 'schedule_entries_member_id_work_date_key'
+  ) then
+    alter table public.schedule_entries
+      add constraint schedule_entries_member_id_work_date_key unique (member_id, work_date);
+  end if;
+end $$;
 
 alter table public.schedule_entries
   add column if not exists overtime_start_time time,
@@ -455,7 +448,6 @@ grant select on table
   public.shift_types,
   public.leave_types,
   public.overtime_types,
-  public.schedule_months,
   public.schedule_entries,
   public.holidays
 to anon;
@@ -468,7 +460,6 @@ grant select, insert, update, delete on table
   public.shift_types,
   public.leave_types,
   public.overtime_types,
-  public.schedule_months,
   public.schedule_entries,
   public.holidays
 to authenticated;
@@ -909,38 +900,6 @@ from member_department_ids
 on conflict (member_id, department_id) do update
 set sort_order = excluded.sort_order;
 
-insert into public.schedule_months (year, month, month_start_day)
-select distinct
-  extract(year from work_date)::integer as year,
-  extract(month from work_date)::integer as month,
-  coalesce((select month_start_day from public.scheduler_settings where id = 'default'), 1)
-from (
-  with legacy as (
-    select payload
-    from public.schedule_documents
-    where id = 'default'
-      and payload is not null
-    limit 1
-  )
-  select make_date(key_parts[part_count - 2]::integer, key_parts[part_count - 1]::integer + 1, key_parts[part_count]::integer) as work_date
-  from (
-    select
-      split.key_parts,
-      array_length(split.key_parts, 1) as part_count
-    from legacy
-    cross join lateral jsonb_each(coalesce(legacy.payload -> 'schedule', '{}'::jsonb)) as entry(key, value)
-    cross join lateral (
-      select string_to_array(entry.key, '_') as key_parts
-    ) split
-  ) parsed
-  where part_count >= 4
-    and key_parts[part_count - 2] ~ '^[0-9]+$'
-    and key_parts[part_count - 1] ~ '^[0-9]+$'
-    and key_parts[part_count] ~ '^[0-9]+$'
-) dates
-on conflict (year, month) do update
-set month_start_day = excluded.month_start_day;
-
 with legacy as (
   select payload
   from public.schedule_documents
@@ -973,7 +932,6 @@ parsed as (
     and key_parts[part_count] ~ '^[0-9]+$'
 )
 insert into public.schedule_entries (
-  schedule_month_id,
   member_id,
   work_date,
   shift_type_id,
@@ -994,7 +952,6 @@ insert into public.schedule_entries (
   overtime_reason
 )
 select
-  sm.id,
   p.id,
   parsed.work_date,
   st.id,
@@ -1014,9 +971,6 @@ select
   nullif(parsed.data #>> '{overtimeMeta,rest2EndTime}', '')::time,
   nullif(parsed.data #>> '{overtimeMeta,reason}', '')
 from parsed
-join public.schedule_months sm
-  on sm.year = extract(year from parsed.work_date)::integer
- and sm.month = extract(month from parsed.work_date)::integer
 join legacy
   on true
 join lateral (
@@ -1032,7 +986,7 @@ left join public.overtime_types ot on ot.scheduler_item_id = parsed.data ->> 'ov
 where st.id is not null
    or lt.id is not null
    or ot.id is not null
-on conflict (schedule_month_id, member_id, work_date) do update
+on conflict (member_id, work_date) do update
 set
   shift_type_id = excluded.shift_type_id,
   leave_type_id = excluded.leave_type_id,

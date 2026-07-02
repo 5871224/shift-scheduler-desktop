@@ -12,7 +12,7 @@
 - `leave_types`：假別設定。
 - `overtime_types`：加班設定。
 - `holidays`：假日設定。
-- `schedule_months` / `schedule_entries`：班表資料。
+- `schedule_entries`：班表資料，以人員 + 日期作為唯一格子。
 - `leave_requests`：主管設定請假資料。
 - `overtime_requests`：主管設定加班資料。
 - `clock_locations` / `attendance_logs`：保留給下一階段打卡功能。

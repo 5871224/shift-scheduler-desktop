@@ -90,22 +90,8 @@ create table public.overtime_types (
   unique (scheduler_item_id)
 );
 
-create table public.schedule_months (
-  id uuid primary key default gen_random_uuid(),
-  year integer not null,
-  month integer not null check (month between 1 and 12),
-  month_start_day integer not null default 1 check (month_start_day between 1 and 31),
-  name text,
-  is_locked boolean not null default false,
-  created_by uuid references public.profiles (id) on delete set null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (year, month)
-);
-
 create table public.schedule_entries (
   id uuid primary key default gen_random_uuid(),
-  schedule_month_id uuid not null references public.schedule_months (id) on delete cascade,
   member_id uuid not null references public.profiles (id) on delete cascade,
   work_date date not null,
   support_department_id uuid references public.departments (id) on delete set null,
@@ -119,7 +105,7 @@ create table public.schedule_entries (
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (schedule_month_id, member_id, work_date)
+  unique (member_id, work_date)
 );
 
 create table public.leave_requests (
@@ -212,10 +198,6 @@ create trigger set_updated_at_overtime_types
 before update on public.overtime_types
 for each row execute function public.set_updated_at();
 
-create trigger set_updated_at_schedule_months
-before update on public.schedule_months
-for each row execute function public.set_updated_at();
-
 create trigger set_updated_at_schedule_entries
 before update on public.schedule_entries
 for each row execute function public.set_updated_at();
@@ -238,7 +220,6 @@ alter table public.member_departments enable row level security;
 alter table public.shift_types enable row level security;
 alter table public.leave_types enable row level security;
 alter table public.overtime_types enable row level security;
-alter table public.schedule_months enable row level security;
 alter table public.schedule_entries enable row level security;
 alter table public.leave_requests enable row level security;
 alter table public.overtime_requests enable row level security;
@@ -339,19 +320,6 @@ using (true);
 
 create policy "managers_can_manage_overtime_types"
 on public.overtime_types
-for all
-to authenticated
-using (public.is_manager(auth.uid()))
-with check (public.is_manager(auth.uid()));
-
-create policy "authenticated_can_read_schedule_months"
-on public.schedule_months
-for select
-to authenticated
-using (true);
-
-create policy "managers_can_manage_schedule_months"
-on public.schedule_months
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
