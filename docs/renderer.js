@@ -3235,8 +3235,8 @@ function buildPersistedState() {
     }
     const nextSlot = {
       shift: slot.shift || null,
-      leave: slot.leaveRequestId ? null : (slot.leave || null),
-      overtime: slot.overtimeRequestId ? null : (slot.overtime || null)
+      leave: slot.leave || null,
+      overtime: slot.overtime || null
     };
     if (nextSlot.leave && slot.leaveMeta) {
       nextSlot.leaveMeta = {
@@ -6867,7 +6867,6 @@ async function refreshScheduleRequestsAfterInitialRender() {
 }
 
 loadApp();
-
 
 
 

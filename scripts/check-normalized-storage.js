@@ -19,6 +19,8 @@ assert(webApi.includes('restInsert("schedule_entries"'), "saveState should write
 assert(!webApi.includes('restSelect("schedule_months"') && !webApi.includes('restInsert("schedule_months"'), "web api should not use schedule_months");
 assert(!webApi.includes("schedule_month_id"), "web api should not depend on schedule_month_id");
 assert(webApi.includes('onConflict: "member_id,work_date"'), "schedule entries should upsert by member and work date");
+assert(webApi.includes("function makeScheduleEntryKey(memberId, workDate)"), "schedule entry cleanup should compare by member and work date");
+assert(!webApi.includes("savedScheduleRows"), "schedule entry cleanup should not depend on upsert return rows");
 assert(!webApi.includes('restInsert("schedule_documents"'), "saveState should not write schedule_documents JSON");
 assert(!webApi.includes('restSelect("schedule_documents"'), "loadState should not read schedule_documents JSON");
 assert(webApi.includes('parts.slice(0, -3).join("_")'), "schedule key parser should keep member ids containing underscores");
@@ -30,6 +32,7 @@ assert(webApi.includes("async function getOvertimeTypeByReference(payload = {})"
 assert(webApi.includes("scheduler_item_id: `eq.${overtimeItemId}`"), "manager overtime entries should use overtime item ids instead of name-only lookup");
 assert(!renderer.includes("merged.overtime = merged.overtime.length ? [merged.overtime[0]] : [];"), "overtime settings should keep every overtime type from storage");
 assert(renderer.includes("state.overtime.find((item) => item.id === record.overtimeItemId)"), "manager overtime overlays should resolve the matching overtime item id");
+assert(!renderer.includes("leave: slot.leaveRequestId ? null") && !renderer.includes("overtime: slot.overtimeRequestId ? null"), "merged manager leave and overtime should persist through schedule_entries");
 assert(webApi.includes("overtimeItemId: overtimeTypeMap.get(item.overtime_type_id)?.scheduler_item_id"), "manager overtime list should include scheduler overtime item ids");
 assert(!webApi.includes("requestLeaveCatalog"), "deleted leave settings should not be preserved by the removed request catalog");
 assert(webApi.includes("function isLegacyRequestCatalogRow(row)") && webApi.includes("!isLegacyRequestCatalogRow(row)"), "legacy catalog leave rows should not load as active leave settings");

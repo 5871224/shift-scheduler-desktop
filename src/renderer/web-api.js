@@ -442,6 +442,10 @@
     };
   }
 
+  function makeScheduleEntryKey(memberId, workDate) {
+    return `${memberId || ""}|${workDate || ""}`;
+  }
+
   async function deleteSchedulerRowsNotIn(table, schedulerIds) {
     await restDelete(table, {
       scheduler_item_id: notInFilter(schedulerIds)
@@ -1132,20 +1136,28 @@
         overtime_reason: slot.overtimeMeta?.reason || null
       };
     }).filter((row) => row && (row.shift_type_id || row.leave_type_id || row.overtime_type_id));
-    let savedScheduleRows = [];
     if (scheduleRows.length) {
-      savedScheduleRows = await restInsert("schedule_entries", scheduleRows, {
+      await restInsert("schedule_entries", scheduleRows, {
         auth: true,
         onConflict: "member_id,work_date",
-        prefer: "resolution=merge-duplicates,return=representation"
-      }) || [];
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
     }
-    const savedScheduleRowIds = savedScheduleRows.map((row) => row?.id).filter(Boolean);
-    await restDelete("schedule_entries", {
-      id: notInFilter(savedScheduleRowIds)
-    }, {
+    const savedScheduleKeys = new Set(scheduleRows.map((row) => makeScheduleEntryKey(row.member_id, row.work_date)));
+    const existingScheduleRows = await restSelect("schedule_entries", {
+      select: "id,member_id,work_date",
       auth: true
     });
+    const obsoleteScheduleRowIds = (existingScheduleRows || [])
+      .filter((row) => row?.id && !savedScheduleKeys.has(makeScheduleEntryKey(row.member_id, row.work_date)))
+      .map((row) => row.id);
+    if (obsoleteScheduleRowIds.length) {
+      await restDelete("schedule_entries", {
+        id: buildInFilter(obsoleteScheduleRowIds)
+      }, {
+        auth: true
+      });
+    }
 
     await syncLeaveAndOvertimeCatalogs(state);
     return { ok: true, savedAt: new Date().toISOString() };
