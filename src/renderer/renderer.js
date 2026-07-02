@@ -1,4 +1,4 @@
-﻿const COLORS = [
+const COLORS = [
   { hex: "#378ADD", label: "藍色" },
   { hex: "#185FA5", label: "深藍" },
   { hex: "#23395B", label: "海軍藍" },
@@ -737,10 +737,10 @@ function showInfoMessage(message) {
 function formatSchedulerError(error, fallback = "操作失敗") {
   const message = String(error?.message || error || "").trim();
   if (
-    message.includes("Could not find the 'end_time' column of 'overtime_requests'") ||
-    message.includes("Could not find the 'start_time' column of 'overtime_requests'")
+    message.includes("Could not find the 'overtime_end_time' column of 'schedule_entries'") ||
+    message.includes("Could not find the 'overtime_start_time' column of 'schedule_entries'")
   ) {
-    return "加班資料庫尚未套用新版欄位，請先執行 supabase/008_overtime_request_details.sql。";
+    return "加班資料庫尚未套用新版欄位，請先執行 supabase/022_rename_settings_and_merge_schedule_entries.sql。";
   }
   return message || fallback;
 }
@@ -6867,7 +6867,6 @@ async function refreshScheduleRequestsAfterInitialRender() {
 }
 
 loadApp();
-
 
 
 

@@ -4,7 +4,7 @@ create type public.app_role as enum ('employee', 'manager');
 create type public.attendance_type as enum ('clock_in', 'clock_out');
 create type public.attendance_result as enum ('normal', 'late', 'early_leave', 'out_of_range', 'no_shift', 'invalid');
 
-create table public.departments (
+create table public.set_departments (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name text not null,
@@ -12,12 +12,12 @@ create table public.departments (
   updated_at timestamptz not null default now()
 );
 
-create table public.profiles (
+create table public.set_employee (
   id uuid primary key references auth.users (id) on delete cascade,
   employee_code text not null unique,
   full_name text not null,
   role public.app_role not null default 'employee',
-  home_department_id uuid references public.departments (id) on delete set null,
+  home_department_id uuid references public.set_departments (id) on delete set null,
   position_name text,
   hire_date date,
   leave_date date,
@@ -29,19 +29,19 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
-create table public.member_departments (
+create table public.set_employee_departments (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references public.profiles (id) on delete cascade,
-  department_id uuid not null references public.departments (id) on delete cascade,
+  member_id uuid not null references public.set_employee (id) on delete cascade,
+  department_id uuid not null references public.set_departments (id) on delete cascade,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   unique (member_id, department_id)
 );
 
-create table public.shift_types (
+create table public.set_shift (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  applicable_department_id uuid references public.departments (id) on delete set null,
+  applicable_department_id uuid references public.set_departments (id) on delete set null,
   color text,
   start_time time not null,
   end_time time not null,
@@ -50,7 +50,7 @@ create table public.shift_types (
   updated_at timestamptz not null default now()
 );
 
-create table public.leave_types (
+create table public.set_leave (
   id uuid primary key default gen_random_uuid(),
   scheduler_item_id text,
   code text not null,
@@ -67,7 +67,7 @@ create table public.leave_types (
   unique (scheduler_item_id)
 );
 
-create table public.overtime_types (
+create table public.set_overtime (
   id uuid primary key default gen_random_uuid(),
   scheduler_item_id text,
   code text unique,
@@ -92,16 +92,16 @@ create table public.overtime_types (
 
 create table public.schedule_entries (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references public.profiles (id) on delete cascade,
+  member_id uuid not null references public.set_employee (id) on delete cascade,
   work_date date not null,
-  support_department_id uuid references public.departments (id) on delete set null,
-  shift_type_id uuid references public.shift_types (id) on delete set null,
-  leave_type_id uuid references public.leave_types (id) on delete set null,
+  support_department_id uuid references public.set_departments (id) on delete set null,
+  shift_type_id uuid references public.set_shift (id) on delete set null,
+  leave_type_id uuid references public.set_leave (id) on delete set null,
   leave_all_day boolean not null default true,
   leave_start_time time,
   leave_end_time time,
   leave_reason text,
-  overtime_type_id uuid references public.overtime_types (id) on delete set null,
+  overtime_type_id uuid references public.set_overtime (id) on delete set null,
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -110,8 +110,8 @@ create table public.schedule_entries (
 
 create table public.leave_requests (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references public.profiles (id) on delete cascade,
-  leave_type_id uuid not null references public.leave_types (id) on delete restrict,
+  member_id uuid not null references public.set_employee (id) on delete cascade,
+  leave_type_id uuid not null references public.set_leave (id) on delete restrict,
   start_date date not null,
   end_date date not null,
   is_all_day boolean not null default true,
@@ -124,8 +124,8 @@ create table public.leave_requests (
 
 create table public.overtime_requests (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references public.profiles (id) on delete cascade,
-  overtime_type_id uuid not null references public.overtime_types (id) on delete restrict,
+  member_id uuid not null references public.set_employee (id) on delete cascade,
+  overtime_type_id uuid not null references public.set_overtime (id) on delete restrict,
   work_date date not null,
   reason text,
   created_at timestamptz not null default now(),
@@ -134,7 +134,7 @@ create table public.overtime_requests (
 
 create table public.clock_locations (
   id uuid primary key default gen_random_uuid(),
-  department_id uuid references public.departments (id) on delete cascade,
+  department_id uuid references public.set_departments (id) on delete cascade,
   name text not null,
   latitude double precision not null,
   longitude double precision not null,
@@ -146,7 +146,7 @@ create table public.clock_locations (
 
 create table public.attendance_logs (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references public.profiles (id) on delete cascade,
+  member_id uuid not null references public.set_employee (id) on delete cascade,
   attendance_type public.attendance_type not null,
   work_date date not null,
   punched_at timestamptz not null,
@@ -160,9 +160,9 @@ create table public.attendance_logs (
   created_at timestamptz not null default now()
 );
 
-create index idx_profiles_home_department_id on public.profiles (home_department_id);
-create index idx_member_departments_member_id on public.member_departments (member_id);
-create index idx_shift_types_applicable_department_id on public.shift_types (applicable_department_id);
+create index idx_set_employee_home_department_id on public.set_employee (home_department_id);
+create index idx_set_employee_departments_member_id on public.set_employee_departments (member_id);
+create index idx_set_shift_applicable_department_id on public.set_shift (applicable_department_id);
 create index idx_schedule_entries_member_date on public.schedule_entries (member_id, work_date);
 create index idx_leave_requests_member_id on public.leave_requests (member_id);
 create index idx_overtime_requests_member_id on public.overtime_requests (member_id);
@@ -178,24 +178,24 @@ begin
 end;
 $$;
 
-create trigger set_updated_at_departments
-before update on public.departments
+create trigger set_updated_at_set_departments
+before update on public.set_departments
 for each row execute function public.set_updated_at();
 
-create trigger set_updated_at_profiles
-before update on public.profiles
+create trigger set_updated_at_set_employee
+before update on public.set_employee
 for each row execute function public.set_updated_at();
 
-create trigger set_updated_at_shift_types
-before update on public.shift_types
+create trigger set_updated_at_set_shift
+before update on public.set_shift
 for each row execute function public.set_updated_at();
 
-create trigger set_updated_at_leave_types
-before update on public.leave_types
+create trigger set_updated_at_set_leave
+before update on public.set_leave
 for each row execute function public.set_updated_at();
 
-create trigger set_updated_at_overtime_types
-before update on public.overtime_types
+create trigger set_updated_at_set_overtime
+before update on public.set_overtime
 for each row execute function public.set_updated_at();
 
 create trigger set_updated_at_schedule_entries
@@ -214,12 +214,12 @@ create trigger set_updated_at_clock_locations
 before update on public.clock_locations
 for each row execute function public.set_updated_at();
 
-alter table public.departments enable row level security;
-alter table public.profiles enable row level security;
-alter table public.member_departments enable row level security;
-alter table public.shift_types enable row level security;
-alter table public.leave_types enable row level security;
-alter table public.overtime_types enable row level security;
+alter table public.set_departments enable row level security;
+alter table public.set_employee enable row level security;
+alter table public.set_employee_departments enable row level security;
+alter table public.set_shift enable row level security;
+alter table public.set_leave enable row level security;
+alter table public.set_overtime enable row level security;
 alter table public.schedule_entries enable row level security;
 alter table public.leave_requests enable row level security;
 alter table public.overtime_requests enable row level security;
@@ -233,93 +233,93 @@ stable
 as $$
   select exists (
     select 1
-    from public.profiles
+    from public.set_employee
     where id = p_user_id
       and role = 'manager'
       and is_active = true
   );
 $$;
 
-create policy "authenticated_can_read_departments"
-on public.departments
+create policy "authenticated_can_read_set_departments"
+on public.set_departments
 for select
 to authenticated
 using (true);
 
-create policy "managers_can_manage_departments"
-on public.departments
+create policy "managers_can_manage_set_departments"
+on public.set_departments
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-create policy "users_can_read_profiles"
-on public.profiles
+create policy "users_can_read_set_employee"
+on public.set_employee
 for select
 to authenticated
 using (true);
 
 create policy "users_can_update_own_profile_basic_fields"
-on public.profiles
+on public.set_employee
 for update
 to authenticated
 using (id = auth.uid())
 with check (id = auth.uid());
 
-create policy "managers_can_manage_profiles"
-on public.profiles
+create policy "managers_can_manage_set_employee"
+on public.set_employee
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-create policy "authenticated_can_read_member_departments"
-on public.member_departments
+create policy "authenticated_can_read_set_employee_departments"
+on public.set_employee_departments
 for select
 to authenticated
 using (true);
 
-create policy "managers_can_manage_member_departments"
-on public.member_departments
+create policy "managers_can_manage_set_employee_departments"
+on public.set_employee_departments
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-create policy "authenticated_can_read_shift_types"
-on public.shift_types
+create policy "authenticated_can_read_set_shift"
+on public.set_shift
 for select
 to authenticated
 using (true);
 
-create policy "managers_can_manage_shift_types"
-on public.shift_types
+create policy "managers_can_manage_set_shift"
+on public.set_shift
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-create policy "authenticated_can_read_leave_types"
-on public.leave_types
+create policy "authenticated_can_read_set_leave"
+on public.set_leave
 for select
 to authenticated
 using (true);
 
-create policy "managers_can_manage_leave_types"
-on public.leave_types
+create policy "managers_can_manage_set_leave"
+on public.set_leave
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-create policy "authenticated_can_read_overtime_types"
-on public.overtime_types
+create policy "authenticated_can_read_set_overtime"
+on public.set_overtime
 for select
 to authenticated
 using (true);
 
-create policy "managers_can_manage_overtime_types"
-on public.overtime_types
+create policy "managers_can_manage_set_overtime"
+on public.set_overtime
 for all
 to authenticated
 using (public.is_manager(auth.uid()))

@@ -55,8 +55,8 @@ as $$
     null::time as rest_2_end_time,
     r.created_at
   from public.leave_requests r
-  join public.profiles p on p.id = r.member_id
-  join public.leave_types t on t.id = r.leave_type_id
+  join public.set_employee p on p.id = r.member_id
+  join public.set_leave t on t.id = r.leave_type_id
 
   union all
 
@@ -84,8 +84,8 @@ as $$
     r.rest_2_end_time,
     r.created_at
   from public.overtime_requests r
-  join public.profiles p on p.id = r.member_id
-  join public.overtime_types t on t.id = r.overtime_type_id
+  join public.set_employee p on p.id = r.member_id
+  join public.set_overtime t on t.id = r.overtime_type_id
   order by created_at desc;
 $$;
 

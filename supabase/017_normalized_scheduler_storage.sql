@@ -49,43 +49,43 @@ to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-drop policy if exists "anon_can_read_departments" on public.departments;
-drop policy if exists "anon_can_read_profiles" on public.profiles;
-drop policy if exists "anon_can_read_leave_types" on public.leave_types;
-drop policy if exists "anon_can_read_overtime_types" on public.overtime_types;
+drop policy if exists "anon_can_read_set_departments" on public.set_departments;
+drop policy if exists "anon_can_read_set_employee" on public.set_employee;
+drop policy if exists "anon_can_read_set_leave" on public.set_leave;
+drop policy if exists "anon_can_read_set_overtime" on public.set_overtime;
 
-create policy "anon_can_read_departments"
-on public.departments
+create policy "anon_can_read_set_departments"
+on public.set_departments
 for select
 to anon
 using (true);
 
-create policy "anon_can_read_profiles"
-on public.profiles
+create policy "anon_can_read_set_employee"
+on public.set_employee
 for select
 to anon
 using (true);
 
-create policy "anon_can_read_leave_types"
-on public.leave_types
+create policy "anon_can_read_set_leave"
+on public.set_leave
 for select
 to anon
 using (true);
 
-create policy "anon_can_read_overtime_types"
-on public.overtime_types
+create policy "anon_can_read_set_overtime"
+on public.set_overtime
 for select
 to anon
 using (true);
 
-alter table public.departments
+alter table public.set_departments
   add column if not exists scheduler_item_id text,
   add column if not exists start_date date,
   add column if not exists end_date date,
   add column if not exists hidden_from_leave boolean not null default false,
   add column if not exists sort_order integer not null default 0;
 
-update public.departments
+update public.set_departments
 set scheduler_item_id = code
 where scheduler_item_id is null;
 
@@ -94,73 +94,72 @@ begin
   if not exists (
     select 1
     from pg_constraint
-    where conrelid = 'public.departments'::regclass
-      and conname = 'departments_scheduler_item_id_key'
+    where conrelid = 'public.set_departments'::regclass
+      and conname = 'set_departments_scheduler_item_id_key'
   ) then
-    alter table public.departments
-      add constraint departments_scheduler_item_id_key unique (scheduler_item_id);
+    alter table public.set_departments
+      add constraint set_departments_scheduler_item_id_key unique (scheduler_item_id);
   end if;
 end $$;
 
-alter table public.profiles
+alter table public.set_employee
   add column if not exists fixed_rest_weekday integer not null default 0;
 
--- ponytail: 班表人員主檔不等於登入帳號；沒有 auth user 的員工也要能被排班。
-alter table public.profiles
-  drop constraint if exists profiles_id_fkey;
+-- ponytail: ?�表人員主�?不�??�登?�帳?��?沒�? auth user ?�員工�?要能被�??��?alter table public.set_employee
+  drop constraint if exists set_employee_id_fkey;
 
-alter table public.profiles
+alter table public.set_employee
   add column if not exists login_email text;
 
-alter table public.profiles
-  drop constraint if exists profiles_fixed_rest_weekday_check;
+alter table public.set_employee
+  drop constraint if exists set_employee_fixed_rest_weekday_check;
 
-alter table public.profiles
-  add constraint profiles_fixed_rest_weekday_check
+alter table public.set_employee
+  add constraint set_employee_fixed_rest_weekday_check
   check (fixed_rest_weekday between 0 and 6);
 
-create table if not exists public.member_departments (
+create table if not exists public.set_employee_departments (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references public.profiles (id) on delete cascade,
-  department_id uuid not null references public.departments (id) on delete cascade,
+  member_id uuid not null references public.set_employee (id) on delete cascade,
+  department_id uuid not null references public.set_departments (id) on delete cascade,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   unique (member_id, department_id)
 );
 
-create index if not exists idx_member_departments_member_id
-on public.member_departments (member_id);
+create index if not exists idx_set_employee_departments_member_id
+on public.set_employee_departments (member_id);
 
-alter table public.member_departments enable row level security;
+alter table public.set_employee_departments enable row level security;
 
-drop policy if exists "anon_can_read_member_departments" on public.member_departments;
-drop policy if exists "authenticated_can_read_member_departments" on public.member_departments;
-drop policy if exists "managers_can_manage_member_departments" on public.member_departments;
+drop policy if exists "anon_can_read_set_employee_departments" on public.set_employee_departments;
+drop policy if exists "authenticated_can_read_set_employee_departments" on public.set_employee_departments;
+drop policy if exists "managers_can_manage_set_employee_departments" on public.set_employee_departments;
 
-create policy "anon_can_read_member_departments"
-on public.member_departments
+create policy "anon_can_read_set_employee_departments"
+on public.set_employee_departments
 for select
 to anon
 using (true);
 
-create policy "authenticated_can_read_member_departments"
-on public.member_departments
+create policy "authenticated_can_read_set_employee_departments"
+on public.set_employee_departments
 for select
 to authenticated
 using (true);
 
-create policy "managers_can_manage_member_departments"
-on public.member_departments
+create policy "managers_can_manage_set_employee_departments"
+on public.set_employee_departments
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-create table if not exists public.shift_types (
+create table if not exists public.set_shift (
   id uuid primary key default gen_random_uuid(),
   scheduler_item_id text,
   name text not null,
-  applicable_department_id uuid references public.departments (id) on delete set null,
+  applicable_department_id uuid references public.set_departments (id) on delete set null,
   color text,
   text_color text,
   auto_text_color boolean not null default true,
@@ -173,14 +172,14 @@ create table if not exists public.shift_types (
   updated_at timestamptz not null default now()
 );
 
-alter table public.shift_types
+alter table public.set_shift
   add column if not exists scheduler_item_id text,
   add column if not exists text_color text,
   add column if not exists auto_text_color boolean not null default true,
   add column if not exists hidden_from_toolbar boolean not null default false,
   add column if not exists sort_order integer not null default 0;
 
-alter table public.shift_types
+alter table public.set_shift
   alter column start_time drop not null,
   alter column end_time drop not null;
 
@@ -189,66 +188,66 @@ begin
   if not exists (
     select 1
     from pg_constraint
-    where conrelid = 'public.shift_types'::regclass
-      and conname = 'shift_types_scheduler_item_id_key'
+    where conrelid = 'public.set_shift'::regclass
+      and conname = 'set_shift_scheduler_item_id_key'
   ) then
-    alter table public.shift_types
-      add constraint shift_types_scheduler_item_id_key unique (scheduler_item_id);
+    alter table public.set_shift
+      add constraint set_shift_scheduler_item_id_key unique (scheduler_item_id);
   end if;
 end $$;
 
-create index if not exists idx_shift_types_applicable_department_id
-on public.shift_types (applicable_department_id);
+create index if not exists idx_set_shift_applicable_department_id
+on public.set_shift (applicable_department_id);
 
-alter table public.shift_types enable row level security;
+alter table public.set_shift enable row level security;
 
-drop policy if exists "anon_can_read_shift_types" on public.shift_types;
-drop policy if exists "authenticated_can_read_shift_types" on public.shift_types;
-drop policy if exists "managers_can_manage_shift_types" on public.shift_types;
+drop policy if exists "anon_can_read_set_shift" on public.set_shift;
+drop policy if exists "authenticated_can_read_set_shift" on public.set_shift;
+drop policy if exists "managers_can_manage_set_shift" on public.set_shift;
 
-create policy "anon_can_read_shift_types"
-on public.shift_types
+create policy "anon_can_read_set_shift"
+on public.set_shift
 for select
 to anon
 using (true);
 
-create policy "authenticated_can_read_shift_types"
-on public.shift_types
+create policy "authenticated_can_read_set_shift"
+on public.set_shift
 for select
 to authenticated
 using (true);
 
-create policy "managers_can_manage_shift_types"
-on public.shift_types
+create policy "managers_can_manage_set_shift"
+on public.set_shift
 for all
 to authenticated
 using (public.is_manager(auth.uid()))
 with check (public.is_manager(auth.uid()));
 
-alter table public.leave_types
+alter table public.set_leave
   add column if not exists scheduler_item_id text,
   add column if not exists text_color text,
   add column if not exists auto_text_color boolean not null default true,
   add column if not exists hidden_from_toolbar boolean not null default false,
   add column if not exists sort_order integer not null default 0;
 
-update public.leave_types
+update public.set_leave
 set scheduler_item_id = concat('legacy:', id::text)
 where scheduler_item_id is null;
 
-alter table public.leave_types
-  drop constraint if exists leave_types_code_key;
+alter table public.set_leave
+  drop constraint if exists set_leave_code_key;
 
 do $$
 begin
   if not exists (
     select 1
     from pg_constraint
-    where conrelid = 'public.leave_types'::regclass
-      and conname = 'leave_types_scheduler_item_id_key'
+    where conrelid = 'public.set_leave'::regclass
+      and conname = 'set_leave_scheduler_item_id_key'
   ) then
-    alter table public.leave_types
-      add constraint leave_types_scheduler_item_id_key unique (scheduler_item_id);
+    alter table public.set_leave
+      add constraint set_leave_scheduler_item_id_key unique (scheduler_item_id);
   end if;
 end $$;
 
@@ -258,17 +257,17 @@ alter table public.leave_requests
 alter table public.leave_requests
   add constraint leave_requests_leave_type_id_fkey
   foreign key (leave_type_id)
-  references public.leave_types (id)
+  references public.set_leave (id)
   on delete cascade;
 
-alter table public.overtime_types
+alter table public.set_overtime
   add column if not exists scheduler_item_id text,
   add column if not exists text_color text,
   add column if not exists auto_text_color boolean not null default true,
   add column if not exists hidden_from_toolbar boolean not null default false,
   add column if not exists sort_order integer not null default 0;
 
-alter table public.overtime_types
+alter table public.set_overtime
   alter column start_time drop not null,
   alter column end_time drop not null;
 
@@ -277,11 +276,11 @@ begin
   if not exists (
     select 1
     from pg_constraint
-    where conrelid = 'public.overtime_types'::regclass
-      and conname = 'overtime_types_scheduler_item_id_key'
+    where conrelid = 'public.set_overtime'::regclass
+      and conname = 'set_overtime_scheduler_item_id_key'
   ) then
-    alter table public.overtime_types
-      add constraint overtime_types_scheduler_item_id_key unique (scheduler_item_id);
+    alter table public.set_overtime
+      add constraint set_overtime_scheduler_item_id_key unique (scheduler_item_id);
   end if;
 end $$;
 
@@ -291,21 +290,21 @@ alter table public.overtime_requests
 alter table public.overtime_requests
   add constraint overtime_requests_overtime_type_id_fkey
   foreign key (overtime_type_id)
-  references public.overtime_types (id)
+  references public.set_overtime (id)
   on delete cascade;
 
 create table if not exists public.schedule_entries (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references public.profiles (id) on delete cascade,
+  member_id uuid not null references public.set_employee (id) on delete cascade,
   work_date date not null,
-  support_department_id uuid references public.departments (id) on delete set null,
-  shift_type_id uuid references public.shift_types (id) on delete set null,
-  leave_type_id uuid references public.leave_types (id) on delete set null,
+  support_department_id uuid references public.set_departments (id) on delete set null,
+  shift_type_id uuid references public.set_shift (id) on delete set null,
+  leave_type_id uuid references public.set_leave (id) on delete set null,
   leave_all_day boolean not null default true,
   leave_start_time time,
   leave_end_time time,
   leave_reason text,
-  overtime_type_id uuid references public.overtime_types (id) on delete set null,
+  overtime_type_id uuid references public.set_overtime (id) on delete set null,
   overtime_start_time time,
   overtime_end_time time,
   overtime_use_rest_1 boolean not null default false,
@@ -442,24 +441,24 @@ with check (public.is_manager(auth.uid()));
 
 grant select on table
   public.scheduler_settings,
-  public.departments,
-  public.profiles,
-  public.member_departments,
-  public.shift_types,
-  public.leave_types,
-  public.overtime_types,
+  public.set_departments,
+  public.set_employee,
+  public.set_employee_departments,
+  public.set_shift,
+  public.set_leave,
+  public.set_overtime,
   public.schedule_entries,
   public.holidays
 to anon;
 
 grant select, insert, update, delete on table
   public.scheduler_settings,
-  public.departments,
-  public.profiles,
-  public.member_departments,
-  public.shift_types,
-  public.leave_types,
-  public.overtime_types,
+  public.set_departments,
+  public.set_employee,
+  public.set_employee_departments,
+  public.set_shift,
+  public.set_leave,
+  public.set_overtime,
   public.schedule_entries,
   public.holidays
 to authenticated;
@@ -471,14 +470,14 @@ with legacy as (
     and payload is not null
   limit 1
 ),
-source_departments as (
+source_set_departments as (
   select
     item.value as data,
     item.ordinality::integer as sort_order
   from legacy
-  cross join lateral jsonb_array_elements(coalesce(legacy.payload -> 'departments', '[]'::jsonb)) with ordinality as item(value, ordinality)
+  cross join lateral jsonb_array_elements(coalesce(legacy.payload -> 'set_departments', '[]'::jsonb)) with ordinality as item(value, ordinality)
 )
-insert into public.departments (
+insert into public.set_departments (
   scheduler_item_id,
   code,
   name,
@@ -490,12 +489,12 @@ insert into public.departments (
 select
   data ->> 'id',
   left(coalesce(nullif(data ->> 'id', ''), 'dept-' || sort_order::text), 64),
-  coalesce(nullif(data ->> 'name', ''), '單位 ' || sort_order::text),
+  coalesce(nullif(data ->> 'name', ''), '?��? ' || sort_order::text),
   nullif(data ->> 'startDate', '')::date,
   nullif(data ->> 'endDate', '')::date,
   coalesce((data ->> 'hiddenFromLeave')::boolean, false),
   sort_order
-from source_departments
+from source_set_departments
 where nullif(data ->> 'id', '') is not null
 on conflict (scheduler_item_id) do update
 set
@@ -574,7 +573,7 @@ source_leaves as (
   from legacy
   cross join lateral jsonb_array_elements(coalesce(legacy.payload -> 'leaves', '[]'::jsonb)) with ordinality as item(value, ordinality)
 )
-insert into public.leave_types (
+insert into public.set_leave (
   scheduler_item_id,
   code,
   name,
@@ -589,7 +588,7 @@ insert into public.leave_types (
 select
   data ->> 'id',
   coalesce(nullif(data ->> 'code', ''), data ->> 'id'),
-  coalesce(nullif(data ->> 'name', ''), '假別 ' || sort_order::text),
+  coalesce(nullif(data ->> 'name', ''), '?�別 ' || sort_order::text),
   data ->> 'color',
   data ->> 'textColor',
   coalesce((data ->> 'autoTextColor')::boolean, true),
@@ -623,7 +622,7 @@ source_overtime as (
   from legacy
   cross join lateral jsonb_array_elements(coalesce(legacy.payload -> 'overtime', '[]'::jsonb)) with ordinality as item(value, ordinality)
 )
-insert into public.overtime_types (
+insert into public.set_overtime (
   scheduler_item_id,
   name,
   color,
@@ -642,7 +641,7 @@ insert into public.overtime_types (
 )
 select
   data ->> 'id',
-  coalesce(nullif(data ->> 'name', ''), '加班'),
+  coalesce(nullif(data ->> 'name', ''), '?�班'),
   data ->> 'color',
   data ->> 'textColor',
   coalesce((data ->> 'autoTextColor')::boolean, true),
@@ -694,7 +693,7 @@ first_department as (
     coalesce(source_shifts.data #>> '{applicableDeptIds,0}', source_shifts.data ->> 'applicableDeptId') as scheduler_department_id
   from source_shifts
 )
-insert into public.shift_types (
+insert into public.set_shift (
   scheduler_item_id,
   name,
   applicable_department_id,
@@ -709,7 +708,7 @@ insert into public.shift_types (
 )
 select
   data ->> 'id',
-  coalesce(nullif(data ->> 'name', ''), '班別 ' || first_department.sort_order::text),
+  coalesce(nullif(data ->> 'name', ''), '?�別 ' || first_department.sort_order::text),
   d.id,
   data ->> 'color',
   data ->> 'textColor',
@@ -720,7 +719,7 @@ select
   greatest(0, coalesce((data ->> 'requiredStaffCount')::integer, 0)),
   first_department.sort_order
 from first_department
-left join public.departments d on d.scheduler_item_id = first_department.scheduler_department_id
+left join public.set_departments d on d.scheduler_item_id = first_department.scheduler_department_id
 where nullif(data ->> 'id', '') is not null
 on conflict (scheduler_item_id) do update
 set
@@ -756,7 +755,7 @@ insert into public.holidays (
 select
   data ->> 'id',
   nullif(data ->> 'date', '')::date,
-  coalesce(nullif(data ->> 'name', ''), '國定假日'),
+  coalesce(nullif(data ->> 'name', ''), '?��??�日'),
   sort_order
 from source_holidays
 where nullif(data ->> 'id', '') is not null
@@ -782,7 +781,7 @@ source_members as (
   where nullif(item.value ->> 'code', '') is not null
   order by item.value ->> 'code'
 )
-insert into public.profiles (
+insert into public.set_employee (
   id,
   employee_code,
   full_name,
@@ -814,13 +813,13 @@ select
   ),
   true
 from source_members
-left join public.departments d on d.scheduler_item_id = coalesce(
+left join public.set_departments d on d.scheduler_item_id = coalesce(
   source_members.data #>> '{scheduleDeptIds,0}',
   source_members.data ->> 'deptId'
 )
 where not exists (
   select 1
-  from public.profiles p
+  from public.set_employee p
   where p.employee_code = source_members.data ->> 'code'
 );
 
@@ -839,7 +838,7 @@ source_members as (
   where nullif(item.value ->> 'code', '') is not null
   order by item.value ->> 'code'
 )
-update public.profiles p
+update public.set_employee p
 set
   full_name = coalesce(nullif(source_members.data ->> 'name', ''), p.full_name),
   role = case when source_members.data ->> 'role' = 'manager' then 'manager'::public.app_role else 'employee'::public.app_role end,
@@ -858,13 +857,13 @@ set
     '{}'
   )
 from source_members
-left join public.departments d on d.scheduler_item_id = coalesce(
+left join public.set_departments d on d.scheduler_item_id = coalesce(
   source_members.data #>> '{scheduleDeptIds,0}',
   source_members.data ->> 'deptId'
 )
 where p.employee_code = source_members.data ->> 'code';
 
-delete from public.member_departments;
+delete from public.set_employee_departments;
 
 with legacy as (
   select payload
@@ -884,7 +883,7 @@ member_department_ids as (
     d.id as department_id,
     dept.ordinality::integer as sort_order
   from source_members
-  join public.profiles p on p.employee_code = source_members.data ->> 'code'
+  join public.set_employee p on p.employee_code = source_members.data ->> 'code'
   cross join lateral jsonb_array_elements_text(
     case
       when jsonb_array_length(coalesce(source_members.data -> 'scheduleDeptIds', '[]'::jsonb)) > 0
@@ -892,9 +891,9 @@ member_department_ids as (
       else jsonb_build_array(source_members.data ->> 'deptId')
     end
   ) with ordinality as dept(value, ordinality)
-  join public.departments d on d.scheduler_item_id = dept.value
+  join public.set_departments d on d.scheduler_item_id = dept.value
 )
-insert into public.member_departments (member_id, department_id, sort_order)
+insert into public.set_employee_departments (member_id, department_id, sort_order)
 select member_id, department_id, sort_order
 from member_department_ids
 on conflict (member_id, department_id) do update
@@ -979,10 +978,10 @@ join lateral (
   where member.value ->> 'id' = parsed.scheduler_member_id
   limit 1
 ) member_code on true
-join public.profiles p on p.employee_code = member_code.employee_code
-left join public.shift_types st on st.scheduler_item_id = parsed.data ->> 'shift'
-left join public.leave_types lt on lt.scheduler_item_id = parsed.data ->> 'leave'
-left join public.overtime_types ot on ot.scheduler_item_id = parsed.data ->> 'overtime'
+join public.set_employee p on p.employee_code = member_code.employee_code
+left join public.set_shift st on st.scheduler_item_id = parsed.data ->> 'shift'
+left join public.set_leave lt on lt.scheduler_item_id = parsed.data ->> 'leave'
+left join public.set_overtime ot on ot.scheduler_item_id = parsed.data ->> 'overtime'
 where st.id is not null
    or lt.id is not null
    or ot.id is not null

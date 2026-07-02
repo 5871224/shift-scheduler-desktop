@@ -25,8 +25,8 @@ assert(
 );
 assert(
     normalizedMigration.includes("fixed_rest_weekday") &&
-    normalizedMigration.includes("public.member_departments") &&
-    normalizedMigration.includes("public.shift_types") &&
+    normalizedMigration.includes("public.set_employee_departments") &&
+    normalizedMigration.includes("public.set_shift") &&
     normalizedMigration.includes("month_start_day") &&
     !normalizedMigration.includes("create table if not exists public.schedule_months"),
   "normalized migration should preserve auto schedule settings tables"

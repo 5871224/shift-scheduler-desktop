@@ -286,7 +286,7 @@
   }
 
   async function fetchProfile(userId) {
-    const rows = await restSelect("profiles", {
+    const rows = await restSelect("set_employee", {
       select: "*",
       filters: {
         id: `eq.${userId}`
@@ -369,7 +369,7 @@
           contentType: false
         });
       } catch {
-        // ponytail: logout失敗時仍直接清本機session，避免使用者卡住；若要更嚴謹可再補重試。
+        // ponytail: logout 失敗時仍直接清本機 session，避免使用者卡住；若要更嚴謹可再補重試。
       }
     }
     clearSession();
@@ -597,12 +597,12 @@
         scheduleEntryRows
       ] = await Promise.all([
         restSelect("scheduler_settings", { select: "*", filters: { id: `eq.${documentId}` }, limit: "1", auth }),
-        restSelect("departments", { select: "*", order: "sort_order.asc,name.asc", auth }),
-        restSelect("profiles", { select: "*", filters: { is_active: "eq.true" }, order: "employee_code.asc", auth }),
-        restSelect("member_departments", { select: "*", order: "sort_order.asc", auth }),
-        restSelect("shift_types", { select: "*", order: "sort_order.asc,name.asc", auth }),
-        restSelect("leave_types", { select: "*", order: "sort_order.asc,code.asc", auth }),
-        restSelect("overtime_types", { select: "*", order: "sort_order.asc,name.asc", auth }),
+        restSelect("set_departments", { select: "*", order: "sort_order.asc,name.asc", auth }),
+        restSelect("set_employee", { select: "*", filters: { is_active: "eq.true" }, order: "employee_code.asc", auth }),
+        restSelect("set_employee_departments", { select: "*", order: "sort_order.asc", auth }),
+        restSelect("set_shift", { select: "*", order: "sort_order.asc,name.asc", auth }),
+        restSelect("set_leave", { select: "*", order: "sort_order.asc,code.asc", auth }),
+        restSelect("set_overtime", { select: "*", order: "sort_order.asc,name.asc", auth }),
         restSelect("holidays", { select: "*", order: "sort_order.asc,holiday_date.asc", auth }),
         restSelect("schedule_entries", { select: "*", order: "work_date.asc", auth })
       ]);
@@ -733,7 +733,7 @@
   async function syncLeaveAndOvertimeCatalogs(state) {
     const leaveItems = (state.leaves || []).filter((item) => item?.id && item?.code && !String(item.id).startsWith("catalog:"));
     if (leaveItems.length) {
-      await restInsert("leave_types", leaveItems.map((item, index) => ({
+      await restInsert("set_leave", leaveItems.map((item, index) => ({
         scheduler_item_id: item.id,
         code: item.code,
         name: item.name,
@@ -753,7 +753,7 @@
 
     const overtimeItems = (state.overtime || []).filter((item) => item?.id && item?.name);
     if (overtimeItems.length) {
-      await restInsert("overtime_types", overtimeItems.map((item, index) => ({
+      await restInsert("set_overtime", overtimeItems.map((item, index) => ({
         scheduler_item_id: item.id,
         name: item.name,
         color: item.color || null,
@@ -807,7 +807,7 @@
   }
 
   async function getLeaveTypeByCode(code) {
-    const rows = await restSelect("leave_types", {
+    const rows = await restSelect("set_leave", {
       select: "id,code,name",
       order: "updated_at.desc,created_at.desc",
       limit: "1",
@@ -826,7 +826,7 @@
     const leaveItemId = String(payload.leaveItemId || "").trim();
     if (leaveItemId) {
       try {
-        const rows = await restSelect("leave_types", {
+        const rows = await restSelect("set_leave", {
           select: "id,code,name,scheduler_item_id",
           filters: {
             scheduler_item_id: `eq.${leaveItemId}`
@@ -850,7 +850,7 @@
     if (!members.length) {
       return new Map();
     }
-    let rows = await restSelect("profiles", {
+    let rows = await restSelect("set_employee", {
       select: "id,employee_code",
       filters: {
         employee_code: buildInFilter(members.map((member) => member.code))
@@ -863,7 +863,7 @@
         await syncMemberProfile(member, member.code);
       }
     }
-    rows = await restSelect("profiles", {
+    rows = await restSelect("set_employee", {
       select: "*",
       filters: {
         employee_code: buildInFilter(members.map((member) => member.code))
@@ -882,7 +882,7 @@
     const holidays = Array.isArray(state.holidays) ? state.holidays : [];
 
     if (departments.length) {
-      await restInsert("departments", departments.map((department, index) => ({
+      await restInsert("set_departments", departments.map((department, index) => ({
         scheduler_item_id: department.id,
         code: department.id,
         name: department.name || department.id,
@@ -896,11 +896,11 @@
         prefer: "resolution=merge-duplicates,return=minimal"
       });
     }
-    await deleteSchedulerRowsNotIn("departments", departments.map((department) => department.id));
-    const departmentMap = await fetchRowsBySchedulerId("departments");
+    await deleteSchedulerRowsNotIn("set_departments", departments.map((department) => department.id));
+    const departmentMap = await fetchRowsBySchedulerId("set_departments");
 
     if (leaves.length) {
-      await restInsert("leave_types", leaves.map((item, index) => ({
+      await restInsert("set_leave", leaves.map((item, index) => ({
         scheduler_item_id: item.id,
         code: item.code || item.id,
         name: item.name || item.code || item.id,
@@ -918,9 +918,8 @@
       });
     }
     const keptLeaveIds = leaves.map((item) => item.id).filter((id) => !String(id).startsWith("catalog:"));
-    const existingLeaveMap = await fetchRowsBySchedulerId("leave_types");
+    const existingLeaveMap = await fetchRowsBySchedulerId("set_leave");
     const removedLeaveRowIds = getRemovedSchedulerRowIds(existingLeaveMap, keptLeaveIds);
-    await deleteRowsByForeignIds("leave_requests", "leave_type_id", removedLeaveRowIds);
     await clearScheduleEntriesByForeignIds("leave_type_id", removedLeaveRowIds, {
       leave_type_id: null,
       leave_all_day: true,
@@ -928,11 +927,11 @@
       leave_end_time: null,
       leave_reason: null
     });
-    await deleteSchedulerRowsNotIn("leave_types", keptLeaveIds);
-    const leaveMap = await fetchRowsBySchedulerId("leave_types");
+    await deleteSchedulerRowsNotIn("set_leave", keptLeaveIds);
+    const leaveMap = await fetchRowsBySchedulerId("set_leave");
 
     if (overtime.length) {
-      await restInsert("overtime_types", overtime.map((item, index) => ({
+      await restInsert("set_overtime", overtime.map((item, index) => ({
         scheduler_item_id: item.id,
         name: item.name || "加班",
         color: item.color || null,
@@ -955,9 +954,8 @@
       });
     }
     const keptOvertimeIds = overtime.map((item) => item.id);
-    const existingOvertimeMap = await fetchRowsBySchedulerId("overtime_types");
+    const existingOvertimeMap = await fetchRowsBySchedulerId("set_overtime");
     const removedOvertimeRowIds = getRemovedSchedulerRowIds(existingOvertimeMap, keptOvertimeIds);
-    await deleteRowsByForeignIds("overtime_requests", "overtime_type_id", removedOvertimeRowIds);
     await clearScheduleEntriesByForeignIds("overtime_type_id", removedOvertimeRowIds, {
       overtime_type_id: null,
       overtime_start_time: null,
@@ -970,11 +968,11 @@
       overtime_rest_2_end_time: null,
       overtime_reason: null
     });
-    await deleteSchedulerRowsNotIn("overtime_types", keptOvertimeIds);
-    const overtimeMap = await fetchRowsBySchedulerId("overtime_types");
+    await deleteSchedulerRowsNotIn("set_overtime", keptOvertimeIds);
+    const overtimeMap = await fetchRowsBySchedulerId("set_overtime");
 
     if (shifts.length) {
-      await restInsert("shift_types", shifts.map((shift, index) => ({
+      await restInsert("set_shift", shifts.map((shift, index) => ({
         scheduler_item_id: shift.id,
         name: shift.name || shift.id,
         applicable_department_id: departmentMap.get(shift.applicableDeptIds?.[0])?.id || null,
@@ -992,8 +990,8 @@
         prefer: "resolution=merge-duplicates,return=minimal"
       });
     }
-    await deleteSchedulerRowsNotIn("shift_types", shifts.map((shift) => shift.id));
-    const shiftMap = await fetchRowsBySchedulerId("shift_types");
+    await deleteSchedulerRowsNotIn("set_shift", shifts.map((shift) => shift.id));
+    const shiftMap = await fetchRowsBySchedulerId("set_shift");
 
     if (holidays.length) {
       await restInsert("holidays", holidays
@@ -1001,7 +999,7 @@
         .map((holiday, index) => ({
           scheduler_item_id: holiday.id,
           holiday_date: nullableDate(holiday.date),
-          name: holiday.name || "國定假日",
+          name: holiday.name || "假日",
           sort_order: index
         })), {
         auth: true,
@@ -1014,7 +1012,7 @@
     const profileMap = await ensureMemberProfiles(state);
     const memberCodes = (state.members || []).map((member) => member.code).filter(Boolean);
     if (memberCodes.length) {
-      await restUpdate("profiles", {
+      await restUpdate("set_employee", {
         employee_code: `not.${buildInFilter(memberCodes)}`
       }, {
         is_active: false
@@ -1031,7 +1029,7 @@
       const scheduleDeptIds = Array.isArray(member.scheduleDeptIds) && member.scheduleDeptIds.length
         ? member.scheduleDeptIds
         : [member.deptId].filter(Boolean);
-      await restUpdate("profiles", {
+      await restUpdate("set_employee", {
         id: `eq.${profile.id}`
       }, {
         employee_code: member.code,
@@ -1051,7 +1049,7 @@
       });
     }
 
-    await restDelete("member_departments", { id: "not.is.null" }, { auth: true });
+    await restDelete("set_employee_departments", { id: "not.is.null" }, { auth: true });
     const memberDepartmentRows = [];
     (state.members || []).forEach((member) => {
       const profile = profileMap.get(member.code);
@@ -1070,7 +1068,7 @@
       });
     });
     if (memberDepartmentRows.length) {
-      await restInsert("member_departments", memberDepartmentRows, {
+      await restInsert("set_employee_departments", memberDepartmentRows, {
         auth: true,
         onConflict: "member_id,department_id",
         prefer: "resolution=merge-duplicates,return=minimal"
@@ -1159,7 +1157,7 @@
   }
 
   async function getOvertimeTypeByName(name) {
-    const rows = await restSelect("overtime_types", {
+    const rows = await restSelect("set_overtime", {
       select: "id,name",
       filters: {
         name: `eq.${name}`
@@ -1195,7 +1193,7 @@
   async function getOvertimeTypeByReference(payload = {}) {
     const overtimeItemId = String(payload.overtimeItemId || "").trim();
     if (overtimeItemId) {
-      let rows = await restSelect("overtime_types", {
+      let rows = await restSelect("set_overtime", {
         select: "id,name,scheduler_item_id",
         filters: {
           scheduler_item_id: `eq.${overtimeItemId}`
@@ -1206,12 +1204,12 @@
       if (rows?.length) {
         return rows[0];
       }
-      await restInsert("overtime_types", [buildOvertimeTypeRowFromPayload({ ...payload, overtimeItemId })], {
+      await restInsert("set_overtime", [buildOvertimeTypeRowFromPayload({ ...payload, overtimeItemId })], {
         auth: true,
         onConflict: "scheduler_item_id",
         prefer: "resolution=merge-duplicates,return=minimal"
       });
-      rows = await restSelect("overtime_types", {
+      rows = await restSelect("set_overtime", {
         select: "id,name,scheduler_item_id",
         filters: {
           scheduler_item_id: `eq.${overtimeItemId}`
@@ -1229,7 +1227,7 @@
   }
 
   async function getDefaultOvertimeType() {
-    const rows = await restSelect("overtime_types", {
+    const rows = await restSelect("set_overtime", {
       select: "id,name",
       order: "created_at.asc",
       limit: "1",
@@ -1250,7 +1248,7 @@
     if (!normalizedMemberCode) {
       throw new Error("找不到人員工號");
     }
-    const rows = await restSelect("profiles", {
+    const rows = await restSelect("set_employee", {
       select: "id,employee_code",
       filters: {
         employee_code: `eq.${normalizedMemberCode}`
@@ -1263,22 +1261,41 @@
     return rows[0].id;
   }
 
+  async function pruneEmptyScheduleEntry(rowOrId) {
+    const rowId = typeof rowOrId === "string" ? rowOrId : rowOrId?.id;
+    if (!rowId) {
+      return;
+    }
+    const rows = typeof rowOrId === "string"
+      ? await restSelect("schedule_entries", {
+        select: "id,shift_type_id,leave_type_id,overtime_type_id",
+        filters: { id: `eq.${rowId}` },
+        limit: "1",
+        auth: true
+      })
+      : [rowOrId];
+    const row = rows?.[0];
+    if (row && !row.shift_type_id && !row.leave_type_id && !row.overtime_type_id) {
+      await restDelete("schedule_entries", { id: `eq.${row.id}` }, { auth: true });
+    }
+  }
+
   async function createManagerLeaveRequest(payload) {
     ensureManager();
     const leaveType = await getLeaveTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    await restInsert("leave_requests", [{
+    await restInsert("schedule_entries", [{
       member_id: profileMemberId,
+      work_date: payload.startDate,
       leave_type_id: leaveType.id,
-      start_date: payload.startDate,
-      end_date: payload.endDate,
-      is_all_day: payload.isAllDay,
-      start_time: payload.isAllDay ? null : payload.startTime,
-      end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || ""
+      leave_all_day: payload.isAllDay,
+      leave_start_time: payload.isAllDay ? null : payload.startTime,
+      leave_end_time: payload.isAllDay ? null : payload.endTime,
+      leave_reason: payload.reason || ""
     }], {
       auth: true,
-      prefer: "return=minimal"
+      onConflict: "member_id,work_date",
+      prefer: "resolution=merge-duplicates,return=minimal"
     });
     return { ok: true };
   }
@@ -1287,17 +1304,16 @@
     ensureManager();
     const leaveType = await getLeaveTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    await restUpdate("leave_requests", {
+    await restUpdate("schedule_entries", {
       id: `eq.${payload.id}`
     }, {
       member_id: profileMemberId,
+      work_date: payload.startDate,
       leave_type_id: leaveType.id,
-      start_date: payload.startDate,
-      end_date: payload.endDate,
-      is_all_day: payload.isAllDay,
-      start_time: payload.isAllDay ? null : payload.startTime,
-      end_time: payload.isAllDay ? null : payload.endTime,
-      reason: payload.reason || ""
+      leave_all_day: payload.isAllDay,
+      leave_start_time: payload.isAllDay ? null : payload.startTime,
+      leave_end_time: payload.isAllDay ? null : payload.endTime,
+      leave_reason: payload.reason || ""
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -1307,11 +1323,19 @@
 
   async function deleteManagerLeaveRequest(requestId) {
     ensureManager();
-    await restDelete("leave_requests", {
+    const rows = await restUpdate("schedule_entries", {
       id: `eq.${requestId}`
     }, {
-      auth: true
+      leave_type_id: null,
+      leave_all_day: true,
+      leave_start_time: null,
+      leave_end_time: null,
+      leave_reason: null
+    }, {
+      auth: true,
+      prefer: "return=representation"
     });
+    await pruneEmptyScheduleEntry(rows?.[0] || requestId);
     return { ok: true };
   }
 
@@ -1319,22 +1343,23 @@
     ensureManager();
     const overtimeType = await getOvertimeTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    await restInsert("overtime_requests", [{
+    await restInsert("schedule_entries", [{
       member_id: profileMemberId,
-      overtime_type_id: overtimeType.id,
       work_date: payload.workDate,
-      start_time: payload.startTime || null,
-      end_time: payload.endTime || null,
-      use_rest_1: Boolean(payload.useRest1),
-      rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
-      rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
-      use_rest_2: Boolean(payload.useRest2),
-      rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
-      rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || ""
+      overtime_type_id: overtimeType.id,
+      overtime_start_time: payload.startTime || null,
+      overtime_end_time: payload.endTime || null,
+      overtime_use_rest_1: Boolean(payload.useRest1),
+      overtime_rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
+      overtime_rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
+      overtime_use_rest_2: Boolean(payload.useRest2),
+      overtime_rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
+      overtime_rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
+      overtime_reason: payload.reason || ""
     }], {
       auth: true,
-      prefer: "return=minimal"
+      onConflict: "member_id,work_date",
+      prefer: "resolution=merge-duplicates,return=minimal"
     });
     return { ok: true };
   }
@@ -1343,21 +1368,21 @@
     ensureManager();
     const overtimeType = await getOvertimeTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
-    await restUpdate("overtime_requests", {
+    await restUpdate("schedule_entries", {
       id: `eq.${payload.id}`
     }, {
       member_id: profileMemberId,
-      overtime_type_id: overtimeType.id,
       work_date: payload.workDate,
-      start_time: payload.startTime || null,
-      end_time: payload.endTime || null,
-      use_rest_1: Boolean(payload.useRest1),
-      rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
-      rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
-      use_rest_2: Boolean(payload.useRest2),
-      rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
-      rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
-      reason: payload.reason || ""
+      overtime_type_id: overtimeType.id,
+      overtime_start_time: payload.startTime || null,
+      overtime_end_time: payload.endTime || null,
+      overtime_use_rest_1: Boolean(payload.useRest1),
+      overtime_rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
+      overtime_rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
+      overtime_use_rest_2: Boolean(payload.useRest2),
+      overtime_rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
+      overtime_rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null,
+      overtime_reason: payload.reason || ""
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -1367,11 +1392,24 @@
 
   async function deleteManagerOvertimeRequest(requestId) {
     ensureManager();
-    await restDelete("overtime_requests", {
+    const rows = await restUpdate("schedule_entries", {
       id: `eq.${requestId}`
     }, {
-      auth: true
+      overtime_type_id: null,
+      overtime_start_time: null,
+      overtime_end_time: null,
+      overtime_use_rest_1: false,
+      overtime_rest_1_start_time: null,
+      overtime_rest_1_end_time: null,
+      overtime_use_rest_2: false,
+      overtime_rest_2_start_time: null,
+      overtime_rest_2_end_time: null,
+      overtime_reason: null
+    }, {
+      auth: true,
+      prefer: "return=representation"
     });
+    await pruneEmptyScheduleEntry(rows?.[0] || requestId);
     return { ok: true };
   }
 
@@ -1379,7 +1417,7 @@
     if (!ids.length) {
       return new Map();
     }
-    const rows = await restSelect("profiles", {
+    const rows = await restSelect("set_employee", {
       select: "id,employee_code,full_name,role",
       filters: {
         id: buildInFilter(ids)
@@ -1395,7 +1433,7 @@
     }
     let rows = [];
     try {
-      rows = await restSelect("leave_types", {
+      rows = await restSelect("set_leave", {
         select: "id,code,name,scheduler_item_id",
         filters: {
           id: buildInFilter(ids)
@@ -1406,7 +1444,7 @@
       if (!/scheduler_item_id/i.test(error.message || "")) {
         throw error;
       }
-      rows = await restSelect("leave_types", {
+      rows = await restSelect("set_leave", {
         select: "id,code,name",
         filters: {
           id: buildInFilter(ids)
@@ -1421,7 +1459,7 @@
     if (!ids.length) {
       return new Map();
     }
-    const rows = await restSelect("overtime_types", {
+    const rows = await restSelect("set_overtime", {
       select: "id,scheduler_item_id,name",
       filters: {
         id: buildInFilter(ids)
@@ -1433,14 +1471,14 @@
 
   async function listLeaveRequests(options = {}) {
     ensureSignedIn();
-    const filters = {};
+    const filters = { leave_type_id: "not.is.null" };
     if (!options.manager) {
       filters.member_id = `eq.${currentSession.user.id}`;
     }
-    const rows = await restSelect("leave_requests", {
+    const rows = await restSelect("schedule_entries", {
       select: "*",
       filters,
-      order: "created_at.desc",
+      order: "work_date.desc",
       auth: true
     });
 
@@ -1457,26 +1495,26 @@
       leaveItemId: leaveTypeMap.get(item.leave_type_id)?.scheduler_item_id || "",
       leaveCode: leaveTypeMap.get(item.leave_type_id)?.code || "",
       leaveName: leaveTypeMap.get(item.leave_type_id)?.name || "",
-      startDate: item.start_date,
-      endDate: item.end_date,
-      isAllDay: item.is_all_day !== false,
-      startTime: item.start_time || "",
-      endTime: item.end_time || "",
-      reason: item.reason || "",
+      startDate: item.work_date,
+      endDate: item.work_date,
+      isAllDay: item.leave_all_day !== false,
+      startTime: item.leave_start_time || "",
+      endTime: item.leave_end_time || "",
+      reason: item.leave_reason || "",
       createdAt: item.created_at
     }));
   }
 
   async function listOvertimeRequests(options = {}) {
     ensureSignedIn();
-    const filters = {};
+    const filters = { overtime_type_id: "not.is.null" };
     if (!options.manager) {
       filters.member_id = `eq.${currentSession.user.id}`;
     }
-    const rows = await restSelect("overtime_requests", {
+    const rows = await restSelect("schedule_entries", {
       select: "*",
       filters,
-      order: "created_at.desc",
+      order: "work_date.desc",
       auth: true
     });
 
@@ -1493,15 +1531,15 @@
       overtimeItemId: overtimeTypeMap.get(item.overtime_type_id)?.scheduler_item_id || "",
       overtimeName: overtimeTypeMap.get(item.overtime_type_id)?.name || "",
       workDate: item.work_date,
-      startTime: item.start_time || "",
-      endTime: item.end_time || "",
-      useRest1: Boolean(item.use_rest_1),
-      rest1StartTime: item.rest_1_start_time || "",
-      rest1EndTime: item.rest_1_end_time || "",
-      useRest2: Boolean(item.use_rest_2),
-      rest2StartTime: item.rest_2_start_time || "",
-      rest2EndTime: item.rest_2_end_time || "",
-      reason: item.reason || "",
+      startTime: item.overtime_start_time || "",
+      endTime: item.overtime_end_time || "",
+      useRest1: Boolean(item.overtime_use_rest_1),
+      rest1StartTime: item.overtime_rest_1_start_time || "",
+      rest1EndTime: item.overtime_rest_1_end_time || "",
+      useRest2: Boolean(item.overtime_use_rest_2),
+      rest2StartTime: item.overtime_rest_2_start_time || "",
+      rest2EndTime: item.overtime_rest_2_end_time || "",
+      reason: item.overtime_reason || "",
       createdAt: item.created_at
     }));
   }
@@ -1555,17 +1593,17 @@
 
   async function updateOvertimeRequestDetails(payload) {
     ensureManager();
-    await restUpdate("overtime_requests", {
+    await restUpdate("schedule_entries", {
       id: `eq.${payload.id}`
     }, {
-      start_time: payload.startTime || null,
-      end_time: payload.endTime || null,
-      use_rest_1: Boolean(payload.useRest1),
-      rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
-      rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
-      use_rest_2: Boolean(payload.useRest2),
-      rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
-      rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null
+      overtime_start_time: payload.startTime || null,
+      overtime_end_time: payload.endTime || null,
+      overtime_use_rest_1: Boolean(payload.useRest1),
+      overtime_rest_1_start_time: payload.useRest1 ? payload.rest1StartTime || null : null,
+      overtime_rest_1_end_time: payload.useRest1 ? payload.rest1EndTime || null : null,
+      overtime_use_rest_2: Boolean(payload.useRest2),
+      overtime_rest_2_start_time: payload.useRest2 ? payload.rest2StartTime || null : null,
+      overtime_rest_2_end_time: payload.useRest2 ? payload.rest2EndTime || null : null
     }, {
       auth: true,
       prefer: "return=minimal"
@@ -1581,7 +1619,7 @@
       [exporter.buildSapLeaveCsvContent(payload)],
       { type: "text/csv;charset=utf-8" }
     );
-    const fileName = makeFileName("sap休例假", payload, "csv");
+    const fileName = makeFileName("sap請假", payload, "csv");
     downloadBlob(blob, fileName);
     return { canceled: false, filePath: fileName };
   }

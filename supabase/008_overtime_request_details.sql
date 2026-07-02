@@ -18,5 +18,5 @@ set
   use_rest_2 = coalesce(r.use_rest_2, t.use_rest_2, false),
   rest_2_start_time = coalesce(r.rest_2_start_time, t.rest_2_start_time),
   rest_2_end_time = coalesce(r.rest_2_end_time, t.rest_2_end_time)
-from public.overtime_types as t
+from public.set_overtime as t
 where r.overtime_type_id = t.id;

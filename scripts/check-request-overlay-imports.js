@@ -9,6 +9,7 @@ const exporter = fs.readFileSync(path.join(rootDir, "src", "renderer", "browser-
 const initialSql = fs.readFileSync(path.join(rootDir, "supabase", "001_initial_schema.sql"), "utf8");
 const cleanupSql = fs.readFileSync(path.join(rootDir, "supabase", "016_manager_schedule_entries_cleanup.sql"), "utf8");
 const unusedSql = fs.readFileSync(path.join(rootDir, "supabase", "018_drop_unused_tables.sql"), "utf8");
+const mergeSql = fs.readFileSync(path.join(rootDir, "supabase", "022_rename_settings_and_merge_schedule_entries.sql"), "utf8");
 
 assert(
   !renderer.includes('data-open-leave-request="true"') &&
@@ -152,9 +153,7 @@ assert(
   "initial schema should not recreate removed employee request approval fields"
 );
 assert(
-  cleanupSql.includes("delete from public.leave_requests") &&
-    cleanupSql.includes("delete from public.overtime_requests") &&
-    cleanupSql.includes('drop policy if exists "employees_can_insert_own_leave_requests"') &&
+  cleanupSql.includes('drop policy if exists "employees_can_insert_own_leave_requests"') &&
     cleanupSql.includes('drop policy if exists "employees_can_update_own_leave_requests"') &&
     cleanupSql.includes('drop policy if exists "employees_can_delete_own_pending_leave_requests"') &&
     cleanupSql.includes('drop policy if exists "employees_can_insert_own_overtime_requests"') &&
@@ -165,14 +164,14 @@ assert(
     cleanupSql.includes("drop column if exists approved_by cascade") &&
     cleanupSql.includes("drop column if exists approved_at cascade") &&
     cleanupSql.includes("drop column if exists manager_note cascade") &&
-    cleanupSql.includes("drop table if exists public.manager_departments") &&
+    mergeSql.includes("drop table if exists public.leave_requests cascade") &&
+    mergeSql.includes("drop table if exists public.overtime_requests cascade") &&
     cleanupSql.includes("drop type if exists public.request_type") &&
     !cleanupSql.includes("drop table if exists public.attendance_logs") &&
     !cleanupSql.includes("drop table if exists public.clock_locations") &&
     !cleanupSql.includes("drop table if exists public.schedule_entries") &&
-    !cleanupSql.includes("drop table if exists public.schedule_months") &&
-    !cleanupSql.includes("drop table if exists public.shift_types") &&
-    !cleanupSql.includes("drop table if exists public.member_departments"),
+    !mergeSql.includes("drop table if exists public.set_shift") &&
+    !mergeSql.includes("drop table if exists public.set_employee_departments"),
   "supabase migration should remove employee request and approval columns"
 );
 assert(
@@ -185,11 +184,12 @@ assert(
   "unused-table cleanup should keep attendance tables for the next feature"
 );
 assert(
-  cleanupSql.includes("create or replace function public.enforce_single_effective_leave_request()") &&
-    cleanupSql.includes("create or replace function public.enforce_single_effective_overtime_request()") &&
-    !cleanupSql.includes("r.status in") &&
-    !cleanupSql.includes("returns table (\n  kind text,\n  request_id uuid,\n  member_code text,\n  member_name text,\n  leave_item_id text,\n  leave_code text,\n  leave_name text,\n  overtime_name text,\n  start_date date,\n  end_date date,\n  work_date date,\n  is_all_day boolean,\n  start_time time,\n  end_time time,\n  use_rest_1 boolean,\n  rest_1_start_time time,\n  rest_1_end_time time,\n  use_rest_2 boolean,\n  rest_2_start_time time,\n  rest_2_end_time time,\n  source text"),
-  "supabase duplicate guards and public RPC should not depend on approval status/source"
+  mergeSql.includes("from public.schedule_entries se") &&
+    mergeSql.includes("where se.leave_type_id is not null") &&
+    mergeSql.includes("where se.overtime_type_id is not null") &&
+    !mergeSql.includes("r.status in") &&
+    !mergeSql.includes("source text"),
+  "supabase public RPC should read merged schedule entries and not depend on approval status/source"
 );
 
 console.log("manager schedule entry cleanup and settings import/export checks passed");
