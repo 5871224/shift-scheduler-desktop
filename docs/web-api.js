@@ -1145,8 +1145,17 @@
       auth: true
     });
     const scheduleMonthMap = new Map((scheduleMonths || []).map((row) => [`${row.year}-${row.month}`, row]));
+    const scheduleMonthIds = [...monthRows.keys()]
+      .map((key) => scheduleMonthMap.get(key)?.id)
+      .filter(Boolean);
 
-    await restDelete("schedule_entries", { id: "not.is.null" }, { auth: true });
+    if (scheduleMonthIds.length) {
+      await restDelete("schedule_entries", {
+        schedule_month_id: buildInFilter(scheduleMonthIds)
+      }, {
+        auth: true
+      });
+    }
     const scheduleRows = scheduleEntries.map(({ parsed, slot, profile }) => {
       const scheduleMonth = scheduleMonthMap.get(`${parsed.year}-${parsed.month}`);
       return scheduleMonth?.id ? {

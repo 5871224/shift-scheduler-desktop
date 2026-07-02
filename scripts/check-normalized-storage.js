@@ -15,6 +15,8 @@ assert(webApi.includes('restSelect("overtime_types"'), "loadState should read ov
 assert(webApi.includes('restSelect("schedule_entries"'), "loadState should read schedule_entries table");
 assert(webApi.includes('restInsert("departments"'), "saveState should write departments table");
 assert(webApi.includes('restInsert("schedule_entries"'), "saveState should write schedule_entries table");
+assert(!webApi.includes('restDelete("schedule_entries", { id: "not.is.null" }'), "saveState should not delete every schedule entry globally");
+assert(webApi.includes("schedule_month_id: buildInFilter(scheduleMonthIds)"), "saveState should limit schedule entry replacement to synced months");
 assert(!webApi.includes('restInsert("schedule_documents"'), "saveState should not write schedule_documents JSON");
 assert(!webApi.includes('restSelect("schedule_documents"'), "loadState should not read schedule_documents JSON");
 assert(webApi.includes('parts.slice(0, -3).join("_")'), "schedule key parser should keep member ids containing underscores");

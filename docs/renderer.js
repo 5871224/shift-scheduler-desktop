@@ -3563,7 +3563,7 @@ async function applySelectionToCell(memberId, day) {
   }
   pruneEmptySchedule();
   renderTable();
-  queueSave();
+  await forceSave();
 }
 
 function selectChip(type, id) {
