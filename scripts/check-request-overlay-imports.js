@@ -62,7 +62,9 @@ assert(
     webApi.includes("async function deleteManagerLeaveRequest(requestId)") &&
     webApi.includes("async function createManagerOvertimeRequest(payload)") &&
     webApi.includes("async function updateManagerOvertimeRequest(payload)") &&
-    webApi.includes("async function deleteManagerOvertimeRequest(requestId)"),
+    webApi.includes("async function deleteManagerOvertimeRequest(requestId)") &&
+    webApi.includes("const overtimeType = await getOvertimeTypeByReference(payload);") &&
+    renderer.includes("overtimeItemId: overtime.id"),
   "web api should expose manager-side leave and overtime helpers"
 );
 assert(

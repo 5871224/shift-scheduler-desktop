@@ -19,6 +19,10 @@ assert(!webApi.includes('restSelect("schedule_documents"'), "loadState should no
 assert(webApi.includes('parts.slice(0, -3).join("_")'), "schedule key parser should keep member ids containing underscores");
 assert(webApi.includes('deleteRowsByForeignIds("leave_requests", "leave_type_id"'), "deleting leave settings should remove dependent manager leave rows");
 assert(webApi.includes('deleteRowsByForeignIds("overtime_requests", "overtime_type_id"'), "deleting overtime settings should remove dependent manager overtime rows");
+assert(webApi.includes('clearScheduleEntriesByForeignIds("leave_type_id"'), "deleting leave settings should clear schedule entry leave references before deleting leave types");
+assert(webApi.includes('clearScheduleEntriesByForeignIds("overtime_type_id"'), "deleting overtime settings should clear schedule entry overtime references before deleting overtime types");
+assert(webApi.includes("async function getOvertimeTypeByReference(payload = {})"), "manager overtime entries should resolve overtime_types by scheduler item id");
+assert(webApi.includes("scheduler_item_id: `eq.${overtimeItemId}`"), "manager overtime entries should use overtime item ids instead of name-only lookup");
 assert(!webApi.includes("requestLeaveCatalog"), "deleted leave settings should not be preserved by the removed request catalog");
 assert(webApi.includes("function isLegacyRequestCatalogRow(row)") && webApi.includes("!isLegacyRequestCatalogRow(row)"), "legacy catalog leave rows should not load as active leave settings");
 assert(webApi.includes("!String(id).startsWith(\"catalog:\")"), "legacy catalog leave ids should not be preserved during save");

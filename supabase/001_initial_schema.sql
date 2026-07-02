@@ -56,8 +56,12 @@ create table public.leave_types (
   code text not null,
   name text not null,
   color text,
+  text_color text,
+  auto_text_color boolean not null default true,
+  hidden_from_toolbar boolean not null default false,
   requires_time boolean not null default false,
   requires_reason boolean not null default false,
+  sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (scheduler_item_id)
@@ -65,19 +69,25 @@ create table public.leave_types (
 
 create table public.overtime_types (
   id uuid primary key default gen_random_uuid(),
+  scheduler_item_id text,
   code text unique,
   name text not null,
   color text,
-  start_time time not null,
-  end_time time not null,
+  text_color text,
+  auto_text_color boolean not null default true,
+  hidden_from_toolbar boolean not null default false,
+  start_time time,
+  end_time time,
   use_rest_1 boolean not null default false,
   rest_1_start_time time,
   rest_1_end_time time,
   use_rest_2 boolean not null default false,
   rest_2_start_time time,
   rest_2_end_time time,
+  sort_order integer not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (scheduler_item_id)
 );
 
 create table public.schedule_months (

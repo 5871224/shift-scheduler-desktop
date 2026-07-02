@@ -483,6 +483,19 @@
     });
   }
 
+  async function clearScheduleEntriesByForeignIds(column, ids, payload) {
+    const values = [...new Set((ids || []).map((value) => String(value || "").trim()).filter(Boolean))];
+    if (!values.length) {
+      return;
+    }
+    await restUpdate("schedule_entries", {
+      [column]: buildInFilter(values)
+    }, payload, {
+      auth: true,
+      prefer: "return=minimal"
+    });
+  }
+
   function getRowSchedulerId(row, fallbackPrefix) {
     return row.scheduler_item_id || `${fallbackPrefix}:${row.id}`;
   }
@@ -913,7 +926,15 @@
     }
     const keptLeaveIds = leaves.map((item) => item.id).filter((id) => !String(id).startsWith("catalog:"));
     const existingLeaveMap = await fetchRowsBySchedulerId("leave_types");
-    await deleteRowsByForeignIds("leave_requests", "leave_type_id", getRemovedSchedulerRowIds(existingLeaveMap, keptLeaveIds));
+    const removedLeaveRowIds = getRemovedSchedulerRowIds(existingLeaveMap, keptLeaveIds);
+    await deleteRowsByForeignIds("leave_requests", "leave_type_id", removedLeaveRowIds);
+    await clearScheduleEntriesByForeignIds("leave_type_id", removedLeaveRowIds, {
+      leave_type_id: null,
+      leave_all_day: true,
+      leave_start_time: null,
+      leave_end_time: null,
+      leave_reason: null
+    });
     await deleteSchedulerRowsNotIn("leave_types", keptLeaveIds);
     const leaveMap = await fetchRowsBySchedulerId("leave_types");
 
@@ -942,7 +963,20 @@
     }
     const keptOvertimeIds = overtime.map((item) => item.id);
     const existingOvertimeMap = await fetchRowsBySchedulerId("overtime_types");
-    await deleteRowsByForeignIds("overtime_requests", "overtime_type_id", getRemovedSchedulerRowIds(existingOvertimeMap, keptOvertimeIds));
+    const removedOvertimeRowIds = getRemovedSchedulerRowIds(existingOvertimeMap, keptOvertimeIds);
+    await deleteRowsByForeignIds("overtime_requests", "overtime_type_id", removedOvertimeRowIds);
+    await clearScheduleEntriesByForeignIds("overtime_type_id", removedOvertimeRowIds, {
+      overtime_type_id: null,
+      overtime_start_time: null,
+      overtime_end_time: null,
+      overtime_use_rest_1: false,
+      overtime_rest_1_start_time: null,
+      overtime_rest_1_end_time: null,
+      overtime_use_rest_2: false,
+      overtime_rest_2_start_time: null,
+      overtime_rest_2_end_time: null,
+      overtime_reason: null
+    });
     await deleteSchedulerRowsNotIn("overtime_types", keptOvertimeIds);
     const overtimeMap = await fetchRowsBySchedulerId("overtime_types");
 
@@ -1168,6 +1202,62 @@
     return rows[0];
   }
 
+  function buildOvertimeTypeRowFromPayload(payload = {}) {
+    return {
+      scheduler_item_id: payload.overtimeItemId || "o1",
+      name: payload.overtimeName || "加班",
+      color: payload.overtimeColor || null,
+      text_color: payload.overtimeTextColor || null,
+      auto_text_color: payload.overtimeAutoTextColor !== false,
+      hidden_from_toolbar: Boolean(payload.overtimeHiddenFromToolbar),
+      start_time: nullableTime(payload.defaultStartTime),
+      end_time: nullableTime(payload.defaultEndTime),
+      use_rest_1: Boolean(payload.defaultUseRest1),
+      rest_1_start_time: payload.defaultUseRest1 ? nullableTime(payload.defaultRest1StartTime) : null,
+      rest_1_end_time: payload.defaultUseRest1 ? nullableTime(payload.defaultRest1EndTime) : null,
+      use_rest_2: Boolean(payload.defaultUseRest2),
+      rest_2_start_time: payload.defaultUseRest2 ? nullableTime(payload.defaultRest2StartTime) : null,
+      rest_2_end_time: payload.defaultUseRest2 ? nullableTime(payload.defaultRest2EndTime) : null,
+      sort_order: 0
+    };
+  }
+
+  async function getOvertimeTypeByReference(payload = {}) {
+    const overtimeItemId = String(payload.overtimeItemId || "").trim();
+    if (overtimeItemId) {
+      let rows = await restSelect("overtime_types", {
+        select: "id,name,scheduler_item_id",
+        filters: {
+          scheduler_item_id: `eq.${overtimeItemId}`
+        },
+        limit: "1",
+        auth: true
+      });
+      if (rows?.length) {
+        return rows[0];
+      }
+      await restInsert("overtime_types", [buildOvertimeTypeRowFromPayload({ ...payload, overtimeItemId })], {
+        auth: true,
+        onConflict: "scheduler_item_id",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+      rows = await restSelect("overtime_types", {
+        select: "id,name,scheduler_item_id",
+        filters: {
+          scheduler_item_id: `eq.${overtimeItemId}`
+        },
+        limit: "1",
+        auth: true
+      });
+      if (rows?.length) {
+        return rows[0];
+      }
+    }
+    return payload.overtimeName
+      ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
+      : await getDefaultOvertimeType();
+  }
+
   async function getDefaultOvertimeType() {
     const rows = await restSelect("overtime_types", {
       select: "id,name",
@@ -1257,9 +1347,7 @@
 
   async function createManagerOvertimeRequest(payload) {
     ensureManager();
-    const overtimeType = payload.overtimeName
-      ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
-      : await getDefaultOvertimeType();
+    const overtimeType = await getOvertimeTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     await restInsert("overtime_requests", [{
       member_id: profileMemberId,
@@ -1283,9 +1371,7 @@
 
   async function updateManagerOvertimeRequest(payload) {
     ensureManager();
-    const overtimeType = payload.overtimeName
-      ? await getOvertimeTypeByName(payload.overtimeName).catch(() => getDefaultOvertimeType())
-      : await getDefaultOvertimeType();
+    const overtimeType = await getOvertimeTypeByReference(payload);
     const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
     await restUpdate("overtime_requests", {
       id: `eq.${payload.id}`
