@@ -135,6 +135,19 @@
     return text ? JSON.parse(text) : null;
   }
 
+  function isMissingSchemaError(error, pattern) {
+    const message = String(error?.message || "");
+    return /schema cache|does not exist|Could not find/i.test(message) && pattern.test(message);
+  }
+
+  function isMissingScheduleMonthsError(error) {
+    return isMissingSchemaError(error, /schedule_months/i);
+  }
+
+  function isMissingScheduleMonthIdError(error) {
+    return isMissingSchemaError(error, /schedule_month_id/i);
+  }
+
   async function requestFunction(functionName, payload) {
     const response = await fetch(`${baseUrl}/functions/v1/${functionName}`, {
       method: "POST",
@@ -256,6 +269,17 @@
         body: JSON.stringify(payload || {})
       }
     );
+  }
+
+  async function loadScheduleMonthsIfAvailable(auth) {
+    try {
+      return await restSelect("schedule_months", { select: "*", auth });
+    } catch (error) {
+      if (isMissingScheduleMonthsError(error)) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   function ensureSignedIn() {
@@ -571,7 +595,7 @@
         restSelect("leave_types", { select: "*", order: "sort_order.asc,code.asc", auth }),
         restSelect("overtime_types", { select: "*", order: "sort_order.asc,name.asc", auth }),
         restSelect("holidays", { select: "*", order: "sort_order.asc,holiday_date.asc", auth }),
-        restSelect("schedule_months", { select: "*", auth }),
+        loadScheduleMonthsIfAvailable(auth),
         restSelect("schedule_entries", { select: "*", order: "work_date.asc", auth })
       ]);
 
@@ -697,7 +721,7 @@
       };
     } catch (error) {
       if (!currentSession?.access_token && /permission denied|42501|401|403/i.test(error.message || "")) {
-        throw new Error("未登入時無法讀取正式班表，請檢查正規化資料表的匿名讀取權限");
+        throw new Error("請先登入後再載入班表");
       }
       throw error;
     }
@@ -1080,27 +1104,55 @@
         month: parsed.month
       });
     });
-    await restInsert("schedule_months", [...monthRows.values()].map((item) => ({
-      year: item.year,
-      month: item.month,
-      month_start_day: clampInteger(state.rules?.monthStartDay, 1, 31, 1),
-      name: `${item.year}-${String(item.month).padStart(2, "0")}`
-    })), {
-      auth: true,
-      onConflict: "year,month",
-      prefer: "resolution=merge-duplicates,return=minimal"
-    });
-    const scheduleMonths = await restSelect("schedule_months", {
-      select: "*",
-      auth: true
-    });
-    const scheduleMonthMap = new Map((scheduleMonths || []).map((row) => [`${row.year}-${row.month}`, row]));
-
     await restDelete("schedule_entries", { id: "not.is.null" }, { auth: true });
-    const scheduleRows = scheduleEntries.map(({ parsed, slot, profile }) => {
-      const scheduleMonth = scheduleMonthMap.get(`${parsed.year}-${parsed.month}`);
-      return scheduleMonth?.id ? {
-        schedule_month_id: scheduleMonth.id,
+
+    let scheduleRows;
+    try {
+      await restInsert("schedule_months", [...monthRows.values()].map((item) => ({
+        year: item.year,
+        month: item.month,
+        month_start_day: clampInteger(state.rules?.monthStartDay, 1, 31, 1),
+        name: `${item.year}-${String(item.month).padStart(2, "0")}`
+      })), {
+        auth: true,
+        onConflict: "year,month",
+        prefer: "resolution=merge-duplicates,return=minimal"
+      });
+      const scheduleMonths = await restSelect("schedule_months", {
+        select: "*",
+        auth: true
+      });
+      const scheduleMonthMap = new Map((scheduleMonths || []).map((row) => [`${row.year}-${row.month}`, row]));
+
+      scheduleRows = scheduleEntries.map(({ parsed, slot, profile }) => {
+        const scheduleMonth = scheduleMonthMap.get(`${parsed.year}-${parsed.month}`);
+        return scheduleMonth?.id ? {
+          schedule_month_id: scheduleMonth.id,
+          member_id: profile.id,
+          work_date: parsed.workDate,
+          shift_type_id: shiftMap.get(slot.shift)?.id || null,
+          leave_type_id: leaveMap.get(slot.leave)?.id || null,
+          leave_all_day: slot.leaveMeta?.allDay !== false,
+          leave_start_time: slot.leaveMeta?.allDay === false ? nullableTime(slot.leaveMeta?.startTime) : null,
+          leave_end_time: slot.leaveMeta?.allDay === false ? nullableTime(slot.leaveMeta?.endTime) : null,
+          leave_reason: slot.leaveMeta?.reason || null,
+          overtime_type_id: overtimeMap.get(slot.overtime)?.id || null,
+          overtime_start_time: nullableTime(slot.overtimeMeta?.startTime),
+          overtime_end_time: nullableTime(slot.overtimeMeta?.endTime),
+          overtime_use_rest_1: Boolean(slot.overtimeMeta?.useRest1),
+          overtime_rest_1_start_time: slot.overtimeMeta?.useRest1 ? nullableTime(slot.overtimeMeta?.rest1StartTime) : null,
+          overtime_rest_1_end_time: slot.overtimeMeta?.useRest1 ? nullableTime(slot.overtimeMeta?.rest1EndTime) : null,
+          overtime_use_rest_2: Boolean(slot.overtimeMeta?.useRest2),
+          overtime_rest_2_start_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2StartTime) : null,
+          overtime_rest_2_end_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2EndTime) : null,
+          overtime_reason: slot.overtimeMeta?.reason || null
+        } : null;
+      }).filter((row) => row && (row.shift_type_id || row.leave_type_id || row.overtime_type_id));
+    } catch (error) {
+      if (!isMissingScheduleMonthsError(error) && !isMissingScheduleMonthIdError(error)) {
+        throw error;
+      }
+      scheduleRows = scheduleEntries.map(({ parsed, slot, profile }) => ({
         member_id: profile.id,
         work_date: parsed.workDate,
         shift_type_id: shiftMap.get(slot.shift)?.id || null,
@@ -1119,13 +1171,18 @@
         overtime_rest_2_start_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2StartTime) : null,
         overtime_rest_2_end_time: slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2EndTime) : null,
         overtime_reason: slot.overtimeMeta?.reason || null
-      } : null;
-    }).filter((row) => row && (row.shift_type_id || row.leave_type_id || row.overtime_type_id));
+      })).filter((row) => row.shift_type_id || row.leave_type_id || row.overtime_type_id);
+    }
+
+    const prefer = "resolution=merge-duplicates,return=minimal";
+    const onConflict = scheduleRows.some((row) => row.schedule_month_id)
+      ? "schedule_month_id,member_id,work_date"
+      : "";
     if (scheduleRows.length) {
       await restInsert("schedule_entries", scheduleRows, {
         auth: true,
-        onConflict: "schedule_month_id,member_id,work_date",
-        prefer: "resolution=merge-duplicates,return=minimal"
+        onConflict,
+        prefer: onConflict ? prefer : "return=minimal"
       });
     }
 
@@ -1434,7 +1491,7 @@
   }
 
   async function listPublicScheduleRequests() {
-    const rows = await restRpc("get_public_schedule_requests", {}, { auth: false });
+    const rows = await restRpc("get_public_schedule_requests", {}, { auth: true });
     const leaveRequests = [];
     const overtimeRequests = [];
     (rows || []).forEach((item) => {
