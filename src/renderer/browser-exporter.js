@@ -815,11 +815,11 @@
       year: 2026,
       month: 4,
       state: {
-        members: [{ id: "m1", name: "王小美", code: "A001", hireDate: "", leaveDate: "", payByDay: false }],
-        leaves: [{ id: "l1", name: "休息日" }, { id: "l2", name: "例假" }],
+        members: [{ id: "self-check-member", name: "Self Check", code: "SELF_CHECK", hireDate: "", leaveDate: "", payByDay: false }],
+        leaves: [{ id: "self-check-rest", name: "休息日" }, { id: "self-check-off", name: "例假" }],
         schedule: {
-          [getScheduleKey("m1", 2026, 4, 3)]: { leave: "l1" },
-          [getScheduleKey("m1", 2026, 4, 4)]: { leave: "l2" }
+          [getScheduleKey("self-check-member", 2026, 4, 3)]: { leave: "self-check-rest" },
+          [getScheduleKey("self-check-member", 2026, 4, 4)]: { leave: "self-check-off" }
         }
       }
     });

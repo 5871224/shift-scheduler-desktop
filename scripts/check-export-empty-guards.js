@@ -17,7 +17,7 @@ vm.runInContext(exporterSource, context);
 const exporter = context.window.schedulerBrowserExporter;
 
 const baseState = {
-  members: [{ id: "m1", name: "Member A", code: "A001", hireDate: "", leaveDate: "", payByDay: false }],
+  members: [{ id: "m1", name: "Member A", code: "SELF_CHECK", hireDate: "", leaveDate: "", payByDay: false }],
   leaves: [
     { id: "regular", code: "0036", name: "Custom Regular" },
     { id: "rest", code: "0047", name: "Custom Rest" },

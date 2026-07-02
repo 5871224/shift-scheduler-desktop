@@ -88,75 +88,13 @@ const DEFAULT_STATE = {
   tableDeptScopeFilter: "all",
   tableStatsVisible: true,
   scheduleStartDate: "",
-  departments: [
-    { id: "d1", name: "門市", startDate: "", endDate: "" },
-    { id: "d2", name: "行政", startDate: "", endDate: "" }
-  ],
-  positions: [
-    { id: "p1", code: "MGR", name: "主管" },
-    { id: "p2", code: "STF", name: "員工" }
-  ],
-  members: [
-    { id: "m1", code: "A001", name: "王小美", deptId: "d1", positionId: "p1", proxyMemberId: "m2", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "manager" },
-    { id: "m2", code: "A002", name: "林佳怡", deptId: "d1", positionId: "p2", proxyMemberId: "m1", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "employee" },
-    { id: "m3", code: "A003", name: "陳建宏", deptId: "d1", positionId: "p2", proxyMemberId: "", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "employee" },
-    { id: "m4", code: "B001", name: "吳佩珊", deptId: "d2", positionId: "p1", proxyMemberId: "m5", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "manager" },
-    { id: "m5", code: "B002", name: "張志豪", deptId: "d2", positionId: "p2", proxyMemberId: "m4", hireDate: "2025-01-01", leaveDate: "", payByDay: false, fixedRestWeekday: 0, role: "employee" }
-  ],
-  shifts: [
-      {
-        id: "s1",
-        name: "早班",
-        color: "#378ADD",
-        startTime: "08:00",
-        endTime: "17:00",
-        applicableDeptIds: ["d1"],
-        positionRequirements: [{ positionId: "p1", count: 1 }]
-      },
-    {
-        id: "s2",
-        name: "中班",
-        color: "#1D9E75",
-        startTime: "12:00",
-        endTime: "21:00",
-        applicableDeptIds: ["d1"],
-        positionRequirements: [{ positionId: "p2", count: 1 }]
-      },
-    {
-        id: "s3",
-        name: "晚班",
-        color: "#E24B4A",
-        startTime: "16:00",
-        endTime: "23:00",
-        applicableDeptIds: ["d2"],
-        positionRequirements: []
-      }
-  ],
-  leaves: [
-    { id: "l1", code: "0017", name: "特休假", color: "#EF9F27", defaultAllDay: false, requireReason: false },
-    { id: "l2", code: "0011", name: "病假", color: "#D4537E", defaultAllDay: false, requireReason: false },
-    { id: "l3", code: "0010", name: "事假", color: "#888780", defaultAllDay: false, requireReason: false },
-    { id: "l4", code: "0047", name: "休息日", color: "#7F77DD", defaultAllDay: false, requireReason: false },
-    { id: "l5", code: "0036", name: "例假", color: "#639922", defaultAllDay: false, requireReason: false }
-  ],
-  overtime: [
-    {
-      id: "o1",
-      name: "加班",
-      color: "#D85A30",
-      startTime: "",
-      endTime: "",
-      useRest1: false,
-      rest1StartTime: "",
-      rest1EndTime: "",
-      useRest2: false,
-      rest2StartTime: "",
-      rest2EndTime: ""
-    }
-  ],
-  holidays: [
-    { id: "h1", date: "2026-01-01", name: "元旦" }
-  ],
+  departments: [],
+  positions: [],
+  members: [],
+  shifts: [],
+  leaves: [],
+  overtime: [],
+  holidays: [],
   rules: {
     maxConsecutiveWorkDays: 6,
     weekStart: 0,
@@ -1497,11 +1435,11 @@ function rememberScheduleUndoSnapshot() {
   scheduleRedoSnapshot = null;
 }
 
-function finishScheduleGridMutation() {
+async function finishScheduleGridMutation() {
   pruneEmptySchedule();
   renderTable();
   syncScheduleRangeSelectionUi();
-  queueSave();
+  await forceSave();
 }
 
 function copyScheduleRangeToClipboard() {
@@ -1532,7 +1470,7 @@ async function clearSelectedScheduleCells() {
     changed = await clearScheduleCellEditableParts(cell.dataset.memberId || "", cell.dataset.date || "") || changed;
   }
   if (changed) {
-    finishScheduleGridMutation();
+    await finishScheduleGridMutation();
   }
   return changed;
 }
@@ -1548,7 +1486,7 @@ async function pasteScheduleClipboard() {
       changed = await applyClipboardSlotToScheduleCell(cell.dataset.memberId || "", cell.dataset.date || "", clipboardSlot) || changed;
     }
     if (changed) {
-      finishScheduleGridMutation();
+      await finishScheduleGridMutation();
     }
     return changed;
   }
@@ -1565,17 +1503,17 @@ async function pasteScheduleClipboard() {
     }
   }
   if (changed) {
-    finishScheduleGridMutation();
+    await finishScheduleGridMutation();
   }
   return changed;
 }
 
-function restoreScheduleSnapshot(snapshot) {
+async function restoreScheduleSnapshot(snapshot) {
   if (!snapshot) {
     return false;
   }
   state.schedule = deepClone(snapshot);
-  finishScheduleGridMutation();
+  await finishScheduleGridMutation();
   return true;
 }
 
@@ -2110,7 +2048,7 @@ async function applyAutoSchedulePreview() {
   syncManagerEntriesToSchedule();
   pruneEmptySchedule();
   renderAll();
-  queueSave();
+  await forceSave();
   showInfoMessage("已套用自動排班預覽");
 }
 
@@ -2223,7 +2161,7 @@ async function handleScheduleGridKeydown(event) {
       if (redoSnapshot) {
         scheduleRedoSnapshot = null;
         scheduleUndoSnapshot = deepClone(state.schedule || {});
-        restoreScheduleSnapshot(redoSnapshot);
+        await restoreScheduleSnapshot(redoSnapshot);
       }
       return;
     }
@@ -2231,7 +2169,7 @@ async function handleScheduleGridKeydown(event) {
     if (undoSnapshot) {
       scheduleUndoSnapshot = null;
       scheduleRedoSnapshot = deepClone(state.schedule || {});
-      restoreScheduleSnapshot(undoSnapshot);
+      await restoreScheduleSnapshot(undoSnapshot);
     }
     return;
   }
@@ -2241,7 +2179,7 @@ async function handleScheduleGridKeydown(event) {
     if (redoSnapshot) {
       scheduleRedoSnapshot = null;
       scheduleUndoSnapshot = deepClone(state.schedule || {});
-      restoreScheduleSnapshot(redoSnapshot);
+      await restoreScheduleSnapshot(redoSnapshot);
     }
   }
 }
@@ -3024,13 +2962,13 @@ function restoreScheduleViewport(viewport) {
   });
 }
 
-function finishScheduleTableOrderChange(viewport) {
+async function finishScheduleTableOrderChange(viewport) {
   renderAll();
   restoreScheduleViewport(viewport);
-  queueSave();
+  await forceSave();
 }
 
-function reorderScheduleTableDepartment(draggedId, targetId, insertAfter = false) {
+async function reorderScheduleTableDepartment(draggedId, targetId, insertAfter = false) {
   const visibleIds = getVisibleTableGroups().map(({ department }) => department.id);
   const nextVisibleIds = getReorderedVisibleIds(visibleIds, draggedId, targetId, insertAfter);
   if (nextVisibleIds.join("|") === visibleIds.join("|")) {
@@ -3038,11 +2976,11 @@ function reorderScheduleTableDepartment(draggedId, targetId, insertAfter = false
   }
   const viewport = captureScheduleViewport();
   state.departments = applyVisibleOrderById(state.departments, nextVisibleIds);
-  finishScheduleTableOrderChange(viewport);
+  await finishScheduleTableOrderChange(viewport);
   return true;
 }
 
-function reorderScheduleTableMember(draggedId, targetId, insertAfter = false) {
+async function reorderScheduleTableMember(draggedId, targetId, insertAfter = false) {
   const draggedMember = state.members.find((member) => member.id === draggedId);
   const targetMember = state.members.find((member) => member.id === targetId);
   const departmentId = getMemberHomeDeptId(draggedMember);
@@ -3057,7 +2995,7 @@ function reorderScheduleTableMember(draggedId, targetId, insertAfter = false) {
   }
   const viewport = captureScheduleViewport();
   state.members = applyVisibleOrderById(state.members, nextVisibleIds);
-  finishScheduleTableOrderChange(viewport);
+  await finishScheduleTableOrderChange(viewport);
   return true;
 }
 
@@ -3145,7 +3083,7 @@ function renderCellInner(key, memberId = "", day = 0, slotOverride = null, isPre
   }
   if (cellState.overtime) {
     const overtime = getItem("overtime", cellState.overtime);
-    const color = overtime?.color || DEFAULT_STATE.overtime[0].color;
+    const color = overtime?.color || "#D85A30";
     segments.push({
       category: "overtime",
       name: overtime?.name || cellState.overtimeMeta?.displayName || "加班",
@@ -3323,14 +3261,9 @@ function queueSave() {
   }
   if (saveTimer) {
     clearTimeout(saveTimer);
+    saveTimer = null;
   }
-  saveTimer = setTimeout(async () => {
-    try {
-      await window.schedulerApi.saveState(buildPersistedState());
-    } catch (error) {
-      setSaveStatus(`儲存失敗：${error.message}`);
-    }
-  }, 250);
+  void forceSave();
 }
 
 function clearLegacyLeaveFromSlot(slot) {
@@ -3473,7 +3406,7 @@ async function applySelectionToCell(memberId, day) {
         clearLegacyLeaveFromSlot(slot);
         pruneEmptySchedule();
         renderTable();
-        queueSave();
+        await forceSave();
         return;
       } else if (shouldPromptLeaveDetail(leave, null)) {
         openLeaveAssignmentModal(memberId, dateString, id);
@@ -3526,7 +3459,7 @@ async function applySelectionToCell(memberId, day) {
         clearLegacyOvertimeFromSlot(slot);
         pruneEmptySchedule();
         renderTable();
-        queueSave();
+        await forceSave();
         return;
       }
       await refreshScheduleFromManagerEntries(true);
@@ -4110,7 +4043,7 @@ function openShiftFormModal(mode, shiftId = "") {
       <div class="form-grid">
         <div class="form-row">
           <label for="shiftName">名稱</label>
-          <textarea id="shiftName" class="single-line-textarea" rows="1" maxlength="12" lang="zh-Hant" spellcheck="false" placeholder="例如早班">${escapeHtml(shift.name)}</textarea>
+          <textarea id="shiftName" class="single-line-textarea" rows="1" maxlength="12" lang="zh-Hant" spellcheck="false" placeholder="請輸入班別">${escapeHtml(shift.name)}</textarea>
         </div>
         <div class="form-row">
           <label for="shiftRequiredStaffCount">需求人數</label>
@@ -5087,7 +5020,7 @@ function openMemberForm(mode, memberId = "") {
       <div class="form-grid two-col">
         <div class="form-row">
           <label for="memberCode">工號</label>
-          <input id="memberCode" type="text" maxlength="12" value="${escapeHtml(member.code)}" placeholder="例如 A001">
+          <input id="memberCode" type="text" maxlength="12" value="${escapeHtml(member.code)}" placeholder="請輸入員工編號">
         </div>
         <div class="form-row">
           <label for="memberName">姓名</label>
@@ -5873,7 +5806,7 @@ function openWeekStartSettingModal() {
   });
 }
 
-function saveWeekStartSettingFromModal() {
+async function saveWeekStartSettingFromModal() {
   const weekValue = Number(document.getElementById("weekStartSetting")?.value || 0);
   const monthValue = Number(document.getElementById("monthStartSetting")?.value || 1);
   const eightWeekStartDate = document.getElementById("eightWeekStartSetting")?.value || getTodayDateString();
@@ -5884,7 +5817,7 @@ function saveWeekStartSettingFromModal() {
   syncVisibleDatePartsFromStart();
   closeModal();
   renderAll();
-  queueSave();
+  await forceSave();
 }
 
 function openRestComplianceModal() {
@@ -6073,7 +6006,7 @@ function applyManagerOvertimeEntryToSchedule(record) {
   const slotKey = scheduleKey(member.id, year, month - 1, day);
   const slot = state.schedule[slotKey] || { shift: null, leave: null, overtime: null };
   slot.overtime = overtime.id;
-  const color = overtime?.color || DEFAULT_STATE.overtime[0].color;
+  const color = overtime?.color || "#D85A30";
   slot.overtimeMeta = {
     displayName: record.overtimeName || overtime.name || "加班",
     displayColor: color,
@@ -6130,12 +6063,12 @@ async function handleSignOut() {
   await loadApp();
 }
 
-function changeScheduleWindowWeeks(weeks) {
+async function changeScheduleWindowWeeks(weeks) {
   const startDate = toDateObject(state.scheduleStartDate) ? state.scheduleStartDate : getEightWeekCycleStartForDate(getTodayDateString());
   state.scheduleStartDate = addDaysToDateString(startDate, weeks * 7);
   syncVisibleDatePartsFromStart();
   renderAll();
-  queueSave();
+  await forceSave();
 }
 
 
@@ -6244,10 +6177,10 @@ function bindEvents() {
     event.stopPropagation();
     toggleToolbarCollapse();
   });
-  bindClick("prevPeriodButton", () => changeScheduleWindowWeeks(-8));
-  bindClick("prevWeekButton", () => changeScheduleWindowWeeks(-1));
-  bindClick("nextWeekButton", () => changeScheduleWindowWeeks(1));
-  bindClick("nextPeriodButton", () => changeScheduleWindowWeeks(8));
+  bindClick("prevPeriodButton", async () => changeScheduleWindowWeeks(-8));
+  bindClick("prevWeekButton", async () => changeScheduleWindowWeeks(-1));
+  bindClick("nextWeekButton", async () => changeScheduleWindowWeeks(1));
+  bindClick("nextPeriodButton", async () => changeScheduleWindowWeeks(8));
   bindClick("exportSapButton", () => {
     closeCoreActionsMenu();
     exportSapCsv();
@@ -6301,32 +6234,32 @@ function bindEvents() {
 
   const deptFilter = document.getElementById("deptFilter");
   if (deptFilter) {
-    deptFilter.addEventListener("change", (event) => {
+    deptFilter.addEventListener("change", async (event) => {
       state.deptFilter = event.target.value;
       renderToolbar();
       renderTable();
-      queueSave();
+      await forceSave();
     });
   }
   const tableDeptScopeFilter = document.getElementById("tableDeptScopeFilter");
   if (tableDeptScopeFilter) {
-    tableDeptScopeFilter.addEventListener("change", (event) => {
+    tableDeptScopeFilter.addEventListener("change", async (event) => {
       state.tableDeptScopeFilter = event.target.value;
       renderToolbar();
       renderTable();
-      queueSave();
+      await forceSave();
     });
   }
   const tableViewSelect = document.getElementById("tableViewSelect");
   if (tableViewSelect) {
-    tableViewSelect.addEventListener("change", (event) => {
+    tableViewSelect.addEventListener("change", async (event) => {
       const value = event.target.value;
       state.tableView = value === "shift" ? "shift" : "member";
       state.tableStatsVisible = value === "member-stats";
       clearScheduleRangeSelection();
       renderToolbar();
       renderTable();
-      queueSave();
+      await forceSave();
     });
   }
 
@@ -6497,7 +6430,7 @@ function bindEvents() {
       saveNamedColorItem(category, mode);
     }
     if (target.dataset.saveWeekStart) {
-      saveWeekStartSettingFromModal();
+      await saveWeekStartSettingFromModal();
     }
     if (target.dataset.saveLeaveAssignment) saveLeaveAssignmentFromModal();
     if (target.dataset.saveOvertimeAssignment) {
@@ -6784,7 +6717,7 @@ function bindEvents() {
     const canDragScheduleOrder = canEditSchedule() && state.tableView !== "shift";
     if (tableDepartment && dragScheduleTableDeptId && canDragScheduleOrder) {
       event.preventDefault();
-      reorderScheduleTableDepartment(dragScheduleTableDeptId, tableDepartment.dataset.tableDepartmentId || "", getScheduleTableOrderInsertAfter(tableDepartment, event.clientY));
+      await reorderScheduleTableDepartment(dragScheduleTableDeptId, tableDepartment.dataset.tableDepartmentId || "", getScheduleTableOrderInsertAfter(tableDepartment, event.clientY));
       clearDragPreviewState();
       dragScheduleTableDeptId = "";
       return;
@@ -6792,7 +6725,7 @@ function bindEvents() {
     const tableMember = event.target.closest("[data-table-member-id]");
     if (tableMember && dragScheduleTableMemberId && canDragScheduleOrder) {
       event.preventDefault();
-      reorderScheduleTableMember(dragScheduleTableMemberId, tableMember.dataset.tableMemberId || "", getScheduleTableOrderInsertAfter(tableMember, event.clientY));
+      await reorderScheduleTableMember(dragScheduleTableMemberId, tableMember.dataset.tableMemberId || "", getScheduleTableOrderInsertAfter(tableMember, event.clientY));
       clearDragPreviewState();
       dragScheduleTableMemberId = "";
       return;

@@ -22,7 +22,7 @@ const result = compliance.checkRestCompliance({
     {
       memberId: "m1",
       memberName: "Compliant",
-      memberCode: "A001",
+      memberCode: "SELF_CHECK_1",
       hireDate: "",
       leaveDate: "",
       days: [
@@ -38,7 +38,7 @@ const result = compliance.checkRestCompliance({
     {
       memberId: "m2",
       memberName: "Missing Regular Holiday",
-      memberCode: "A002",
+      memberCode: "SELF_CHECK_2",
       hireDate: "",
       leaveDate: "",
       days: [
@@ -54,7 +54,7 @@ const result = compliance.checkRestCompliance({
     {
       memberId: "m3",
       memberName: "Regular Holiday Work",
-      memberCode: "A003",
+      memberCode: "SELF_CHECK_3",
       hireDate: "",
       leaveDate: "",
       days: [

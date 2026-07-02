@@ -202,7 +202,7 @@ async function resetPassword(ctx: any, body: any) {
   };
 }
 
-console.assert(buildLoginEmail("A001") === "a001@local.invalid", "member-auth-admin buildLoginEmail failed");
+console.assert(buildLoginEmail("SELF_CHECK") === "self_check@local.invalid", "member-auth-admin buildLoginEmail failed");
 
 export default {
   fetch: withSupabase({ auth: "user" }, async (req, ctx) => {
