@@ -1435,6 +1435,41 @@ function rememberScheduleUndoSnapshot() {
   scheduleRedoSnapshot = null;
 }
 
+function getScheduleCellElement(memberId, dateString) {
+  return Array.from(document.querySelectorAll("#mainTable .cell[data-member-id][data-date]"))
+    .find((cell) => cell instanceof HTMLElement && cell.dataset.memberId === memberId && cell.dataset.date === dateString) || null;
+}
+
+function renderScheduleCell(memberId, dateString) {
+  const cell = getScheduleCellElement(memberId, dateString);
+  if (!(cell instanceof HTMLElement)) {
+    return;
+  }
+  const key = getScheduleKeyForDateString(memberId, dateString);
+  cell.innerHTML = renderCellInner(key, memberId, dateString, state.schedule[key] || null, false);
+}
+
+async function persistScheduleCell(memberId, dateString) {
+  const member = state.members.find((item) => item.id === memberId);
+  if (!member) {
+    return;
+  }
+  const key = getScheduleKeyForDateString(memberId, dateString);
+  await window.schedulerApi.saveScheduleCell({
+    memberId,
+    memberCode: member.code || "",
+    dateString,
+    slot: key ? state.schedule[key] || null : null
+  });
+}
+
+async function finishScheduleCellMutation(memberId, dateString) {
+  pruneEmptySchedule();
+  renderScheduleCell(memberId, dateString);
+  syncScheduleRangeSelectionUi();
+  await persistScheduleCell(memberId, dateString);
+}
+
 async function finishScheduleGridMutation() {
   pruneEmptySchedule();
   renderTable();
@@ -1466,11 +1501,23 @@ async function clearSelectedScheduleCells() {
     return false;
   }
   let changed = false;
+  const changedCells = [];
   for (const cell of cells) {
-    changed = await clearScheduleCellEditableParts(cell.dataset.memberId || "", cell.dataset.date || "") || changed;
+    const memberId = cell.dataset.memberId || "";
+    const dateString = cell.dataset.date || "";
+    const cellChanged = await clearScheduleCellEditableParts(memberId, dateString);
+    if (cellChanged) {
+      changedCells.push({ memberId, dateString });
+      changed = true;
+    }
   }
   if (changed) {
-    await finishScheduleGridMutation();
+    pruneEmptySchedule();
+    changedCells.forEach(({ memberId, dateString }) => renderScheduleCell(memberId, dateString));
+    syncScheduleRangeSelectionUi();
+    for (const { memberId, dateString } of changedCells) {
+      await persistScheduleCell(memberId, dateString);
+    }
   }
   return changed;
 }
@@ -1482,15 +1529,28 @@ async function pasteScheduleClipboard() {
   if (scheduleClipboard.rows === 1 && scheduleClipboard.cols === 1) {
     const [clipboardSlot] = scheduleClipboard.matrix[0] || [];
     let changed = false;
+    const changedCells = [];
     for (const cell of getSelectedScheduleCells()) {
-      changed = await applyClipboardSlotToScheduleCell(cell.dataset.memberId || "", cell.dataset.date || "", clipboardSlot) || changed;
+      const memberId = cell.dataset.memberId || "";
+      const dateString = cell.dataset.date || "";
+      const cellChanged = await applyClipboardSlotToScheduleCell(memberId, dateString, clipboardSlot);
+      if (cellChanged) {
+        changedCells.push({ memberId, dateString });
+        changed = true;
+      }
     }
     if (changed) {
-      await finishScheduleGridMutation();
+      pruneEmptySchedule();
+      changedCells.forEach(({ memberId, dateString }) => renderScheduleCell(memberId, dateString));
+      syncScheduleRangeSelectionUi();
+      for (const { memberId, dateString } of changedCells) {
+        await persistScheduleCell(memberId, dateString);
+      }
     }
     return changed;
   }
   let changed = false;
+  const changedCells = [];
   for (let rowOffset = 0; rowOffset < scheduleClipboard.rows; rowOffset += 1) {
     for (let colOffset = 0; colOffset < scheduleClipboard.cols; colOffset += 1) {
       const row = scheduleRangeSelection.anchor.row + rowOffset;
@@ -1499,11 +1559,20 @@ async function pasteScheduleClipboard() {
       if (!(cell instanceof HTMLElement) || cell.classList.contains("inactive-cell") || !cell.dataset.memberId || !cell.dataset.date) {
         continue;
       }
-      changed = await applyClipboardSlotToScheduleCell(cell.dataset.memberId, cell.dataset.date, scheduleClipboard.matrix[rowOffset][colOffset]) || changed;
+      const cellChanged = await applyClipboardSlotToScheduleCell(cell.dataset.memberId, cell.dataset.date, scheduleClipboard.matrix[rowOffset][colOffset]);
+      if (cellChanged) {
+        changedCells.push({ memberId: cell.dataset.memberId, dateString: cell.dataset.date });
+        changed = true;
+      }
     }
   }
   if (changed) {
-    await finishScheduleGridMutation();
+    pruneEmptySchedule();
+    changedCells.forEach(({ memberId, dateString }) => renderScheduleCell(memberId, dateString));
+    syncScheduleRangeSelectionUi();
+    for (const { memberId, dateString } of changedCells) {
+      await persistScheduleCell(memberId, dateString);
+    }
   }
   return changed;
 }
@@ -3400,30 +3469,24 @@ async function applySelectionToCell(memberId, day) {
       return;
     }
     try {
-      if (slot.leave === id && isManagerSlotRequest(slot, "leave")) {
-        await deleteManagerScheduleEntry("leave", slot.leaveRequestId);
-      } else if (slot.leave === id) {
+      if (slot.leave === id) {
         clearLegacyLeaveFromSlot(slot);
-        pruneEmptySchedule();
-        renderTable();
-        await forceSave();
+        await finishScheduleCellMutation(memberId, dateString);
         return;
       } else if (shouldPromptLeaveDetail(leave, null)) {
         openLeaveAssignmentModal(memberId, dateString, id);
         return;
       } else {
-        await upsertManagerLeaveEntry({
-          requestId: isManagerSlotRequest(slot, "leave") ? slot.leaveRequestId : "",
-          memberId,
-          dateString,
-          leaveId: id,
-          isAllDay: defaultLeaveIsAllDay(leave),
+        slot.leave = id;
+        delete slot.leaveRequestId;
+        slot.leaveMeta = {
+          allDay: defaultLeaveIsAllDay(leave),
           startTime: "",
           endTime: "",
           reason: ""
-        });
+        };
       }
-      await refreshScheduleFromManagerEntries(true);
+      await finishScheduleCellMutation(memberId, dateString);
     } catch (error) {
       showInfoMessage(`設定請假失敗：${formatSchedulerError(error, "設定失敗")}`);
     }
@@ -3432,17 +3495,21 @@ async function applySelectionToCell(memberId, day) {
   if (type === "shift") {
     const nextShiftId = slot.shift === id ? null : id;
     slot.shift = nextShiftId;
+    try {
+      await finishScheduleCellMutation(memberId, dateString);
+    } catch (error) {
+      showInfoMessage(`設定班別失敗：${formatSchedulerError(error, "設定失敗")}`);
+    }
+    return;
   }
   if (type === "overtime") {
     const nextOvertimeId = slot.overtime === id ? null : id;
     try {
       if (nextOvertimeId) {
         const overtime = getItem("overtime", nextOvertimeId) || state.overtime[0];
-        await upsertManagerOvertimeEntry({
-          requestId: isManagerSlotRequest(slot, "overtime") ? slot.overtimeRequestId : "",
-          memberId,
-          dateString,
-          overtimeId: nextOvertimeId,
+        slot.overtime = nextOvertimeId;
+        delete slot.overtimeRequestId;
+        slot.overtimeMeta = {
           startTime: slot.overtimeMeta?.startTime || overtime?.startTime || "",
           endTime: slot.overtimeMeta?.endTime || overtime?.endTime || "",
           useRest1: slot.overtimeMeta?.useRest1 ?? Boolean(overtime?.useRest1),
@@ -3452,51 +3519,43 @@ async function applySelectionToCell(memberId, day) {
           rest2StartTime: slot.overtimeMeta?.rest2StartTime || overtime?.rest2StartTime || "",
           rest2EndTime: slot.overtimeMeta?.rest2EndTime || overtime?.rest2EndTime || "",
           reason: slot.overtimeMeta?.reason || ""
-        });
-      } else if (isManagerSlotRequest(slot, "overtime")) {
-        await deleteManagerScheduleEntry("overtime", slot.overtimeRequestId);
+        };
       } else {
         clearLegacyOvertimeFromSlot(slot);
-        pruneEmptySchedule();
-        renderTable();
-        await forceSave();
-        return;
       }
-      await refreshScheduleFromManagerEntries(true);
+      await finishScheduleCellMutation(memberId, dateString);
     } catch (error) {
       showInfoMessage(`設定加班失敗：${formatSchedulerError(error, "設定失敗")}`);
     }
+    return;
   }
-  if (type === "cancel-shift") slot.shift = null;
+  if (type === "cancel-shift") {
+    slot.shift = null;
+    try {
+      await finishScheduleCellMutation(memberId, dateString);
+    } catch (error) {
+      showInfoMessage(`清除班別失敗：${formatSchedulerError(error, "清除失敗")}`);
+    }
+    return;
+  }
   if (type === "cancel-leave") {
     try {
-      if (isManagerSlotRequest(slot, "leave")) {
-        await deleteManagerScheduleEntry("leave", slot.leaveRequestId);
-        await refreshScheduleFromManagerEntries(true);
-        return;
-      }
       clearLegacyLeaveFromSlot(slot);
+      await finishScheduleCellMutation(memberId, dateString);
     } catch (error) {
       showInfoMessage(`清除請假失敗：${formatSchedulerError(error, "清除失敗")}`);
-      return;
     }
+    return;
   }
   if (type === "cancel-overtime") {
     try {
-      if (isManagerSlotRequest(slot, "overtime")) {
-        await deleteManagerScheduleEntry("overtime", slot.overtimeRequestId);
-        await refreshScheduleFromManagerEntries(true);
-        return;
-      }
       clearLegacyOvertimeFromSlot(slot);
+      await finishScheduleCellMutation(memberId, dateString);
     } catch (error) {
       showInfoMessage(`清除加班失敗：${formatSchedulerError(error, "清除失敗")}`);
-      return;
     }
+    return;
   }
-  pruneEmptySchedule();
-  renderTable();
-  await forceSave();
 }
 
 function selectChip(type, id) {
@@ -6867,9 +6926,6 @@ async function refreshScheduleRequestsAfterInitialRender() {
 }
 
 loadApp();
-
-
-
 
 
 

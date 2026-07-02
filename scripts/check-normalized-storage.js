@@ -19,6 +19,7 @@ assert(webApi.includes('restInsert("schedule_entries"'), "saveState should write
 assert(!webApi.includes('restSelect("schedule_months"') && !webApi.includes('restInsert("schedule_months"'), "web api should not use schedule_months");
 assert(!webApi.includes("schedule_month_id"), "web api should not depend on schedule_month_id");
 assert(webApi.includes('onConflict: "member_id,work_date"'), "schedule entries should upsert by member and work date");
+assert(webApi.includes("async function saveScheduleCell(payload)") && webApi.includes("shift_type_id: shiftType?.id || null"), "single cell edits should save shift, leave, and overtime together");
 assert(webApi.includes("function makeScheduleEntryKey(memberId, workDate)"), "schedule entry cleanup should compare by member and work date");
 assert(!webApi.includes("savedScheduleRows"), "schedule entry cleanup should not depend on upsert return rows");
 assert(!webApi.includes('restInsert("schedule_documents"'), "saveState should not write schedule_documents JSON");

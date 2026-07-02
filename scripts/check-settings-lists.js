@@ -33,7 +33,8 @@ assert(renderer.includes("state.leaves = nextList;"), "leave reorder should pers
 assert(renderer.includes("state.departments = nextList;"), "department reorder should persist to state.departments");
 assert(!renderer.includes("function mergeDefaultLeaves"), "leave settings should not restore deleted default leave types");
 assert(renderer.includes("await forceSave();"), "settings deletion should persist to storage immediately");
-assert(renderer.includes("async function applySelectionToCell") && renderer.includes("await forceSave();"), "schedule cell edits should persist immediately");
+assert(renderer.includes("async function applySelectionToCell") && renderer.includes("await finishScheduleCellMutation(memberId, dateString);"), "schedule cell edits should persist immediately");
+assert(renderer.includes("function renderScheduleCell(memberId, dateString)") && renderer.includes("saveScheduleCell"), "schedule cell edits should update only changed cells");
 assert(renderer.includes("async function finishScheduleGridMutation()") && renderer.includes("await finishScheduleGridMutation();"), "schedule grid range edits should persist asynchronously");
 assert(renderer.includes("async function applyAutoSchedulePreview") && renderer.includes("已套用自動排班預覽"), "auto schedule apply flow should remain async and persisted");
 assert(!renderer.includes("}, 250);"), "save queue should not debounce database writes");

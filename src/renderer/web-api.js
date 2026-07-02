@@ -464,6 +464,22 @@
       .map((row) => [row.scheduler_item_id, row]));
   }
 
+  async function fetchSchedulerRowByItemId(table, schedulerItemId) {
+    const itemId = String(schedulerItemId || "").trim();
+    if (!itemId) {
+      return null;
+    }
+    const rows = await restSelect(table, {
+      select: "*",
+      filters: {
+        scheduler_item_id: `eq.${itemId}`
+      },
+      limit: "1",
+      auth: true
+    });
+    return rows?.[0] || null;
+  }
+
   function getRemovedSchedulerRowIds(rowMap, keptSchedulerIds) {
     const keptIds = new Set((keptSchedulerIds || []).map((value) => String(value || "").trim()).filter(Boolean));
     return [...rowMap.entries()]
@@ -1292,6 +1308,59 @@
     }
   }
 
+  async function saveScheduleCell(payload) {
+    ensureManager();
+    const profileMemberId = await resolveManagerMemberProfileId(payload.memberId, payload.memberCode);
+    const workDate = nullableDate(payload.dateString || payload.workDate);
+    if (!profileMemberId || !workDate) {
+      throw new Error("找不到班表格子的員工或日期");
+    }
+    const slot = payload.slot || {};
+    const [shiftType, leaveType, overtimeType] = await Promise.all([
+      fetchSchedulerRowByItemId("set_shift", slot.shift),
+      fetchSchedulerRowByItemId("set_leave", slot.leave),
+      fetchSchedulerRowByItemId("set_overtime", slot.overtime)
+    ]);
+
+    if (!shiftType?.id && !leaveType?.id && !overtimeType?.id) {
+      await restDelete("schedule_entries", {
+        member_id: `eq.${profileMemberId}`,
+        work_date: `eq.${workDate}`
+      }, {
+        auth: true
+      });
+      return { ok: true, row: null };
+    }
+
+    const leaveAllDay = slot.leaveMeta?.allDay !== false;
+    const row = {
+      member_id: profileMemberId,
+      work_date: workDate,
+      shift_type_id: shiftType?.id || null,
+      leave_type_id: leaveType?.id || null,
+      leave_all_day: leaveAllDay,
+      leave_start_time: leaveType?.id && !leaveAllDay ? nullableTime(slot.leaveMeta?.startTime) : null,
+      leave_end_time: leaveType?.id && !leaveAllDay ? nullableTime(slot.leaveMeta?.endTime) : null,
+      leave_reason: leaveType?.id ? slot.leaveMeta?.reason || null : null,
+      overtime_type_id: overtimeType?.id || null,
+      overtime_start_time: overtimeType?.id ? nullableTime(slot.overtimeMeta?.startTime) : null,
+      overtime_end_time: overtimeType?.id ? nullableTime(slot.overtimeMeta?.endTime) : null,
+      overtime_use_rest_1: overtimeType?.id ? Boolean(slot.overtimeMeta?.useRest1) : false,
+      overtime_rest_1_start_time: overtimeType?.id && slot.overtimeMeta?.useRest1 ? nullableTime(slot.overtimeMeta?.rest1StartTime) : null,
+      overtime_rest_1_end_time: overtimeType?.id && slot.overtimeMeta?.useRest1 ? nullableTime(slot.overtimeMeta?.rest1EndTime) : null,
+      overtime_use_rest_2: overtimeType?.id ? Boolean(slot.overtimeMeta?.useRest2) : false,
+      overtime_rest_2_start_time: overtimeType?.id && slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2StartTime) : null,
+      overtime_rest_2_end_time: overtimeType?.id && slot.overtimeMeta?.useRest2 ? nullableTime(slot.overtimeMeta?.rest2EndTime) : null,
+      overtime_reason: overtimeType?.id ? slot.overtimeMeta?.reason || null : null
+    };
+    const rows = await restInsert("schedule_entries", [row], {
+      auth: true,
+      onConflict: "member_id,work_date",
+      prefer: "resolution=merge-duplicates,return=representation"
+    });
+    return { ok: true, row: rows?.[0] || null };
+  }
+
   async function createManagerLeaveRequest(payload) {
     ensureManager();
     const leaveType = await getLeaveTypeByReference(payload);
@@ -1755,6 +1824,7 @@
     loadState,
     saveState,
     syncCatalogs,
+    saveScheduleCell,
     syncMemberProfile,
     resetMemberPassword,
     createManagerLeaveRequest,
