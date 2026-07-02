@@ -45,3 +45,4 @@
 10. `020_cleanup_demo_test_data.sql`：清除明確測試單位資料。
 11. `021_remove_schedule_months.sql`：移除 `schedule_months`，改以 `schedule_entries(member_id, work_date)` 作為班表唯一格子。
 12. `022_rename_settings_and_merge_schedule_entries.sql`：基本設定表改名為 `set_*`，並將主管設定請假/加班合併進 `schedule_entries`。
+13. `023_fix_login_employee_table.sql`：重建工號登入 RPC，改查 `set_employee`。
