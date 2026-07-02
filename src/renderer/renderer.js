@@ -1164,14 +1164,6 @@ function cleanupScheduleEntries(schedule, merged) {
   return nextSchedule;
 }
 
-function mergeDefaultLeaves(leaves) {
-  const existingCodes = new Set(leaves.map((leave) => leave.code || LEGACY_LEAVE_NAME_MAP[leave.name] || leave.name));
-  const missingDefaults = DEFAULT_STATE.leaves
-    .filter((leave) => !existingCodes.has(leave.code))
-    .map((leave) => ({ ...leave }));
-  return [...leaves, ...missingDefaults];
-}
-
 function normalizeState(payload) {
   if (!payload || typeof payload !== "object") {
     return createEmptyState();
@@ -1197,9 +1189,6 @@ function normalizeState(payload) {
   merged.leaves = Array.isArray(payload.leaves)
     ? payload.leaves.map((item, index) => sanitizeLeaveItem(item, index))
     : merged.leaves;
-  if (merged.leaves.length) {
-    merged.leaves = mergeDefaultLeaves(merged.leaves);
-  }
   merged.overtime = Array.isArray(payload.overtime)
     ? payload.overtime.map((item, index) => sanitizeOvertimeItem(item, index))
     : merged.overtime;
@@ -4429,7 +4418,7 @@ async function deleteListItem(category, id) {
   removeAssignmentsByItem(category, id);
   renderAll();
   openListSettings(category);
-  queueSave();
+  await forceSave();
 }
 
 function openDepartmentSettings() {
