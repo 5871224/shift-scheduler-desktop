@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const rootDir = path.resolve(__dirname, "..");
+const renderer = fs.readFileSync(path.join(rootDir, "src", "renderer", "renderer.js"), "utf8");
 const webApi = fs.readFileSync(path.join(rootDir, "src", "renderer", "web-api.js"), "utf8");
 const migration = fs.readFileSync(path.join(rootDir, "supabase", "017_normalized_scheduler_storage.sql"), "utf8");
 
@@ -23,6 +24,9 @@ assert(webApi.includes('clearScheduleEntriesByForeignIds("leave_type_id"'), "del
 assert(webApi.includes('clearScheduleEntriesByForeignIds("overtime_type_id"'), "deleting overtime settings should clear schedule entry overtime references before deleting overtime types");
 assert(webApi.includes("async function getOvertimeTypeByReference(payload = {})"), "manager overtime entries should resolve overtime_types by scheduler item id");
 assert(webApi.includes("scheduler_item_id: `eq.${overtimeItemId}`"), "manager overtime entries should use overtime item ids instead of name-only lookup");
+assert(!renderer.includes("merged.overtime = merged.overtime.length ? [merged.overtime[0]] : [];"), "overtime settings should keep every overtime type from storage");
+assert(renderer.includes("state.overtime.find((item) => item.id === record.overtimeItemId)"), "manager overtime overlays should resolve the matching overtime item id");
+assert(webApi.includes("overtimeItemId: overtimeTypeMap.get(item.overtime_type_id)?.scheduler_item_id"), "manager overtime list should include scheduler overtime item ids");
 assert(!webApi.includes("requestLeaveCatalog"), "deleted leave settings should not be preserved by the removed request catalog");
 assert(webApi.includes("function isLegacyRequestCatalogRow(row)") && webApi.includes("!isLegacyRequestCatalogRow(row)"), "legacy catalog leave rows should not load as active leave settings");
 assert(webApi.includes("!String(id).startsWith(\"catalog:\")"), "legacy catalog leave ids should not be preserved during save");

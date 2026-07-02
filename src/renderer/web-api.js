@@ -1452,7 +1452,7 @@
       return new Map();
     }
     const rows = await restSelect("overtime_types", {
-      select: "id,name",
+      select: "id,scheduler_item_id,name",
       filters: {
         id: buildInFilter(ids)
       },
@@ -1520,6 +1520,7 @@
       memberId: item.member_id,
       memberCode: profileMap.get(item.member_id)?.employee_code || "",
       memberName: profileMap.get(item.member_id)?.full_name || "",
+      overtimeItemId: overtimeTypeMap.get(item.overtime_type_id)?.scheduler_item_id || "",
       overtimeName: overtimeTypeMap.get(item.overtime_type_id)?.name || "",
       workDate: item.work_date,
       startTime: item.start_time || "",
@@ -1563,6 +1564,7 @@
           id: item.request_id,
           memberCode: item.member_code || "",
           memberName: item.member_name || "",
+          overtimeItemId: item.overtime_item_id || "",
           overtimeName: item.overtime_name || "",
           workDate: item.work_date,
           startTime: item.start_time || "",

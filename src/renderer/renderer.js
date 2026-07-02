@@ -1203,7 +1203,6 @@ function normalizeState(payload) {
   merged.overtime = Array.isArray(payload.overtime)
     ? payload.overtime.map((item, index) => sanitizeOvertimeItem(item, index))
     : merged.overtime;
-  merged.overtime = merged.overtime.length ? [merged.overtime[0]] : [];
   merged.holidays = Array.isArray(payload.holidays)
     ? payload.holidays.map((holiday, index) => sanitizeHoliday(holiday, index)).filter((holiday) => holiday.date)
     : merged.holidays;
@@ -6075,7 +6074,9 @@ function applyManagerOvertimeEntryToSchedule(record) {
   clearScheduleOvertimeByRequestId(record.id);
   const member = state.members.find((item) => item.id === record.memberId)
     || state.members.find((item) => item.code === record.memberCode);
-  const overtime = state.overtime[0];
+  const overtime = state.overtime.find((item) => item.id === record.overtimeItemId)
+    || state.overtime.find((item) => item.name === record.overtimeName)
+    || state.overtime[0];
   if (!member || !overtime || !record.workDate) {
     return;
   }
